@@ -75,6 +75,28 @@ dashboard's saved views. Included labels combine with ALL or ANY matching;
 excluded labels always remove a match. Views can also narrow the board using
 search, status, issue type, and priority.
 
+## Agents and identities
+
+Open **Agents** in the sidebar to search identities, harness aliases, providers,
+and models. Running and queued sessions sort first; **Active only** hides terminal
+and untracked sessions. Click an identity or an issue’s agent badge to inspect its
+provider/model, effort, working directory, run history, and owned work. Identity
+details and the Agents surface have shareable URLs and support browser Back.
+
+The UI joins card/task `owner` values to `identity/id`, then resolves published
+runs carrying that identity to `harness/alias`. **Working** requires a running run
+explicitly targeting the item or its work root. **Session running** only proves
+that the owner’s tracked session is running, not that it is working on every owned
+issue. Queued, stopping, completed, failed, and untracked sessions remain distinct.
+These are Weaver’s recorded process states, not keystroke or model-token activity.
+
+Agent data refreshes independently every five seconds; failed refreshes mark
+retained data as last-known rather than claiming it is live. Agents can be browsed
+even when a workspace does not publish Kanban. Inspection uses a bounded core
+strand list (up to 10,000 strands) and exposes only selected metadata—not provider
+environment variables, injected prompts, or credentials. All agent controls are
+read-only; there are no launch, stop, retry-run, or assignment actions.
+
 ## Develop
 
 ```sh

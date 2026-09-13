@@ -114,6 +114,7 @@ kbd {
   overflow-y: auto;
 }
 .brand {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -136,6 +137,7 @@ kbd {
   color: light-dark(#c77955, #cf9377);
 }
 .workspace-picker {
+  flex-shrink: 0;
   margin: 28px 2px 27px;
   padding: 10px 8px;
   display: flex;
@@ -283,6 +285,7 @@ kbd {
   font-size: 12px;
 }
 .sidebar-bottom {
+  flex-shrink: 0;
   margin-top: auto;
   padding-top: 16px;
 }
@@ -1981,4 +1984,90 @@ h1 {
 }
 .status-active {
   color: light-dark(#8395a4, #99abb9);
+}
+
+.agents-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+  border-top: 1px solid var(--color-border);
+  background: var(--graph-canvas);
+}
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: 14px;
+}
+.agent-card {
+  min-width: 0;
+  padding: 18px;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--background);
+}
+.agent-card:hover,
+.agent-link:hover {
+  border-color: var(--primary);
+  background: var(--color-accent);
+}
+.agent-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 10px;
+  color: var(--color-muted-foreground);
+}
+.agent-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+.agent-status-running {
+  color: light-dark(#408264, #8ac9a7);
+}
+.agent-status-running .agent-dot {
+  animation: agent-pulse 2s ease-in-out infinite;
+}
+.agent-status-ready {
+  color: light-dark(#98783e, #d1b583);
+}
+.agent-status-failed {
+  color: var(--color-destructive);
+}
+.agent-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 5px 6px;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+}
+.agent-link .agent-status {
+  width: 100%;
+}
+.agent-run {
+  margin-bottom: 12px;
+  padding: 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+.agent-run summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.agent-run summary .agent-status {
+  display: inline-flex;
+  margin-left: 10px;
+}
+@keyframes agent-pulse {
+  50% {
+    opacity: 0.4;
+  }
 }

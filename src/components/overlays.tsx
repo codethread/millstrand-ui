@@ -21,7 +21,7 @@ export function DashboardOverlays({
   views,
   viewsReady,
 }: {
-  board: Board;
+  board: Board | null;
   views: SavedView[];
   viewsReady: boolean;
 }) {
@@ -64,7 +64,7 @@ export function DashboardOverlays({
       }}
     >
       <DialogContent className="dashboard-dialog">
-        {overlay.kind === 'view' ? (
+        {overlay.kind === 'view' && board ? (
           <>
             <DialogHeader>
               <DialogTitle>

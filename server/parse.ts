@@ -45,7 +45,7 @@ export function string(value: unknown, where: string): string {
   return value;
 }
 
-function maybeString(value: unknown, where: string): string | null {
+export function maybeString(value: unknown, where: string): string | null {
   return value === undefined || value === null ? null : string(value, where);
 }
 

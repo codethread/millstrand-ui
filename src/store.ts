@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { CardType, LabelTerm, Lane, Priority, SavedView, ViewFilter } from '../shared/api';
 import { emptyFilter, workspaceFilter, type WorkspaceView } from './lib/board';
 
-export type Presentation = 'board' | 'outline' | 'graph';
+export type Presentation = 'board' | 'outline' | 'graph' | 'agents';
 export type DetailTab = 'overview' | 'activity' | 'attributes';
 export type ShortcutAction = 'search' | 'board' | 'outline' | 'graph' | 'refresh' | 'help';
 export const defaultShortcuts: Record<ShortcutAction, string> = {
@@ -29,6 +29,10 @@ export type Overlay =
 
 interface DashboardState {
   filter: ViewFilter;
+  agentQuery: string;
+  activeAgentsOnly: boolean;
+  setAgentQuery: (query: string) => void;
+  toggleActiveAgents: () => void;
   activeViewId: string | null;
   overlay: Overlay;
   detailTab: DetailTab;
@@ -69,6 +73,10 @@ export const useDashboardStore = create<DashboardState>()(
   persist(
     (set) => ({
       filter: emptyFilter(),
+      agentQuery: '',
+      activeAgentsOnly: false,
+      setAgentQuery: (agentQuery) => set({ agentQuery }),
+      toggleActiveAgents: () => set((s) => ({ activeAgentsOnly: !s.activeAgentsOnly })),
       activeViewId: null,
       overlay: { kind: 'closed' },
       detailTab: 'overview',
@@ -116,6 +124,8 @@ export const useDashboardStore = create<DashboardState>()(
       resetWorkspace: () =>
         set({
           filter: emptyFilter(),
+          agentQuery: '',
+          activeAgentsOnly: false,
           activeViewId: null,
           graphRoot: null,
           overlay: { kind: 'closed' },

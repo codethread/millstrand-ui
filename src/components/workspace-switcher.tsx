@@ -29,7 +29,7 @@ export function WorkspaceSwitcher({ workspace }: { workspace: Board['workspace']
           <span className="workspace-monogram">{name[0]?.toUpperCase()}</span>
           <span className="workspace-picker-text">
             <strong>{name}</strong>
-            <small>Kanban workspace</small>
+            <small>Weaver workspace</small>
           </span>
           <ChevronDown className="ml-auto size-3.5 text-muted-foreground" />
         </button>

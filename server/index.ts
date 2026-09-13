@@ -179,6 +179,11 @@ const server = createServer((request, response) => {
       json(response, 200, await strand.board());
       return;
     }
+    if (path === '/api/agents' && method === 'GET') {
+      const { strand } = await workspaces.select(url.searchParams.get('workspace'));
+      json(response, 200, await strand.agents());
+      return;
+    }
     if (path === '/api/views' && method === 'GET') {
       const { views } = await workspaces.select(url.searchParams.get('workspace'));
       json(response, 200, await views.load());

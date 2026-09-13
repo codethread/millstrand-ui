@@ -20,12 +20,23 @@ const indexRoute = createRoute({
   path: '/',
   validateSearch: (
     search: Record<string, unknown>,
-  ): { mode: Presentation; issue: string | null; workspace: string | null } => ({
-    mode: search.mode === 'outline' || search.mode === 'graph' ? search.mode : 'board',
-    issue: typeof search.issue === 'string' && search.issue ? search.issue : null,
+  ): {
+    mode: Presentation;
+    issue: string | null;
+    agent: string | null;
+    workspace: string | null;
+  } => ({
+    mode:
+      search.mode === 'outline' || search.mode === 'graph' || search.mode === 'agents'
+        ? search.mode
+        : 'board',
+    issue: !search.agent && typeof search.issue === 'string' && search.issue ? search.issue : null,
+    agent: typeof search.agent === 'string' && search.agent ? search.agent : null,
     workspace: typeof search.workspace === 'string' && search.workspace ? search.workspace : null,
   }),
-  search: { middlewares: [stripSearchParams({ mode: 'board', issue: null, workspace: null })] },
+  search: {
+    middlewares: [stripSearchParams({ mode: 'board', issue: null, agent: null, workspace: null })],
+  },
   component: Dashboard,
 });
 export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) });

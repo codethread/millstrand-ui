@@ -1,7 +1,16 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { basename, dirname } from 'node:path';
-import type { Board, Card, CardDetail, CardGraph, LabelChange, Note } from '../shared/api.ts';
+import { parseAgents } from './agents.ts';
+import type {
+  AgentDirectory,
+  Board,
+  Card,
+  CardDetail,
+  CardGraph,
+  LabelChange,
+  Note,
+} from '../shared/api.ts';
 import {
   array,
   HttpError,
@@ -52,6 +61,7 @@ class ReadCache<T> {
 
 export class StrandData {
   private readonly boards = new ReadCache<Board>();
+  private readonly agentDirectories = new ReadCache<AgentDirectory>();
   private readonly details = new ReadCache<CardDetail>();
   private readonly graphs = new ReadCache<CardGraph>();
 
@@ -95,6 +105,21 @@ export class StrandData {
         labels: [...counts]
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([label, count]) => ({ label, count })),
+      };
+    });
+  }
+
+  agents(): Promise<AgentDirectory> {
+    return this.agentDirectories.get('agents', async () => {
+      // The core list operation also works in worlds without the Harnesses spool.
+      // Read one extra row so a bounded read never silently hides an active agent.
+      const rows = array(await this.run(['list', '--limit', '10001']), 'agent strands');
+      if (rows.length > 10000)
+        throw new HttpError(503, 'Agent inspection is limited to workspaces with 10,000 strands.');
+      return {
+        workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
+        fetchedAt: new Date().toISOString(),
+        identities: parseAgents(rows),
       };
     });
   }

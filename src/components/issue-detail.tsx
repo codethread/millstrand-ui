@@ -11,7 +11,6 @@ import {
   Network,
   Plus,
   Tag,
-  UserRound,
   X,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -25,16 +24,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
-import {
-  Avatar,
-  ErrorNotice,
-  LabelPill,
-  Loading,
-  StatusBadge,
-  StatusIcon,
-  TypeIcon,
-} from './issue-parts';
+import { ErrorNotice, LabelPill, Loading, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { cn } from '../lib/utils';
+import { IssueAgents } from './agents-view';
 
 export function Markdown({ text }: { text: string }) {
   return (
@@ -95,6 +87,9 @@ function TaskRow({ task, cardId }: { task: Task; cardId: string }) {
       </button>
       {open && (
         <div className="task-expanded">
+          <div className="mb-4">
+            <IssueAgents owner={task.owner} target={task.id} />
+          </div>
           {task.body ? (
             <Markdown text={task.body} />
           ) : (
@@ -379,15 +374,7 @@ export function IssueDetail({ id }: { id: string }) {
               <div className="detail-meta">
                 <StatusBadge status={detail.card.lane} />
                 <span className="detail-meta-separator" />
-                <span className="flex items-center gap-2">
-                  <Avatar owner={detail.card.owner} />
-                  {detail.card.owner ?? (
-                    <>
-                      <UserRound className="size-3" />
-                      Unassigned
-                    </>
-                  )}
-                </span>
+                <IssueAgents owner={detail.card.owner} target={detail.card.id} />
                 <span className="detail-meta-separator" />
                 <span className={`priority priority-${detail.card.priority}`}>
                   {detail.card.priority.toUpperCase()} priority

@@ -31,6 +31,50 @@ export interface Board {
   labels: { label: string; count: number }[];
 }
 
+export type AgentRunStatus = 'ready' | 'running' | 'stopped' | 'failed' | 'unknown';
+
+export interface AgentRun {
+  id: string;
+  title: string;
+  alias: string;
+  harness: string;
+  status: AgentRunStatus;
+  substatus: string | null;
+  mode: string;
+  model: string | null;
+  effort: string | null;
+  cwd: string | null;
+  target: string | null;
+  rootTargets: string[];
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface AgentWork {
+  id: string;
+  title: string;
+  state: string;
+  kind: 'card' | 'task' | 'work';
+}
+
+export interface AgentIdentity {
+  id: string;
+  strandId: string;
+  harness: string;
+  model: string | null;
+  effort: string | null;
+  createdAt: string;
+  runs: AgentRun[];
+  work: AgentWork[];
+}
+
+export interface AgentDirectory {
+  workspace: { path: string; name: string };
+  fetchedAt: string;
+  identities: AgentIdentity[];
+}
+
 export interface WorkspaceOption {
   id: string;
   name: string;
@@ -120,6 +164,7 @@ export interface ApiError {
 
 /**
  * GET /api/workspaces → WorkspaceOption[] (known local mill weavers)
+ * GET /api/agents → AgentDirectory (identities, tracked runs, and owned work)
  * GET /api/board → Board
  * GET /api/cards/:id → CardDetail
  * GET /api/cards/:id/graph → CardGraph
