@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-router';
 import { TooltipProvider } from './components/ui/tooltip';
 import { Dashboard } from './Dashboard';
-import type { Presentation } from './store';
+import { dashboardSearchDefaults, parseDashboardSearch } from './lib/dashboard-search';
 import './index.css';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 3000 } } });
@@ -18,25 +18,8 @@ const rootRoute = createRootRoute();
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  validateSearch: (
-    search: Record<string, unknown>,
-  ): {
-    mode: Presentation;
-    issue: string | null;
-    agent: string | null;
-    workspace: string | null;
-  } => ({
-    mode:
-      search.mode === 'outline' || search.mode === 'graph' || search.mode === 'agents'
-        ? search.mode
-        : 'board',
-    issue: !search.agent && typeof search.issue === 'string' && search.issue ? search.issue : null,
-    agent: typeof search.agent === 'string' && search.agent ? search.agent : null,
-    workspace: typeof search.workspace === 'string' && search.workspace ? search.workspace : null,
-  }),
-  search: {
-    middlewares: [stripSearchParams({ mode: 'board', issue: null, agent: null, workspace: null })],
-  },
+  validateSearch: parseDashboardSearch,
+  search: { middlewares: [stripSearchParams(dashboardSearchDefaults)] },
   component: Dashboard,
 });
 export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) });

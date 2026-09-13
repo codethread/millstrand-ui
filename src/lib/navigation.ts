@@ -2,38 +2,102 @@ import { flushSync } from 'react-dom';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { useDashboardStore, type Presentation } from '../store';
+import { useDashboardStore } from '../store';
+import type { CardType, Lane, Priority, SavedView, ViewFilter } from '../../shared/api';
+import { emptyFilter, workspaceFilter, type WorkspaceView } from './board';
+import {
+  workspaceDestination,
+  type DashboardSearch,
+  type DetailTab,
+  type Presentation,
+} from './dashboard-search';
+
+function toggle<T>(values: T[], value: T): T[] {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+}
 
 export function useDashboardNavigation() {
   const search = useSearch({ from: '/' });
   const navigate = useNavigate({ from: '/' });
+  function update(change: Partial<DashboardSearch>, replace = false) {
+    void navigate({ search: (old) => ({ ...old, ...change }), replace });
+  }
+  function filter(change: (current: ViewFilter) => ViewFilter, replace = false) {
+    update(
+      {
+        filter: change(search.filter),
+        graphRoot: null,
+        mode: search.mode === 'agents' ? 'board' : search.mode,
+      },
+      replace,
+    );
+  }
+  function selectView(view: SavedView | null) {
+    useDashboardStore.getState().setSidebarOpen(false);
+    update({
+      filter: view?.filter ?? emptyFilter(),
+      activeViewId: view?.id ?? null,
+      graphRoot: null,
+      mode: search.mode === 'agents' || search.mode === 'overview' ? 'board' : search.mode,
+    });
+  }
   return {
     ...search,
+    pinWorkspace: (workspace: string) => update({ workspace }, true),
     selectWorkspace: (workspace: string) => {
       useDashboardStore.getState().resetWorkspace();
-      void navigate({ search: (old) => ({ ...old, workspace, issue: null, agent: null }) });
+      void navigate({ search: workspaceDestination(workspace, { kind: 'board' }) });
     },
-    openCard: (issue: string) => {
-      useDashboardStore.getState().setDetailTab('overview');
-      void navigate({ search: (old) => ({ ...old, issue, agent: null }) });
+    openOverview: () => {
+      useDashboardStore.getState().resetWorkspace();
+      update({ mode: 'overview', issue: null, agent: null });
     },
+    openCard: (issue: string) => update({ issue, agent: null, detailTab: 'overview' }),
     openAgent: (agent: string) => {
       useDashboardStore.getState().setSidebarOpen(false);
-      void navigate({ search: (old) => ({ ...old, agent, issue: null }) });
+      update({ agent, issue: null });
     },
-    closeAgent: () => {
-      void navigate({ search: (old) => ({ ...old, agent: null }) });
+    closeAgent: () => update({ agent: null }),
+    closeCard: () => update({ issue: null }),
+    setMode: (mode: Presentation) => update({ mode }),
+    exploreGraph: (graphRoot: string) =>
+      update({ graphRoot, mode: 'graph', issue: null, agent: null }),
+    setGraphRoot: (graphRoot: string | null) => update({ graphRoot }),
+    setDetailTab: (detailTab: DetailTab) => update({ detailTab }),
+    setAgentQuery: (agentQuery: string) => update({ agentQuery }, true),
+    resetAgentFilters: () => update({ agentQuery: '', activeAgentsOnly: false }),
+    toggleActiveAgents: () => update({ activeAgentsOnly: !search.activeAgentsOnly }),
+    setQuery: (query: string) => filter((f) => ({ ...f, query }), true),
+    toggleClosed: () => filter((f) => ({ ...f, includeClosed: !f.includeClosed })),
+    toggleLane: (lane: Lane) =>
+      filter((f) => ({
+        ...f,
+        lanes: toggle(f.lanes, lane),
+        includeClosed: lane === 'closed' ? true : f.includeClosed,
+      })),
+    toggleType: (type: CardType) => filter((f) => ({ ...f, types: toggle(f.types, type) })),
+    togglePriority: (priority: Priority) =>
+      filter((f) => ({ ...f, priorities: toggle(f.priorities, priority) })),
+    toggleLabel: (label: string) =>
+      filter((f) => {
+        const terms = { ...f.terms };
+        if (terms[label]) delete terms[label];
+        else terms[label] = 'include';
+        return { ...f, terms };
+      }),
+    resetFilters: () => update({ filter: emptyFilter(), activeViewId: null, graphRoot: null }),
+    selectWorkspaceView: (view: WorkspaceView) => {
+      useDashboardStore.getState().setSidebarOpen(false);
+      update({
+        filter: workspaceFilter(view),
+        activeViewId: null,
+        graphRoot: null,
+        mode: search.mode === 'agents' ? 'board' : search.mode,
+      });
     },
-    closeCard: () => {
-      void navigate({ search: (old) => ({ ...old, issue: null }) });
-    },
-    setMode: (mode: Presentation) => {
-      void navigate({ search: (old) => ({ ...old, mode }) });
-    },
-    exploreGraph: (id: string) => {
-      useDashboardStore.getState().setGraphRoot(id);
-      void navigate({ search: (old) => ({ ...old, mode: 'graph', issue: null, agent: null }) });
-    },
+    selectView,
+    editView: (view: SavedView | null) =>
+      useDashboardStore.getState().editView(view, search.filter),
   };
 }
 
