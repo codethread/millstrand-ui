@@ -35,7 +35,7 @@ import {
 } from './lib/board';
 import { useDashboardKeys, useDashboardNavigation } from './lib/navigation';
 import { useDashboardStore } from './store';
-import type { Presentation } from './lib/dashboard-search';
+import { pinnableWorkspaceId, type Presentation } from './lib/dashboard-search';
 import { cn } from './lib/utils';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
 import { Button } from './components/ui/button';
@@ -345,8 +345,8 @@ function WorkspaceDashboard() {
   const s = useDashboardStore();
   const nav = useDashboardNavigation();
   useDashboardKeys();
-  const workspacePath = board.data?.workspace.path ?? agents.data?.workspace.path;
-  const defaultWorkspace = workspaces.data?.find((option) => option.path === workspacePath)?.id;
+  const workspacePath = board.data?.workspace.path ?? agents.data?.workspace.path ?? null;
+  const defaultWorkspace = pinnableWorkspaceId(workspaces.data ?? [], workspacePath);
   useEffect(() => {
     if (nav.workspace === null && defaultWorkspace) nav.pinWorkspace(defaultWorkspace);
   }, [nav, defaultWorkspace]);

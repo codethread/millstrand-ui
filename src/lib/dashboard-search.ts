@@ -1,4 +1,11 @@
-import type { CardType, LabelTerm, Lane, Priority, ViewFilter } from '../../shared/api';
+import type {
+  CardType,
+  LabelTerm,
+  Lane,
+  Priority,
+  ViewFilter,
+  WorkspaceOption,
+} from '../../shared/api';
 import { emptyFilter } from './board';
 
 export type Presentation = 'overview' | 'board' | 'outline' | 'graph' | 'agents';
@@ -94,6 +101,17 @@ export const dashboardSearchDefaults = {
   agentQuery: '',
   activeAgentsOnly: false,
 } satisfies Partial<DashboardSearch>;
+
+/** The unscoped default works without discovery; explicit IDs require a running weaver. */
+export function pinnableWorkspaceId(
+  workspaces: WorkspaceOption[],
+  path: string | null,
+): string | null {
+  return (
+    workspaces.find((workspace) => workspace.path === path && workspace.status === 'running')?.id ??
+    null
+  );
+}
 
 /** Cross-weaver links start clean; Back restores the exact prior dashboard. */
 export function workspaceDestination(

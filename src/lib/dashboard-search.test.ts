@@ -1,12 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
-import { parseDashboardSearch, workspaceDestination } from './dashboard-search';
+import {
+  parseDashboardSearch,
+  pinnableWorkspaceId,
+  workspaceDestination,
+} from './dashboard-search';
 
 describe('shareable dashboard navigation', () => {
   it('opens the overview at home and a dashboard for workspace/item links', () => {
     expect(parseDashboardSearch({}).mode).toBe('overview');
     expect(parseDashboardSearch({ workspace: 'weaver-a' }).mode).toBe('board');
     expect(parseDashboardSearch({ issue: 'card-a' }).mode).toBe('board');
+  });
+
+  it('keeps an undiscovered/offline configured default unscoped instead of breaking its API requests', () => {
+    const workspace = { id: 'default', name: 'Default', path: '/default/.millstrand' };
+    expect(pinnableWorkspaceId([{ ...workspace, status: 'offline' }], workspace.path)).toBeNull();
+    expect(pinnableWorkspaceId([], workspace.path)).toBeNull();
+    expect(pinnableWorkspaceId([{ ...workspace, status: 'running' }], workspace.path)).toBe(
+      'default',
+    );
+    expect(pinnableWorkspaceId([{ ...workspace, status: 'running' }], null)).toBeNull();
   });
 
   it('round trips a full dashboard through the router URL codec', () => {
