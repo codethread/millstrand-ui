@@ -64,8 +64,10 @@ Card and agent links open the correct workspace and selected item, including in
 a new tab. Activity polls every five seconds and discovery every thirty seconds;
 **Refresh all** requests both immediately. Failed sources retain their last
 successful snapshot with explicit last-known labels. Counts are marked partial
-when a source is loading, offline, or failing. A missing Kanban surface does not
-prevent that weaver's agents from appearing.
+when a source is loading, offline, or failing. Offline snapshots remain visible,
+but their workspace, card, and agent links stay unavailable until discovery sees
+the weaver running again. A missing Kanban surface does not prevent that weaver's
+agents from appearing.
 
 ## Switch weavers
 

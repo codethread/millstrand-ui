@@ -166,7 +166,7 @@ const server = createServer((request, response) => {
     const method = request.method ?? 'GET';
     if (method !== 'GET' && method !== 'HEAD') checkWriteOrigin(request);
     if (path === '/api/workspaces' && method === 'GET') {
-      json(response, 200, await workspaces.list());
+      json(response, 200, await workspaces.list(url.searchParams.has('refresh')));
       return;
     }
     if (path === '/api/health' && method === 'GET') {

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import {
+  manualFilterSearch,
   parseDashboardSearch,
   pinnableWorkspaceId,
+  workspaceActivityDestination,
   workspaceDestination,
 } from './dashboard-search';
 
@@ -85,6 +87,42 @@ describe('shareable dashboard navigation', () => {
     expect(parseDashboardSearch({ filter: ['bad'] }).filter).toEqual(
       parseDashboardSearch({}).filter,
     );
+  });
+
+  it('clears saved-view identity when its filter snapshot is changed manually', () => {
+    const search = parseDashboardSearch({
+      mode: 'graph',
+      activeViewId: 'saved-view',
+      graphRoot: 'card-a',
+    });
+    const filter = { ...search.filter, query: 'manual change' };
+
+    expect(manualFilterSearch(search, filter)).toEqual({
+      filter,
+      activeViewId: null,
+      graphRoot: null,
+      mode: 'graph',
+    });
+  });
+
+  it('does not offer explicit routes into offline last-known activity', () => {
+    const workspace = {
+      id: 'weaver-a',
+      name: 'Weaver A',
+      path: '/work/a/.millstrand',
+      status: 'offline' as const,
+    };
+
+    expect(workspaceActivityDestination(workspace, { kind: 'board' })).toBeNull();
+    expect(
+      workspaceActivityDestination(
+        { ...workspace, status: 'running' },
+        {
+          kind: 'card',
+          id: 'card-a',
+        },
+      ),
+    ).toMatchObject({ workspace: 'weaver-a', issue: 'card-a' });
   });
 
   it('scopes same-named items to their own weaver and starts without stale filters', () => {
