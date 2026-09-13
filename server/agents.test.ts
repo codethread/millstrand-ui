@@ -76,6 +76,25 @@ describe('agent directory boundary', () => {
     expect(parseAgents([strand('card', { 'kanban/card': 'true' })])).toEqual([]);
   });
 
+  it.each([undefined, null])(
+    'retains linked runs and owned work when a historical run has identity %s',
+    (identityId) => {
+      const unlinkedRun = strand('historical', {
+        ...runAttrs,
+        'identity/id': identityId,
+        owner: 'calm-young-tiger',
+      });
+      const agents = parseAgents([unlinkedRun, identity, strand('linked', runAttrs)]);
+
+      expect(agents).toHaveLength(1);
+      expect(agents[0]?.runs.map((run) => run.id)).toEqual(['linked']);
+      expect(agents[0]?.work).toEqual([
+        { id: 'historical', title: 'historical', state: 'active', kind: 'work' },
+      ]);
+      expect(parseAgents([unlinkedRun])).toEqual([]);
+    },
+  );
+
   it('rejects malformed identity linkage instead of silently assigning the wrong alias', () => {
     expect(() =>
       parseAgents([identity, strand('broken', { ...runAttrs, 'identity/id': 42 })]),

@@ -9,7 +9,12 @@ export function parseAgents(value: unknown): AgentIdentity[] {
   const work = new Map<string, AgentWork[]>();
   for (const row of rows) {
     const attrs = row.attributes;
-    if (attrs['harness/run'] === 'true' && attrs['harness/published'] === 'true') {
+    // Historical published runs can predate identity linkage and cannot join an identity.
+    if (
+      attrs['harness/run'] === 'true' &&
+      attrs['harness/published'] === 'true' &&
+      attrs['identity/id'] != null
+    ) {
       const identity = string(attrs['identity/id'], 'run.identity/id');
       const statuses: AgentRunStatus[] = ['ready', 'running', 'stopped', 'failed'];
       const run: AgentRun = {
