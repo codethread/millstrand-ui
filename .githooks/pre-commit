@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-set -eu
-
-# Historic Beads data is retained for audit only. This hook must not mutate or
-# stage it.

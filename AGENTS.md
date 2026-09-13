@@ -14,9 +14,6 @@ Never stop the mill; only the user may stop it.
   shared `land` for quality, one basic review, FIFO merge, card completion, and
   branch/worktree cleanup.
 
-Historic Beads data remains under `.beads/` for audit only. Do not use, migrate,
-delete, edit, or sync it as the operative work tracker.
-
 ## Types and boundaries
 
 - Use strict TypeScript, including `noUncheckedIndexedAccess` and
@@ -55,5 +52,3 @@ delete, edit, or sync it as the operative work tracker.
 - Verify the running UI in a browser, including narrow layouts, selection,
   navigation, filters, labels, and graph interactions. A build alone is not proof
   that the dashboard works.
-- Treat `.beads/` as historic audit data. Do not edit or include incidental
-  changes to it.
