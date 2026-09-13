@@ -4,6 +4,11 @@ A web interface for exploring Millstrand workspaces. Its first surface covers
 Kanban cards, tasks, dependencies, and activity through a local Node server.
 Only card labels and saved dashboard views are currently editable.
 
+| | |
+|---|---|
+|![visible ui showing the kanban board](https://github.com/user-attachments/assets/b34a3284-f22f-4de0-a94e-8b84ed54e24b) | ![focussed view of card](https://github.com/user-attachments/assets/23c46da0-6ed2-4e01-949e-aab4d2a0593b) |
+| ![graph view](https://github.com/user-attachments/assets/c58e5fa9-9445-4576-93f7-4144d90d3d19) |
+
 ## Run
 
 Install Node.js 24.21.0 (LTS) or newer, pnpm, `mill`, and `strand`. Start the workspace weaver as
