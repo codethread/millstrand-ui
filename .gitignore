@@ -15,3 +15,5 @@ coverage/
 # Public application assets are source files. Override broad global ignores.
 !public/
 !public/**
+
+.millstrand/.land-merge-lock.acquire
