@@ -6,6 +6,8 @@ saved views are dashboard preferences. Do not add workflow mutation controls.
 
 ## Working here
 
+Never stop the mill; only the user may stop it.
+
 - Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
 - Never edit `main` or push directly to `main`; feature-branch pushes are expected.
 - Inspect `strand workflow show land` and `strand prime merge-queue`, then drive
