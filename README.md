@@ -6,7 +6,7 @@ Only card labels and saved dashboard views are currently editable.
 
 ## Run
 
-Install Node.js 22.13 or newer, pnpm, `mill`, and `strand`. Start the workspace weaver as
+Install Node.js 24.21.0 (LTS) or newer, pnpm, `mill`, and `strand`. Start the workspace weaver as
 you normally would, then run:
 
 ```sh
