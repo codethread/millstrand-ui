@@ -1,0 +1,13 @@
+{:deps
+ {io.millstrand/batteries
+  {:git/url "https://github.com/codethread/millstrand.git"
+   :git/sha "310368dff9174bd889ad21d4ed8196952684eaf9"
+   :deps/root "spools/batteries"}
+  millhouse.spools/workflow
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/sha "3132c8f7f10455c893da28fef0e9ca0047560f82"
+   :deps/root "spools/workflow"}
+  codethread/config
+  {:git/url "https://github.com/codethread/codethread.spool.git"
+   :git/sha "b23d84b06af25c56c009f1697bd13f1ed739091c"
+   :deps/root "spools/config"}}}
