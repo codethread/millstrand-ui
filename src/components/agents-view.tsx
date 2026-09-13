@@ -81,6 +81,7 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
 
 export function AgentSearchControls() {
   const s = useDashboardStore();
+  const nav = useDashboardNavigation();
   return (
     <div className="toolbar-actions">
       <div className="search-field">
@@ -89,11 +90,11 @@ export function AgentSearchControls() {
           id="agent-search"
           aria-label="Search agents"
           placeholder="Identity, alias, model…"
-          value={s.agentQuery}
-          onChange={(event) => s.setAgentQuery(event.target.value)}
+          value={nav.agentQuery}
+          onChange={(event) => nav.setAgentQuery(event.target.value)}
         />
-        {s.agentQuery ? (
-          <button aria-label="Clear agent search" onClick={() => s.setAgentQuery('')}>
+        {nav.agentQuery ? (
+          <button aria-label="Clear agent search" onClick={() => nav.setAgentQuery('')}>
             <X className="size-3" />
           </button>
         ) : (
@@ -101,9 +102,9 @@ export function AgentSearchControls() {
         )}
       </div>
       <button
-        className={cn('closed-toggle', s.activeAgentsOnly && 'selected')}
-        aria-pressed={s.activeAgentsOnly}
-        onClick={s.toggleActiveAgents}
+        className={cn('closed-toggle', nav.activeAgentsOnly && 'selected')}
+        aria-pressed={nav.activeAgentsOnly}
+        onClick={nav.toggleActiveAgents}
       >
         <Bot className="size-3.5" />
         Active only
@@ -114,8 +115,7 @@ export function AgentSearchControls() {
 
 export function AgentsView() {
   const query = useAgents();
-  const s = useDashboardStore();
-  const { openAgent } = useDashboardNavigation();
+  const nav = useDashboardNavigation();
   if (!query.data)
     return query.error ? (
       <div className="p-5">
@@ -131,7 +131,7 @@ export function AgentsView() {
     ) : (
       <Loading text="Loading agent identities…" />
     );
-  const agents = selectAgents(query.data.identities, s.agentQuery, s.activeAgentsOnly);
+  const agents = selectAgents(query.data.identities, nav.agentQuery, nav.activeAgentsOnly);
   return (
     <div className="agents-canvas">
       <div className="mb-4 pr-10 text-xs text-muted-foreground">
@@ -150,14 +150,8 @@ export function AgentsView() {
               ? 'Search by identity, harness alias, provider, or model.'
               : 'Identities appear when a harness session is registered in this workspace.'}
           </p>
-          {(s.agentQuery || s.activeAgentsOnly) && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                s.setAgentQuery('');
-                if (s.activeAgentsOnly) s.toggleActiveAgents();
-              }}
-            >
+          {(nav.agentQuery || nav.activeAgentsOnly) && (
+            <Button variant="outline" onClick={nav.resetAgentFilters}>
               Clear agent filters
             </Button>
           )}
@@ -169,7 +163,7 @@ export function AgentsView() {
               key={agent.id}
               agent={agent}
               stale={!!query.error}
-              onSelect={() => openAgent(agent.id)}
+              onSelect={() => nav.openAgent(agent.id)}
             />
           ))}
         </div>

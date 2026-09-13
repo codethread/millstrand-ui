@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Card, ViewFilter } from '../../shared/api';
+import { overviewCards } from './overview';
 import {
   emptyFilter,
   matchesWorkspaceView,
@@ -148,6 +149,20 @@ describe('workspace navigation filters', () => {
       );
     },
   );
+});
+
+describe('all-weaver overview cards', () => {
+  it('shows only open in-progress/review cards in priority order', () => {
+    const cards: Card[] = [
+      card('ready'),
+      { ...card('idea'), lane: 'refinement' },
+      { ...card('progress'), lane: 'claimed', priority: 'p3' },
+      { ...card('review'), lane: 'in_review', priority: 'p1' },
+      { ...card('closed'), lane: 'claimed', state: 'closed' },
+      { ...card('unknown'), lane: 'unknown' },
+    ];
+    expect(overviewCards(cards).map((item) => item.id)).toEqual(['review', 'progress']);
+  });
 });
 
 describe('outline context', () => {

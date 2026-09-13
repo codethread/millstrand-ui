@@ -1,5 +1,6 @@
 import { Check, Keyboard, Minus, RotateCcw, Trash2 } from 'lucide-react';
 import type { Board, SavedView } from '../../shared/api';
+import { useDashboardNavigation } from '../lib/navigation';
 import { useSaveViews } from '../lib/api';
 import { selectCards } from '../lib/board';
 import { cn } from '../lib/utils';
@@ -26,6 +27,7 @@ export function DashboardOverlays({
   viewsReady: boolean;
 }) {
   const s = useDashboardStore();
+  const nav = useDashboardNavigation();
   const mutation = useSaveViews();
   const overlay = s.overlay;
   function saveView() {
@@ -39,7 +41,12 @@ export function DashboardOverlays({
       overlay.id === null
         ? [...views, view]
         : views.map((item) => (item.id === view.id ? view : item));
-    mutation.mutate(next, { onSuccess: () => s.savedView(view) });
+    mutation.mutate(next, {
+      onSuccess: () => {
+        nav.selectView(view);
+        s.closeOverlay();
+      },
+    });
   }
   function deleteView() {
     if (overlay.kind !== 'view') return;
@@ -47,7 +54,7 @@ export function DashboardOverlays({
       views.filter((view) => view.id !== overlay.id),
       {
         onSuccess: () => {
-          s.selectView(null);
+          nav.selectView(null);
           s.closeOverlay();
         },
       },

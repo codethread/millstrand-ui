@@ -19,7 +19,7 @@ import type { CardDetail, Note, Task } from '../../shared/api';
 import { useCard, useLabels, useTaskNotes } from '../lib/api';
 import { formatDate, relativeTime } from '../lib/board';
 import { useDashboardNavigation } from '../lib/navigation';
-import { useDashboardStore, type DetailTab } from '../store';
+import type { DetailTab } from '../lib/dashboard-search';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -331,9 +331,13 @@ function CopyLink() {
 
 export function IssueDetail({ id }: { id: string }) {
   const query = useCard(id);
-  const { closeCard, openCard, exploreGraph } = useDashboardNavigation();
-  const tab = useDashboardStore((s) => s.detailTab);
-  const setTab = useDashboardStore((s) => s.setDetailTab);
+  const {
+    closeCard,
+    openCard,
+    exploreGraph,
+    detailTab: tab,
+    setDetailTab: setTab,
+  } = useDashboardNavigation();
   const detail = query.data;
   const tabs: { id: DetailTab; label: string }[] = [
     { id: 'overview', label: 'Overview' },

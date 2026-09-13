@@ -52,6 +52,21 @@ reach the server can browse discovered local weavers and edit their card labels
 and saved views. Bind to
 localhost when using a tunnel or when the network is not trusted.
 
+## All-weaver overview
+
+The home page (`/?mode=overview`) shows work in motion across every discovered
+local weaver: only in-progress/review cards and active agents (running, queued,
+or stopping). Busy workspaces appear first, with summary counts; quiet, loading,
+and offline weavers are listed compactly below. Expand one to inspect its status
+or open its dashboard. **All weavers** in any dashboard returns to this overview.
+
+Card and agent links open the correct workspace and selected item, including in
+a new tab. Activity polls every five seconds and discovery every thirty seconds;
+**Refresh all** requests both immediately. Failed sources retain their last
+successful snapshot with explicit last-known labels. Counts are marked partial
+when a source is loading, offline, or failing. A missing Kanban surface does not
+prevent that weaver's agents from appearing.
+
 ## Switch weavers
 
 The workspace menu lists local weavers discovered by `mill weaver list`. Selecting
@@ -133,8 +148,15 @@ ask you to narrow the filters or choose a smaller focus. Changing a filter or
 saved view returns the graph to the filtered board.
 
 Click any card for its description, task status, full notes, labels, and attributes.
-Issue selection and layout live in the URL, so links can be shared and browser
-Back works. Polling refreshes the board and open details every five seconds.
+Workspace, layout, issue/agent selection, issue detail tab, graph focus, board
+filters, agent search/active-only, and selected saved view all live in the URL.
+Reload, shared links, and browser Back restore that navigation state. Saved-view
+links carry the filter snapshot as well as the view ID, so later saved-view edits
+or deletion do not silently change what a shared link shows. Typing replaces the
+current history entry rather than adding one per keystroke; discrete navigation
+and filter changes create history entries. Draft forms and keyboard preferences
+remain browser interaction state. Polling refreshes the board and open details
+every five seconds.
 
 Default shortcuts: `/` searches, `1`/`2`/`3` switch layouts, `r` refreshes, and `?`
 opens keyboard settings. Bindings are editable and saved per browser. A blank

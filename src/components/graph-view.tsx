@@ -14,7 +14,6 @@ import type { Card, GraphNode } from '../../shared/api';
 import { useGraph } from '../lib/api';
 import { graphBody, graphFromCards, layoutGraph, type IssueGraphNode } from '../lib/graph';
 import { useDashboardNavigation } from '../lib/navigation';
-import { useDashboardStore } from '../store';
 import { Button } from './ui/button';
 import { ErrorNotice, Loading } from './issue-parts';
 import { Markdown } from './issue-detail';
@@ -43,10 +42,8 @@ function GraphCard({ data }: NodeProps<IssueGraphNode>) {
 const nodeTypes = { issue: GraphCard };
 
 export default function GraphView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
-  const root = useDashboardStore((s) => s.graphRoot);
-  const includeClosed = useDashboardStore((s) => s.filter.includeClosed);
-  const setRoot = useDashboardStore((s) => s.setGraphRoot);
-  const { openCard } = useDashboardNavigation();
+  const { graphRoot: root, filter, setGraphRoot: setRoot, openCard } = useDashboardNavigation();
+  const includeClosed = filter.includeClosed;
   const query = useGraph(root);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const graph = useMemo(

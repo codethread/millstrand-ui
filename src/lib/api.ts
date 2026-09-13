@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
 import type {
   AgentDirectory,
@@ -36,21 +36,25 @@ export function useWorkspaces() {
     refetchInterval: 30000,
   });
 }
-export function useBoard() {
-  const workspace = useWorkspace();
-  return useQuery({
+export function boardQueryOptions(workspace: string | null) {
+  return queryOptions({
     queryKey: ['board', workspace],
     queryFn: () => request<Board>('/board', workspace),
     refetchInterval: 5000,
   });
 }
-export function useAgents() {
-  const workspace = useWorkspace();
-  return useQuery({
+export function agentQueryOptions(workspace: string | null) {
+  return queryOptions({
     queryKey: ['agents', workspace],
     queryFn: () => request<AgentDirectory>('/agents', workspace),
     refetchInterval: 5000,
   });
+}
+export function useBoard() {
+  return useQuery(boardQueryOptions(useWorkspace()));
+}
+export function useAgents() {
+  return useQuery(agentQueryOptions(useWorkspace()));
 }
 export function useViews() {
   const workspace = useWorkspace();

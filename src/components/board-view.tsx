@@ -1,7 +1,6 @@
 import { ArrowUpRight, Inbox, Layers } from 'lucide-react';
 import type { Card } from '../../shared/api';
 import { lanes, selectOutline } from '../lib/board';
-import { useDashboardStore } from '../store';
 import { useDashboardNavigation } from '../lib/navigation';
 import { IssueAgents } from './agents-view';
 import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
@@ -53,7 +52,7 @@ function IssueCard({ card, allCards }: { card: Card; allCards: Card[] }) {
 }
 
 export function BoardView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
-  const includeClosed = useDashboardStore((s) => s.filter.includeClosed);
+  const includeClosed = useDashboardNavigation().filter.includeClosed;
   const columns = lanes.filter((lane) =>
     lane.id === 'unknown'
       ? cards.some((card) => card.lane === 'unknown')
@@ -158,7 +157,7 @@ export function OutlineView({ cards, allCards }: { cards: Card[]; allCards: Card
 }
 
 export function EmptyBoard() {
-  const reset = useDashboardStore((s) => s.resetFilters);
+  const reset = useDashboardNavigation().resetFilters;
   return (
     <div className="empty-board">
       <div className="empty-board-icon">

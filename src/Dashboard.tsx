@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowUpRight,
   Bookmark,
   Bot,
   Check,
@@ -22,7 +23,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useAgents, useBoard, useViews } from './lib/api';
+import { useAgents, useBoard, useViews, useWorkspaces } from './lib/api';
 import {
   boardSummary,
   emptyFilter,
@@ -33,7 +34,8 @@ import {
   type WorkspaceView,
 } from './lib/board';
 import { useDashboardKeys, useDashboardNavigation } from './lib/navigation';
-import { useDashboardStore, type Presentation } from './store';
+import { useDashboardStore } from './store';
+import { pinnableWorkspaceId, type Presentation } from './lib/dashboard-search';
 import { cn } from './lib/utils';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
 import { Button } from './components/ui/button';
@@ -44,6 +46,7 @@ import { BoardView, EmptyBoard, OutlineView } from './components/board-view';
 import { ErrorNotice, LabelPill, Loading, StatusIcon } from './components/issue-parts';
 import { IssueDetail } from './components/issue-detail';
 import { WorkspaceSwitcher } from './components/workspace-switcher';
+import { Overview } from './components/overview';
 import { DashboardOverlays } from './components/overlays';
 import { AgentDetail, AgentSearchControls, AgentsView } from './components/agents-view';
 import { agentIsActive } from './lib/agents';
@@ -69,9 +72,6 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
   const active = board ? boardSummary(board) : null;
   const nav = useDashboardNavigation();
   const agents = useAgents();
-  const leaveAgents = () => {
-    if (nav.mode === 'agents') nav.setMode('board');
-  };
   const workspaceViews = [
     { id: 'all', label: 'All issues', count: active?.active ?? null, icon: LayoutGrid },
     { id: 'progress', label: 'In progress', count: active?.inProgress ?? null, icon: CircleDot },
@@ -95,6 +95,11 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
           <X className="size-4" />
         </button>
       </div>
+      <button className="nav-item mx-3 mb-2" onClick={nav.openOverview}>
+        <LayoutGrid />
+        All weavers
+        <ArrowUpRight className="ml-auto" />
+      </button>
       <WorkspaceSwitcher workspace={board?.workspace ?? agents.data?.workspace ?? null} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="sidebar-section-label">WORKSPACE</div>
@@ -103,15 +108,16 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
         </p>
         {workspaceViews.map(({ id, label, count, icon: Icon }) => {
           const selected =
-            nav.mode !== 'agents' && s.activeViewId === null && matchesWorkspaceView(s.filter, id);
+            nav.mode !== 'agents' &&
+            nav.activeViewId === null &&
+            matchesWorkspaceView(nav.filter, id);
           return (
             <button
               key={id}
               className={cn('nav-item', selected && 'active')}
               aria-pressed={selected}
               onClick={() => {
-                leaveAgents();
-                s.selectWorkspaceView(id);
+                nav.selectWorkspaceView(id);
               }}
             >
               <Icon />
@@ -138,7 +144,7 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
           <>
             <div className="sidebar-section-label mt-7">
               <span>YOUR VIEWS</span>
-              <button aria-label="Create view" onClick={() => s.editView(null)}>
+              <button aria-label="Create view" onClick={() => nav.editView(null)}>
                 <Plus className="size-3.5" />
               </button>
             </div>
@@ -148,11 +154,10 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
                   <button
                     className={cn(
                       'nav-item flex-1',
-                      nav.mode !== 'agents' && s.activeViewId === view.id && 'active',
+                      nav.mode !== 'agents' && nav.activeViewId === view.id && 'active',
                     )}
                     onClick={() => {
-                      leaveAgents();
-                      s.selectView(view);
+                      nav.selectView(view);
                     }}
                     title={viewDescription(view)}
                   >
@@ -164,7 +169,7 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
                   </button>
                   <button
                     className="edit-view-button"
-                    onClick={() => s.editView(view)}
+                    onClick={() => nav.editView(view)}
                     aria-label={`Edit view ${view.name}`}
                   >
                     <SlidersHorizontal className="size-3.5" />
@@ -175,7 +180,7 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
             {views.length === 0 && (
               <p className="sidebar-hint">Make a little space for the work you care about.</p>
             )}
-            <button className="nav-item new-view" onClick={() => s.editView(null)}>
+            <button className="nav-item new-view" onClick={() => nav.editView(null)}>
               <Plus />
               Create a view
             </button>
@@ -186,10 +191,9 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
               {board.labels.map(({ label, count }) => (
                 <button
                   key={label}
-                  className={cn('sidebar-label', s.filter.terms[label] && 'selected')}
+                  className={cn('sidebar-label', nav.filter.terms[label] && 'selected')}
                   onClick={() => {
-                    leaveAgents();
-                    s.toggleLabel(label);
+                    nav.toggleLabel(label);
                   }}
                 >
                   <LabelPill label={label} />
@@ -260,8 +264,8 @@ function Sidebar(props: SidebarProps) {
 }
 
 function Filters() {
-  const s = useDashboardStore();
-  const count = s.filter.lanes.length + s.filter.types.length + s.filter.priorities.length;
+  const nav = useDashboardNavigation();
+  const count = nav.filter.lanes.length + nav.filter.types.length + nav.filter.priorities.length;
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -281,8 +285,8 @@ function Filters() {
               .map((lane) => (
                 <button
                   key={lane.id}
-                  className={cn('filter-chip', s.filter.lanes.includes(lane.id) && 'selected')}
-                  onClick={() => s.toggleLane(lane.id)}
+                  className={cn('filter-chip', nav.filter.lanes.includes(lane.id) && 'selected')}
+                  onClick={() => nav.toggleLane(lane.id)}
                 >
                   <StatusIcon status={lane.id} />
                   {lane.title}
@@ -296,9 +300,9 @@ function Filters() {
                 key={type}
                 className={cn(
                   'filter-chip capitalize',
-                  s.filter.types.includes(type) && 'selected',
+                  nav.filter.types.includes(type) && 'selected',
                 )}
-                onClick={() => s.toggleType(type)}
+                onClick={() => nav.toggleType(type)}
               >
                 {type}
               </button>
@@ -311,15 +315,15 @@ function Filters() {
                 key={priority}
                 className={cn(
                   'filter-chip uppercase',
-                  s.filter.priorities.includes(priority) && 'selected',
+                  nav.filter.priorities.includes(priority) && 'selected',
                 )}
-                onClick={() => s.togglePriority(priority)}
+                onClick={() => nav.togglePriority(priority)}
               >
                 {priority}
               </button>
             ))}
           </div>
-          <Button variant="ghost" size="sm" onClick={s.resetFilters}>
+          <Button variant="ghost" size="sm" onClick={nav.resetFilters}>
             Reset filters
           </Button>
         </div>
@@ -329,12 +333,23 @@ function Filters() {
 }
 
 export function Dashboard() {
+  const nav = useDashboardNavigation();
+  return nav.mode === 'overview' ? <Overview /> : <WorkspaceDashboard key={nav.workspace} />;
+}
+
+function WorkspaceDashboard() {
   const board = useBoard();
   const agents = useAgents();
   const views = useViews();
+  const workspaces = useWorkspaces();
   const s = useDashboardStore();
   const nav = useDashboardNavigation();
   useDashboardKeys();
+  const workspacePath = board.data?.workspace.path ?? agents.data?.workspace.path ?? null;
+  const defaultWorkspace = pinnableWorkspaceId(workspaces.data ?? [], workspacePath);
+  useEffect(() => {
+    if (nav.workspace === null && defaultWorkspace) nav.pinWorkspace(defaultWorkspace);
+  }, [nav, defaultWorkspace]);
   useEffect(() => {
     useDashboardStore.getState().resetWorkspace();
   }, [nav.workspace]);
@@ -347,6 +362,10 @@ export function Dashboard() {
           </span>
           millstrand.
         </div>
+        <Button variant="outline" onClick={nav.openOverview}>
+          <LayoutGrid />
+          All weavers
+        </Button>
         <WorkspaceSwitcher workspace={null} />
         <Button variant="outline" onClick={() => nav.setMode('agents')}>
           <Bot />
@@ -370,9 +389,9 @@ export function Dashboard() {
     );
   const data = board.data ?? null;
   const allCards = data?.cards ?? [];
-  const cards = selectCards(allCards, s.filter);
-  const selectedView = views.data?.find((view) => view.id === s.activeViewId);
-  const isFiltered = JSON.stringify(s.filter) !== JSON.stringify(emptyFilter());
+  const cards = selectCards(allCards, nav.filter);
+  const selectedView = views.data?.find((view) => view.id === nav.activeViewId);
+  const isFiltered = JSON.stringify(nav.filter) !== JSON.stringify(emptyFilter());
   return (
     <div className={cn('app-shell', s.contentFullscreen && 'content-fullscreen')}>
       <Sidebar
@@ -423,11 +442,11 @@ export function Dashboard() {
                     id="issue-search"
                     aria-label="Search issues"
                     placeholder="Search issues…"
-                    value={s.filter.query}
-                    onChange={(event) => s.setQuery(event.target.value)}
+                    value={nav.filter.query}
+                    onChange={(event) => nav.setQuery(event.target.value)}
                   />
-                  {s.filter.query ? (
-                    <button aria-label="Clear search" onClick={() => s.setQuery('')}>
+                  {nav.filter.query ? (
+                    <button aria-label="Clear search" onClick={() => nav.setQuery('')}>
                       <X className="size-3" />
                     </button>
                   ) : (
@@ -436,9 +455,9 @@ export function Dashboard() {
                 </div>
                 <Filters />
                 <button
-                  className={cn('closed-toggle', s.filter.includeClosed && 'selected')}
-                  onClick={s.toggleClosed}
-                  aria-pressed={s.filter.includeClosed}
+                  className={cn('closed-toggle', nav.filter.includeClosed && 'selected')}
+                  onClick={nav.toggleClosed}
+                  aria-pressed={nav.filter.includeClosed}
                 >
                   <Check className="size-3.5" />
                   Include completed
@@ -451,7 +470,7 @@ export function Dashboard() {
               <span>
                 {cards.length} {cards.length === 1 ? 'issue' : 'issues'}
                 <span className="context-dot">·</span>
-                {selectedView?.name ?? (s.filter.includeClosed ? 'All activity' : 'Active work')}
+                {selectedView?.name ?? (nav.filter.includeClosed ? 'All activity' : 'Active work')}
                 {nav.mode === 'board' && (
                   <>
                     <span className="context-dot">·</span>Grouped by status
@@ -459,11 +478,11 @@ export function Dashboard() {
                 )}
               </span>
               <div className="flex flex-wrap items-center gap-2">
-                {Object.entries(s.filter.terms).map(([label, term]) => (
+                {Object.entries(nav.filter.terms).map(([label, term]) => (
                   <button
                     key={label}
                     className="active-filter"
-                    onClick={() => s.toggleLabel(label)}
+                    onClick={() => nav.toggleLabel(label)}
                   >
                     {term === 'exclude' ? '−' : '#'}
                     {label}
@@ -471,7 +490,7 @@ export function Dashboard() {
                   </button>
                 ))}
                 {isFiltered && (
-                  <button className="reset-filters" onClick={s.resetFilters}>
+                  <button className="reset-filters" onClick={nav.resetFilters}>
                     Clear filters
                   </button>
                 )}
@@ -481,7 +500,7 @@ export function Dashboard() {
                 size="sm"
                 className="save-view-button ml-auto"
                 onClick={() =>
-                  s.editView(selectedView ? { ...selectedView, filter: s.filter } : null)
+                  nav.editView(selectedView ? { ...selectedView, filter: nav.filter } : null)
                 }
               >
                 <Bookmark />
@@ -535,7 +554,7 @@ export function Dashboard() {
           )}
         </section>
       </main>
-      {nav.issue && <IssueDetail key={nav.issue} id={nav.issue} />}
+      {nav.issue && <IssueDetail key={`${nav.workspace}:${nav.issue}`} id={nav.issue} />}
       {nav.agent && <AgentDetail key={nav.agent} id={nav.agent} />}
       <DashboardOverlays board={data} views={views.data ?? []} viewsReady={views.isSuccess} />
     </div>
