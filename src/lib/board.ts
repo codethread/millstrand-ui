@@ -21,6 +21,32 @@ export function emptyFilter(): ViewFilter {
   };
 }
 
+export type WorkspaceView = 'all' | 'progress' | 'review' | 'completed';
+
+export function workspaceFilter(view: WorkspaceView): ViewFilter {
+  const filter = emptyFilter();
+  if (view === 'progress') filter.lanes = ['claimed'];
+  if (view === 'review') filter.lanes = ['in_review'];
+  if (view === 'completed') {
+    filter.lanes = ['closed'];
+    filter.includeClosed = true;
+  }
+  return filter;
+}
+
+export function matchesWorkspaceView(filter: ViewFilter, view: WorkspaceView): boolean {
+  const preset = workspaceFilter(view);
+  return (
+    filter.query === '' &&
+    Object.keys(filter.terms).length === 0 &&
+    filter.types.length === 0 &&
+    filter.priorities.length === 0 &&
+    filter.includeClosed === preset.includeClosed &&
+    filter.lanes.length === preset.lanes.length &&
+    filter.lanes.every((lane) => preset.lanes.includes(lane))
+  );
+}
+
 export function matchesCard(card: Card, filter: ViewFilter): boolean {
   if (!filter.includeClosed && card.state === 'closed') return false;
   if (filter.lanes.length && !filter.lanes.includes(card.lane)) return false;

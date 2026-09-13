@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useHotkeys } from 'react-hotkeys-hook';
@@ -43,9 +44,18 @@ export function useDashboardKeys() {
   const enabled = overlay === 'closed' && issue === null;
   useHotkeys(
     hotkeys(keys.search),
-    () => document.getElementById('issue-search')?.focus(),
+    () => {
+      flushSync(() => useDashboardStore.getState().setContentFullscreen(false));
+      document.getElementById('issue-search')?.focus();
+    },
     { preventDefault: true, enabled },
     [keys.search, enabled],
+  );
+  useHotkeys(
+    'escape',
+    () => useDashboardStore.getState().setContentFullscreen(false),
+    { enabled },
+    [enabled],
   );
   useHotkeys(hotkeys(keys.board), () => setMode('board'), { enabled }, [keys.board, enabled]);
   useHotkeys(hotkeys(keys.outline), () => setMode('outline'), { enabled }, [keys.outline, enabled]);

@@ -4,10 +4,10 @@ A web interface for exploring Millstrand workspaces. Its first surface covers
 Kanban cards, tasks, dependencies, and activity through a local Node server.
 Only card labels and saved dashboard views are currently editable.
 
-| | |
-|---|---|
-|![visible ui showing the kanban board](https://github.com/user-attachments/assets/b34a3284-f22f-4de0-a94e-8b84ed54e24b) | ![focussed view of card](https://github.com/user-attachments/assets/23c46da0-6ed2-4e01-949e-aab4d2a0593b) |
-| ![graph view](https://github.com/user-attachments/assets/c58e5fa9-9445-4576-93f7-4144d90d3d19) |
+|                                                                                                                         |                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| ![visible ui showing the kanban board](https://github.com/user-attachments/assets/b34a3284-f22f-4de0-a94e-8b84ed54e24b) | ![focussed view of card](https://github.com/user-attachments/assets/23c46da0-6ed2-4e01-949e-aab4d2a0593b) |
+| ![graph view](https://github.com/user-attachments/assets/c58e5fa9-9445-4576-93f7-4144d90d3d19)                          |
 
 ## Run
 
@@ -97,7 +97,11 @@ pre-commit hook.
 ## Explore
 
 The interface follows your system light/dark preference automatically, including
-changes made while the page is open. The overview stays compact above the working view.
+changes made while the page is open. Status counts, workspace filters, and live refresh
+status live in the sidebar; layout, search, and filters share a compact header.
+Use the fullscreen button at the top right of the content to hide the sidebar and
+header. Click it again or press Escape to restore them. Your filters and layout
+stay intact; the search shortcut also restores the header and focuses search.
 
 Use Board for lanes, Outline for epic/feature context, and Graph for relationships.
 Choose a graph focus to load one card's task subtree and dependencies. Solid arrows

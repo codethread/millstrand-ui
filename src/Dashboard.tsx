@@ -1,17 +1,17 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  Activity,
   Bookmark,
   Check,
   ChevronDown,
-  ChevronRight,
   CircleDot,
   Filter,
   GitBranch,
   Keyboard,
   LayoutGrid,
   ListTree,
+  Maximize,
+  Minimize,
   Menu,
   Network,
   Plus,
@@ -22,7 +22,15 @@ import {
   X,
 } from 'lucide-react';
 import { useBoard, useViews } from './lib/api';
-import { boardSummary, emptyFilter, lanes, selectCards, viewDescription } from './lib/board';
+import {
+  boardSummary,
+  emptyFilter,
+  lanes,
+  matchesWorkspaceView,
+  selectCards,
+  viewDescription,
+  type WorkspaceView,
+} from './lib/board';
 import { useDashboardKeys, useDashboardNavigation } from './lib/navigation';
 import { useDashboardStore, type Presentation } from './store';
 import { cn } from './lib/utils';
@@ -49,11 +57,19 @@ interface SidebarProps {
   board: Board;
   views: SavedView[];
   connected: boolean;
+  refreshing: boolean;
 }
 
-function SidebarContents({ board, views, connected }: SidebarProps) {
+function SidebarContents({ board, views, connected, refreshing }: SidebarProps) {
   const s = useDashboardStore();
+  const client = useQueryClient();
   const active = boardSummary(board);
+  const workspaceViews = [
+    { id: 'all', label: 'All issues', count: active.active, icon: LayoutGrid },
+    { id: 'progress', label: 'In progress', count: active.inProgress, icon: CircleDot },
+    { id: 'review', label: 'In review', count: active.review, icon: Sparkles },
+    { id: 'completed', label: 'Completed', count: active.closed, icon: Check },
+  ] satisfies { id: WorkspaceView; label: string; count: number; icon: typeof LayoutGrid }[];
   return (
     <>
       <div className="brand">
@@ -73,23 +89,22 @@ function SidebarContents({ board, views, connected }: SidebarProps) {
       </div>
       <WorkspaceSwitcher workspace={board.workspace} />
       <div className="sidebar-section-label">WORKSPACE</div>
-      <button
-        className={cn('nav-item', s.activeViewId === null && 'active')}
-        onClick={() => s.selectView(null)}
-      >
-        <LayoutGrid />
-        All issues<span className="nav-count">{active.active}</span>
-      </button>
-      <button
-        className="nav-item"
-        onClick={() => {
-          s.selectView(null);
-          s.toggleLane('claimed');
-        }}
-      >
-        <Activity />
-        Active work<span className="nav-count">{active.inProgress}</span>
-      </button>
+      <p className="sidebar-hint">{active.active} active issues</p>
+      {workspaceViews.map(({ id, label, count, icon: Icon }) => {
+        const selected = s.activeViewId === null && matchesWorkspaceView(s.filter, id);
+        return (
+          <button
+            key={id}
+            className={cn('nav-item', selected && 'active')}
+            aria-pressed={selected}
+            onClick={() => s.selectWorkspaceView(id)}
+          >
+            <Icon />
+            {label}
+            <span className="nav-count">{count}</span>
+          </button>
+        );
+      })}
       <div className="sidebar-section-label mt-7">
         <span>YOUR VIEWS</span>
         <button aria-label="Create view" onClick={() => s.editView(null)}>
@@ -144,12 +159,29 @@ function SidebarContents({ board, views, connected }: SidebarProps) {
         <p className="sidebar-hint">Add labels from an issue’s detail panel.</p>
       )}
       <div className="sidebar-bottom">
-        <div className="local-workspace-note">
-          <span className="live-dot" />
-          <span>
-            {connected ? 'Connected to your workspace' : 'Connection interrupted'}
-            <small>Labels & views are editable</small>
-          </span>
+        <div className="flex items-center justify-between px-2 pb-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" className={cn('sync-indicator', !connected && 'disconnected')}>
+                <span className="live-dot" />
+                {connected ? 'Live' : 'Disconnected'}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Refreshes every 5 seconds · last update{' '}
+              {new Date(board.fetchedAt).toLocaleTimeString()}
+            </TooltipContent>
+          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Refresh workspace"
+            onClick={() => {
+              void client.invalidateQueries();
+            }}
+          >
+            <RefreshCw className={cn(refreshing && 'animate-spin')} />
+          </Button>
         </div>
         <button className="nav-item" onClick={s.openShortcuts}>
           <Keyboard />
@@ -253,7 +285,6 @@ function Filters() {
 export function Dashboard() {
   const board = useBoard();
   const views = useViews();
-  const client = useQueryClient();
   const s = useDashboardStore();
   const nav = useDashboardNavigation();
   useDashboardKeys();
@@ -288,15 +319,19 @@ export function Dashboard() {
     );
   const data = board.data;
   const cards = selectCards(data.cards, s.filter);
-  const summary = boardSummary(data);
   const selectedView = views.data?.find((view) => view.id === s.activeViewId);
   const isFiltered = JSON.stringify(s.filter) !== JSON.stringify(emptyFilter());
   return (
-    <div className="app-shell">
-      <Sidebar board={data} views={views.data ?? []} connected={!board.error} />
-      <main className="main-workspace">
-        <header className="topbar">
-          <div className="flex min-w-0 items-center gap-3">
+    <div className={cn('app-shell', s.contentFullscreen && 'content-fullscreen')}>
+      <Sidebar
+        board={data}
+        views={views.data ?? []}
+        connected={!board.error}
+        refreshing={board.isFetching}
+      />
+      <main className="main-workspace" aria-label="Issues">
+        <header className="workspace-header">
+          <div className="view-toolbar">
             <Button
               className="md:hidden"
               variant="ghost"
@@ -306,216 +341,115 @@ export function Dashboard() {
             >
               <Menu />
             </Button>
-            <span className="breadcrumb-project">{data.workspace.name}</span>
-            <ChevronRight className="size-3 text-muted-foreground" />
-            <span className="text-foreground">Overview</span>
+            <div className="view-tabs" aria-label="View layout">
+              {modes.map(({ id, label, icon: Icon }) => (
+                <button
+                  aria-pressed={nav.mode === id}
+                  className={cn(nav.mode === id && 'selected')}
+                  key={id}
+                  onClick={() => nav.setMode(id)}
+                >
+                  <Icon />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="toolbar-actions">
+              <div className="search-field">
+                <Search />
+                <Input
+                  id="issue-search"
+                  aria-label="Search issues"
+                  placeholder="Search issues…"
+                  value={s.filter.query}
+                  onChange={(event) => s.setQuery(event.target.value)}
+                />
+                {s.filter.query ? (
+                  <button aria-label="Clear search" onClick={() => s.setQuery('')}>
+                    <X className="size-3" />
+                  </button>
+                ) : (
+                  <kbd>{s.shortcuts.search}</kbd>
+                )}
+              </div>
+              <Filters />
+              <button
+                className={cn('closed-toggle', s.filter.includeClosed && 'selected')}
+                onClick={s.toggleClosed}
+                aria-pressed={s.filter.includeClosed}
+              >
+                <Check className="size-3.5" />
+                Include completed
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className={cn('sync-indicator', board.error && 'disconnected')}>
-                  <span className="live-dot" />
-                  {board.error ? 'Disconnected' : 'Live'}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                Refreshes every 5 seconds · last update{' '}
-                {new Date(data.fetchedAt).toLocaleTimeString()}
-              </TooltipContent>
-            </Tooltip>
+          <div className="view-context">
+            <span>
+              {cards.length} {cards.length === 1 ? 'issue' : 'issues'}
+              <span className="context-dot">·</span>
+              {selectedView?.name ?? (s.filter.includeClosed ? 'All activity' : 'Active work')}
+              {nav.mode === 'board' && (
+                <>
+                  <span className="context-dot">·</span>Grouped by status
+                </>
+              )}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {Object.entries(s.filter.terms).map(([label, term]) => (
+                <button key={label} className="active-filter" onClick={() => s.toggleLabel(label)}>
+                  {term === 'exclude' ? '−' : '#'}
+                  {label}
+                  <X className="size-3" />
+                </button>
+              ))}
+              {isFiltered && (
+                <button className="reset-filters" onClick={s.resetFilters}>
+                  Clear filters
+                </button>
+              )}
+            </div>
             <Button
               variant="ghost"
-              size="icon-sm"
-              aria-label="Refresh workspace"
-              onClick={() => {
-                void client.invalidateQueries();
-              }}
+              size="sm"
+              className="save-view-button ml-auto"
+              onClick={() =>
+                s.editView(selectedView ? { ...selectedView, filter: s.filter } : null)
+              }
             >
-              <RefreshCw className={cn(board.isFetching && 'animate-spin')} />
+              <Bookmark />
+              {selectedView ? 'Edit view' : 'Save view'}
             </Button>
           </div>
         </header>
-        <div className="workspace-heading">
-          <div>
-            <div className="eyebrow">
-              <span className="size-1.5 rounded-full bg-primary" />
-              YOUR WORK, CONNECTED
-            </div>
-            <h1>{selectedView?.name ?? 'All issues'}</h1>
-            <p>
-              {selectedView
-                ? viewDescription(selectedView)
-                : 'A little perspective on everything in motion.'}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            className="save-view-button"
-            onClick={() => s.editView(selectedView ? { ...selectedView, filter: s.filter } : null)}
-          >
-            <Bookmark />
-            {selectedView ? 'Edit view' : 'Save view'}
-          </Button>
-        </div>
-        <div className="summary-strip">
-          <button onClick={() => s.selectView(null)}>
-            <span className="summary-icon active">
-              <LayersIcon />
-            </span>
-            <div>
-              <span>Active issues</span>
-              <strong>{summary.active}</strong>
-            </div>
-          </button>
-          <button
-            onClick={() => {
-              s.selectView(null);
-              s.toggleLane('claimed');
-            }}
-          >
-            <span className="summary-icon progress">
-              <CircleDot />
-            </span>
-            <div>
-              <span>In progress</span>
-              <strong>{summary.inProgress}</strong>
-            </div>
-            <span className="summary-caption">Moving forward</span>
-          </button>
-          <button
-            onClick={() => {
-              s.selectView(null);
-              s.toggleLane('in_review');
-            }}
-          >
-            <span className="summary-icon review">
-              <Sparkles />
-            </span>
-            <div>
-              <span>In review</span>
-              <strong>{summary.review}</strong>
-            </div>
-          </button>
-          <button
-            onClick={() => {
-              s.selectView(null);
-              s.toggleClosed();
-              s.toggleLane('closed');
-            }}
-          >
-            <span className="summary-icon done">
-              <Check />
-            </span>
-            <div>
-              <span>Completed</span>
-              <strong>{summary.closed}</strong>
-            </div>
-          </button>
-        </div>
-        <div className="view-toolbar">
-          <div className="view-tabs" aria-label="View layout">
-            {modes.map(({ id, label, icon: Icon }) => (
-              <button
-                aria-pressed={nav.mode === id}
-                className={cn(nav.mode === id && 'selected')}
-                key={id}
-                onClick={() => nav.setMode(id)}
-              >
-                <Icon />
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="toolbar-actions">
-            <div className="search-field">
-              <Search />
-              <Input
-                id="issue-search"
-                aria-label="Search issues"
-                placeholder="Search issues…"
-                value={s.filter.query}
-                onChange={(event) => s.setQuery(event.target.value)}
-              />
-              {s.filter.query ? (
-                <button aria-label="Clear search" onClick={() => s.setQuery('')}>
-                  <X className="size-3" />
-                </button>
-              ) : (
-                <kbd>{s.shortcuts.search}</kbd>
-              )}
-            </div>
-            <Filters />
-            <button
-              className={cn('closed-toggle', s.filter.includeClosed && 'selected')}
-              onClick={s.toggleClosed}
-              aria-pressed={s.filter.includeClosed}
-            >
-              <Check className="size-3.5" />
-              Include completed
-            </button>
-          </div>
-        </div>
-        <div className="view-context">
-          <span>
-            {cards.length} {cards.length === 1 ? 'issue' : 'issues'}
-            <span className="context-dot">·</span>
-            {s.filter.includeClosed ? 'All activity' : 'Active work'}
-            {nav.mode === 'board' && (
-              <>
-                <span className="context-dot">·</span>Grouped by status
-              </>
-            )}
-          </span>
-          <div className="flex items-center gap-2">
-            {Object.entries(s.filter.terms).map(([label, term]) => (
-              <button key={label} className="active-filter" onClick={() => s.toggleLabel(label)}>
-                {term === 'exclude' ? '−' : '#'}
-                {label}
-                <X className="size-3" />
-              </button>
-            ))}
-            {isFiltered && (
-              <button className="reset-filters" onClick={s.resetFilters}>
-                Clear filters
-              </button>
-            )}
-          </div>
-        </div>
         {board.error && <ErrorNotice error={board.error} />}
         {views.error && <ErrorNotice error={views.error} />}
-        {nav.mode === 'graph' ? (
-          <Suspense fallback={<Loading text="Loading graph…" />}>
-            <GraphView cards={cards} allCards={data.cards} />
-          </Suspense>
-        ) : cards.length === 0 ? (
-          <EmptyBoard />
-        ) : nav.mode === 'board' ? (
-          <BoardView cards={cards} allCards={data.cards} />
-        ) : (
-          <OutlineView cards={cards} allCards={data.cards} />
-        )}
-        <footer className="workspace-footer">
-          <span>
-            <span className="live-dot" />
-            Millstrand workspace
-          </span>
-          <span>
-            Board <kbd>{s.shortcuts.board}</kbd> Outline <kbd>{s.shortcuts.outline}</kbd> Graph{' '}
-            <kbd>{s.shortcuts.graph}</kbd>
-            <span className="footer-divider" />
-            Shortcuts{' '}
-            <button onClick={s.openShortcuts}>
-              <kbd>?</kbd>
-            </button>
-          </span>
-        </footer>
+        <section className="working-content" aria-label={`${nav.mode} content`}>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="content-fullscreen-toggle"
+            aria-label={s.contentFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+            title={s.contentFullscreen ? 'Exit fullscreen (Esc)' : 'Expand content to fullscreen'}
+            aria-pressed={s.contentFullscreen}
+            onClick={() => s.setContentFullscreen(!s.contentFullscreen)}
+          >
+            {s.contentFullscreen ? <Minimize /> : <Maximize />}
+          </Button>
+          {nav.mode === 'graph' ? (
+            <Suspense fallback={<Loading text="Loading graph…" />}>
+              <GraphView cards={cards} allCards={data.cards} />
+            </Suspense>
+          ) : cards.length === 0 ? (
+            <EmptyBoard />
+          ) : nav.mode === 'board' ? (
+            <BoardView cards={cards} allCards={data.cards} />
+          ) : (
+            <OutlineView cards={cards} allCards={data.cards} />
+          )}
+        </section>
       </main>
       {nav.issue && <IssueDetail key={nav.issue} id={nav.issue} />}
       <DashboardOverlays board={data} views={views.data ?? []} viewsReady={views.isSuccess} />
     </div>
   );
-}
-
-function LayersIcon() {
-  return <LayoutGrid />;
 }

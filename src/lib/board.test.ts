@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Card, ViewFilter } from '../../shared/api';
-import { emptyFilter, selectCards, selectOutline } from './board';
+import {
+  emptyFilter,
+  matchesWorkspaceView,
+  selectCards,
+  selectOutline,
+  workspaceFilter,
+  type WorkspaceView,
+} from './board';
 
 function card(id: string, labels: string[] = []): Card {
   return {
@@ -101,6 +108,46 @@ describe('saved-view filters', () => {
     };
     expect(selectCards(cards, filter).map((item) => item.id)).toEqual(['match']);
   });
+});
+
+describe('workspace navigation filters', () => {
+  const cards: Card[] = [
+    card('ready'),
+    { ...card('progress'), state: 'claimed', lane: 'claimed' },
+    { ...card('review'), state: 'in_review', lane: 'in_review' },
+    { ...card('completed'), state: 'closed', lane: 'closed' },
+  ];
+
+  it.each([
+    { view: 'all', expected: ['progress', 'ready', 'review'] },
+    { view: 'progress', expected: ['progress'] },
+    { view: 'review', expected: ['review'] },
+    { view: 'completed', expected: ['completed'] },
+  ] satisfies { view: WorkspaceView; expected: string[] }[])(
+    '$view selects its issues and only its navigation button',
+    ({ view, expected }) => {
+      const filter = workspaceFilter(view);
+      expect(selectCards(cards, filter).map((item) => item.id)).toEqual(expected);
+      const views: WorkspaceView[] = ['all', 'progress', 'review', 'completed'];
+      expect(views.filter((candidate) => matchesWorkspaceView(filter, candidate))).toEqual([view]);
+    },
+  );
+
+  it.each([
+    { query: 'search' },
+    { terms: { web: 'include' } },
+    { types: ['epic'] },
+    { priorities: ['p1'] },
+    { lanes: ['claimed', 'in_review'] },
+    { includeClosed: true },
+  ] satisfies Partial<ViewFilter>[])(
+    'does not mark a modified preset as selected: %j',
+    (change) => {
+      expect(matchesWorkspaceView({ ...workspaceFilter('progress'), ...change }, 'progress')).toBe(
+        false,
+      );
+    },
+  );
 });
 
 describe('outline context', () => {

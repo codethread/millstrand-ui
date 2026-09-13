@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { CardType, LabelTerm, Lane, Priority, SavedView, ViewFilter } from '../shared/api';
-import { emptyFilter } from './lib/board';
+import { emptyFilter, workspaceFilter, type WorkspaceView } from './lib/board';
 
 export type Presentation = 'board' | 'outline' | 'graph';
 export type DetailTab = 'overview' | 'activity' | 'attributes';
@@ -34,6 +34,9 @@ interface DashboardState {
   detailTab: DetailTab;
   graphRoot: string | null;
   sidebarOpen: boolean;
+  contentFullscreen: boolean;
+  setContentFullscreen: (fullscreen: boolean) => void;
+  selectWorkspaceView: (view: WorkspaceView) => void;
   shortcuts: Record<ShortcutAction, string>;
   setQuery: (query: string) => void;
   toggleClosed: () => void;
@@ -71,6 +74,15 @@ export const useDashboardStore = create<DashboardState>()(
       detailTab: 'overview',
       graphRoot: null,
       sidebarOpen: false,
+      contentFullscreen: false,
+      setContentFullscreen: (contentFullscreen) => set({ contentFullscreen, sidebarOpen: false }),
+      selectWorkspaceView: (view) =>
+        set({
+          filter: workspaceFilter(view),
+          activeViewId: null,
+          graphRoot: null,
+          sidebarOpen: false,
+        }),
       shortcuts: defaultShortcuts,
       setQuery: (query) => set((s) => ({ graphRoot: null, filter: { ...s.filter, query } })),
       toggleClosed: () =>
