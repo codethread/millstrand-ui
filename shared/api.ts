@@ -1,0 +1,132 @@
+/** Normalized dashboard contract. Missing source values become explicit nulls. */
+export type CardType = 'epic' | 'feature';
+export type Lane = 'refinement' | 'pending' | 'claimed' | 'in_review' | 'closed' | 'unknown';
+export type Priority = 'p1' | 'p2' | 'p3' | 'p4';
+export type TaskStatus = 'ready' | 'doing' | 'blocked' | 'closed';
+export type JsonValue =
+  null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+export interface Card {
+  id: string;
+  title: string;
+  type: CardType;
+  state: string;
+  lane: Lane;
+  priority: Priority;
+  epicId: string | null;
+  owner: string | null;
+  branch: string | null;
+  worktree: string | null;
+  source: string | null;
+  outcome: string | null;
+  labels: string[];
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface Board {
+  workspace: { path: string; name: string };
+  fetchedAt: string;
+  cards: Card[];
+  labels: { label: string; count: number }[];
+}
+
+export interface WorkspaceOption {
+  id: string;
+  name: string;
+  path: string;
+  status: 'running' | 'offline';
+}
+
+export interface Note {
+  id: string;
+  text: string;
+  at: string;
+  by: string | null;
+  kind: string | null;
+  truncated: boolean;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  state: string;
+  status: TaskStatus;
+  owner: string | null;
+  body: string;
+  latestNote: Note | null;
+}
+
+export interface WorkItem {
+  id: string;
+  title: string;
+  state: string;
+  attributes: Record<string, JsonValue>;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export type Relation =
+  { kind: 'depends-on'; item: WorkItem } | { kind: 'depended-on-by'; item: WorkItem };
+
+export interface CardDetail {
+  card: Card;
+  body: string;
+  attributes: Record<string, JsonValue>;
+  tasks: Task[];
+  notes: Note[];
+  activeWork: WorkItem[];
+  ready: WorkItem[];
+  related: Relation[];
+}
+
+export interface GraphNode extends WorkItem {
+  kind: 'epic' | 'feature' | 'task' | 'work';
+}
+
+export type GraphEdge =
+  | { kind: 'parent-of'; from: string; to: string }
+  | { kind: 'depends-on'; from: string; to: string };
+
+export interface CardGraph {
+  rootId: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export type LabelTerm = 'include' | 'exclude';
+export interface ViewFilter {
+  query: string;
+  mode: 'and' | 'or';
+  terms: Record<string, LabelTerm>;
+  lanes: Lane[];
+  types: CardType[];
+  priorities: Priority[];
+  includeClosed: boolean;
+}
+
+export interface SavedView {
+  id: string;
+  name: string;
+  filter: ViewFilter;
+}
+
+export type LabelChange =
+  { action: 'add'; labels: string[] } | { action: 'remove'; labels: string[] };
+
+export interface ApiError {
+  error: string;
+}
+
+/**
+ * GET /api/workspaces → WorkspaceOption[] (known local mill weavers)
+ * GET /api/board → Board
+ * GET /api/cards/:id → CardDetail
+ * GET /api/cards/:id/graph → CardGraph
+ * GET /api/cards/:id/tasks/:taskId/notes → Note[]
+ * PATCH /api/cards/:id/labels, LabelChange → CardDetail
+ * GET /api/views → SavedView[]
+ * PUT /api/views, SavedView[] → SavedView[]
+ * Scoped routes accept ?workspace=<WorkspaceOption.id>; omission uses the startup workspace.
+ * All failures are non-2xx with ApiError.
+ */

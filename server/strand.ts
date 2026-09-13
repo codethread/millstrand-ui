@@ -1,0 +1,165 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { basename, dirname } from 'node:path';
+import type { Board, Card, CardDetail, CardGraph, LabelChange, Note } from '../shared/api.ts';
+import {
+  array,
+  HttpError,
+  object,
+  parseCard,
+  parseGraph,
+  parseNote,
+  parseRelation,
+  parseTask,
+  parseWork,
+  strandErrorMessage,
+} from './parse.ts';
+
+const exec = promisify(execFile);
+const cacheLifetime = 3_000;
+
+/** One shared in-flight request per key; refresh failures remain visible to callers. */
+class ReadCache<T> {
+  private readonly values = new Map<string, { value: T; until: number }>();
+  private readonly pending = new Map<string, Promise<T>>();
+  private generation = 0;
+
+  async get(key: string, load: () => Promise<T>): Promise<T> {
+    const cached = this.values.get(key);
+    if (cached && cached.until > Date.now()) return cached.value;
+    const running = this.pending.get(key);
+    if (running) return running;
+    const generation = this.generation;
+    const request = load()
+      .then((value) => {
+        if (generation === this.generation)
+          this.values.set(key, { value, until: Date.now() + cacheLifetime });
+        return value;
+      })
+      .finally(() => {
+        if (this.pending.get(key) === request) this.pending.delete(key);
+      });
+    this.pending.set(key, request);
+    return request;
+  }
+
+  clear(): void {
+    this.generation += 1;
+    this.values.clear();
+    this.pending.clear();
+  }
+}
+
+export class StrandData {
+  private readonly boards = new ReadCache<Board>();
+  private readonly details = new ReadCache<CardDetail>();
+  private readonly graphs = new ReadCache<CardGraph>();
+
+  constructor(readonly workspace: string) {}
+
+  private async run(args: string[]): Promise<unknown> {
+    try {
+      const { stdout } = await exec('strand', ['--workspace', this.workspace, ...args], {
+        cwd: dirname(this.workspace),
+        timeout: 30_000,
+        maxBuffer: 16 * 1024 * 1024,
+        encoding: 'utf8',
+        env: { ...process.env, MILLSTRAND_ERROR_FORMAT: 'json' },
+      });
+      return JSON.parse(stdout) as unknown;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown strand failure';
+      const stderr =
+        error instanceof Error && 'stderr' in error && typeof error.stderr === 'string'
+          ? error.stderr
+          : '';
+      throw new HttpError(
+        502,
+        strandErrorMessage(stderr, `Strand command failed: ${detail.slice(0, 1500)}`),
+      );
+    }
+  }
+
+  board(): Promise<Board> {
+    return this.boards.get('board', async () => {
+      const raw = object(await this.run(['kanban', 'board', '--all', 'true']), 'board');
+      const cards = array(raw['cards'], 'board.cards').map(parseCard);
+      const counts = new Map<string, number>();
+      for (const card of cards) {
+        for (const label of card.labels) counts.set(label, (counts.get(label) ?? 0) + 1);
+      }
+      return {
+        workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
+        fetchedAt: new Date().toISOString(),
+        cards,
+        labels: [...counts]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([label, count]) => ({ label, count })),
+      };
+    });
+  }
+
+  private async card(id: string): Promise<Card> {
+    const card = (await this.board()).cards.find((card) => card.id === id);
+    if (!card) throw new HttpError(404, `Kanban card ${id} was not found in this workspace.`);
+    return card;
+  }
+
+  detail(id: string): Promise<CardDetail> {
+    return this.details.get(id, async () => {
+      const known = await this.card(id);
+      const [cardPayload, notesPayload] = await Promise.all([
+        this.run(['kanban', 'card', id]),
+        this.run(['notes', id]),
+      ]);
+      const raw = object(cardPayload, 'card detail');
+      const cardRaw = object(raw['card'], 'card detail.card');
+      const attrs = object(cardRaw['attributes'], 'card.attributes');
+      const body = attrs['body'];
+      if (body !== undefined && typeof body !== 'string')
+        throw new Error('card body must be a string');
+      return {
+        card: { ...parseCard(cardRaw), epicId: known.epicId },
+        body: body ?? '',
+        attributes: attrs,
+        tasks: array(raw['tasks'], 'card detail.tasks').map(parseTask),
+        notes: array(notesPayload, 'card notes').map(parseNote).reverse(),
+        activeWork: array(raw['active-work'], 'card detail.active-work').map(parseWork),
+        ready: array(raw['ready'], 'card detail.ready').map(parseWork),
+        related: array(raw['related'], 'card detail.related').map(parseRelation),
+      };
+    });
+  }
+
+  graph(id: string): Promise<CardGraph> {
+    return this.graphs.get(id, async () => {
+      await this.card(id);
+      return parseGraph(await this.run(['kanban-export', id]));
+    });
+  }
+
+  async taskNotes(cardId: string, taskId: string): Promise<Note[]> {
+    const detail = await this.detail(cardId);
+    if (!detail.tasks.some((task) => task.id === taskId)) {
+      throw new HttpError(404, 'That task does not belong to this kanban card.');
+    }
+    return array(await this.run(['notes', taskId]), 'task notes')
+      .map(parseNote)
+      .reverse();
+  }
+
+  async changeLabels(id: string, change: LabelChange): Promise<CardDetail> {
+    await this.card(id);
+    await this.run([
+      'kanban',
+      'label',
+      change.action === 'add' ? 'add' : 'rm',
+      id,
+      ...change.labels,
+    ]);
+    this.boards.clear();
+    this.details.clear();
+    this.graphs.clear();
+    return this.detail(id);
+  }
+}

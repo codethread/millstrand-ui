@@ -1,0 +1,17 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local configuration and tool output
+.env
+.env.*
+!.env.example
+*.local
+*.log
+.DS_Store
+
+# Public application assets are source files. Override broad global ignores.
+!public/
+!public/**
