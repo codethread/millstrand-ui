@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
 set -eu
 
-repo_root="$(git rev-parse --show-toplevel)" || exit $?
-br --db "$repo_root/.beads/beads.db" sync --flush-only --quiet || exit $?
-case "$(basename "${GIT_INDEX_FILE:-index}")" in
-  next-index-*) ;; # Git's path-limited commit index: do not widen its scope.
-  *) git add -- "$repo_root/.beads/issues.jsonl" || exit $? ;;
-esac
+# Historic Beads data is retained for audit only. This hook must not mutate or
+# stage it.
