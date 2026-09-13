@@ -2021,6 +2021,7 @@ h1 {
   color: var(--color-muted-foreground);
 }
 .agent-dot {
+  position: relative;
   width: 6px;
   height: 6px;
   flex-shrink: 0;
@@ -2029,6 +2030,14 @@ h1 {
 }
 .agent-status-running {
   color: light-dark(#408264, #8ac9a7);
+}
+.agent-status-running .agent-dot::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  content: '';
+  animation: agent-pulse 2.4s ease-out infinite;
 }
 .agent-status-ready {
   color: light-dark(#98783e, #d1b583);
@@ -2062,4 +2071,18 @@ h1 {
 .agent-run summary .agent-status {
   display: inline-flex;
   margin-left: 10px;
+}
+@keyframes agent-pulse {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  15% {
+    opacity: 0.35;
+  }
+  70% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
 }
