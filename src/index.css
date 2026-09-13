@@ -2030,9 +2030,6 @@ h1 {
 .agent-status-running {
   color: light-dark(#408264, #8ac9a7);
 }
-.agent-status-running .agent-dot {
-  animation: agent-pulse 2s ease-in-out infinite;
-}
 .agent-status-ready {
   color: light-dark(#98783e, #d1b583);
 }
@@ -2065,9 +2062,4 @@ h1 {
 .agent-run summary .agent-status {
   display: inline-flex;
   margin-left: 10px;
-}
-@keyframes agent-pulse {
-  50% {
-    opacity: 0.4;
-  }
 }
