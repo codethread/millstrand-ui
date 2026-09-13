@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "dev": "concurrently --kill-others --names api,web \"tsx watch server/index.ts\" \"vite\"",
     "dev:api": "tsx watch server/index.ts",
