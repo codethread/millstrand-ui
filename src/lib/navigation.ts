@@ -6,6 +6,7 @@ import { useDashboardStore } from '../store';
 import type { CardType, Lane, Priority, SavedView, ViewFilter } from '../../shared/api';
 import { emptyFilter, workspaceFilter, type WorkspaceView } from './board';
 import {
+  manualFilterSearch,
   workspaceDestination,
   type DashboardSearch,
   type DetailTab,
@@ -23,14 +24,7 @@ export function useDashboardNavigation() {
     void navigate({ search: (old) => ({ ...old, ...change }), replace });
   }
   function filter(change: (current: ViewFilter) => ViewFilter, replace = false) {
-    update(
-      {
-        filter: change(search.filter),
-        graphRoot: null,
-        mode: search.mode === 'agents' ? 'board' : search.mode,
-      },
-      replace,
-    );
+    update(manualFilterSearch(search, change(search.filter)), replace);
   }
   function selectView(view: SavedView | null) {
     useDashboardStore.getState().setSidebarOpen(false);
@@ -113,14 +107,15 @@ export function useDashboardKeys() {
   const keys = useDashboardStore((s) => s.shortcuts);
   const overlay = useDashboardStore((s) => s.overlay.kind);
   const enabled = overlay === 'closed' && issue === null && agent === null;
+  const workspaceEnabled = enabled && mode !== 'overview';
   useHotkeys(
     hotkeys(keys.search),
     () => {
       flushSync(() => useDashboardStore.getState().setContentFullscreen(false));
       document.getElementById(mode === 'agents' ? 'agent-search' : 'issue-search')?.focus();
     },
-    { preventDefault: true, enabled },
-    [keys.search, enabled, mode],
+    { preventDefault: true, enabled: workspaceEnabled },
+    [keys.search, workspaceEnabled, mode],
   );
   useHotkeys(
     'escape',
@@ -128,9 +123,18 @@ export function useDashboardKeys() {
     { enabled },
     [enabled],
   );
-  useHotkeys(hotkeys(keys.board), () => setMode('board'), { enabled }, [keys.board, enabled]);
-  useHotkeys(hotkeys(keys.outline), () => setMode('outline'), { enabled }, [keys.outline, enabled]);
-  useHotkeys(hotkeys(keys.graph), () => setMode('graph'), { enabled }, [keys.graph, enabled]);
+  useHotkeys(hotkeys(keys.board), () => setMode('board'), { enabled: workspaceEnabled }, [
+    keys.board,
+    workspaceEnabled,
+  ]);
+  useHotkeys(hotkeys(keys.outline), () => setMode('outline'), { enabled: workspaceEnabled }, [
+    keys.outline,
+    workspaceEnabled,
+  ]);
+  useHotkeys(hotkeys(keys.graph), () => setMode('graph'), { enabled: workspaceEnabled }, [
+    keys.graph,
+    workspaceEnabled,
+  ]);
   useHotkeys(
     hotkeys(keys.refresh),
     () => {

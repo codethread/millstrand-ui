@@ -45,16 +45,35 @@ interface WorkspaceClients {
   views: ViewStore;
 }
 
+type DiscoverWorkspaces = () => Promise<WorkspaceOption[]>;
+
+async function discoverWorkspaces(defaultPath: string): Promise<WorkspaceOption[]> {
+  try {
+    const { stdout } = await exec('mill', ['weaver', 'list'], {
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    return parseWorkspaces(JSON.parse(stdout) as unknown, defaultPath);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Unknown mill failure';
+    throw new HttpError(502, `Could not discover local workspaces: ${detail.slice(0, 1500)}`);
+  }
+}
+
 export class WorkspaceDirectory {
   private readonly clients = new Map<string, WorkspaceClients>();
   private snapshot: WorkspaceOption[] | null = null;
   private validUntil = 0;
   private pending: Promise<WorkspaceOption[]> | null = null;
 
-  constructor(private readonly defaultPath: string) {}
+  constructor(
+    private readonly defaultPath: string,
+    private readonly discover: DiscoverWorkspaces = () => discoverWorkspaces(defaultPath),
+  ) {}
 
-  async list(): Promise<WorkspaceOption[]> {
-    if (this.snapshot !== null && Date.now() < this.validUntil) return this.snapshot;
+  async list(force = false): Promise<WorkspaceOption[]> {
+    if (!force && this.snapshot !== null && Date.now() < this.validUntil) return this.snapshot;
     if (this.pending !== null) return this.pending;
     this.pending = this.discover()
       .then((workspaces) => {
@@ -66,20 +85,6 @@ export class WorkspaceDirectory {
         this.pending = null;
       });
     return this.pending;
-  }
-
-  private async discover(): Promise<WorkspaceOption[]> {
-    try {
-      const { stdout } = await exec('mill', ['weaver', 'list'], {
-        encoding: 'utf8',
-        timeout: 10_000,
-        maxBuffer: 4 * 1024 * 1024,
-      });
-      return parseWorkspaces(JSON.parse(stdout) as unknown, this.defaultPath);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : 'Unknown mill failure';
-      throw new HttpError(502, `Could not discover local workspaces: ${detail.slice(0, 1500)}`);
-    }
   }
 
   async select(id: string | null): Promise<WorkspaceClients> {

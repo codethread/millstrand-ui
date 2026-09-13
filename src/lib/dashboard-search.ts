@@ -113,10 +113,26 @@ export function pinnableWorkspaceId(
   );
 }
 
+/** Manual filter edits no longer represent the selected saved view snapshot. */
+export function manualFilterSearch(
+  search: DashboardSearch,
+  filter: ViewFilter,
+): Partial<DashboardSearch> {
+  return {
+    filter,
+    activeViewId: null,
+    graphRoot: null,
+    mode: search.mode === 'agents' ? 'board' : search.mode,
+  };
+}
+
+type WorkspaceDestination =
+  { kind: 'board' } | { kind: 'card'; id: string } | { kind: 'agent'; id: string };
+
 /** Cross-weaver links start clean; Back restores the exact prior dashboard. */
 export function workspaceDestination(
   workspace: string,
-  item: { kind: 'board' } | { kind: 'card'; id: string } | { kind: 'agent'; id: string },
+  item: WorkspaceDestination,
 ): DashboardSearch {
   return {
     ...dashboardSearchDefaults,
@@ -126,4 +142,12 @@ export function workspaceDestination(
     agent: item.kind === 'agent' ? item.id : null,
     activeAgentsOnly: item.kind === 'agent',
   };
+}
+
+/** Explicit workspace routes reject offline weavers, so stale activity is not actionable. */
+export function workspaceActivityDestination(
+  workspace: WorkspaceOption,
+  item: WorkspaceDestination,
+): DashboardSearch | null {
+  return workspace.status === 'running' ? workspaceDestination(workspace.id, item) : null;
 }

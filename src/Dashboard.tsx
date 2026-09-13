@@ -334,7 +334,15 @@ function Filters() {
 
 export function Dashboard() {
   const nav = useDashboardNavigation();
-  return nav.mode === 'overview' ? <Overview /> : <WorkspaceDashboard key={nav.workspace} />;
+  useDashboardKeys();
+  return nav.mode === 'overview' ? (
+    <>
+      <Overview />
+      <DashboardOverlays board={null} views={[]} viewsReady={false} />
+    </>
+  ) : (
+    <WorkspaceDashboard key={nav.workspace} />
+  );
 }
 
 function WorkspaceDashboard() {
@@ -344,7 +352,6 @@ function WorkspaceDashboard() {
   const workspaces = useWorkspaces();
   const s = useDashboardStore();
   const nav = useDashboardNavigation();
-  useDashboardKeys();
   const workspacePath = board.data?.workspace.path ?? agents.data?.workspace.path ?? null;
   const defaultWorkspace = pinnableWorkspaceId(workspaces.data ?? [], workspacePath);
   useEffect(() => {

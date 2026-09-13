@@ -32,7 +32,7 @@ function useWorkspace() {
 export function useWorkspaces() {
   return useQuery({
     queryKey: ['workspaces'],
-    queryFn: () => request<WorkspaceOption[]>('/workspaces', null),
+    queryFn: () => request<WorkspaceOption[]>('/workspaces?refresh', null),
     refetchInterval: 30000,
   });
 }

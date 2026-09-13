@@ -4,7 +4,7 @@ import { ArrowUpRight, Bot, GitBranch, LayoutGrid, RefreshCw } from 'lucide-reac
 import type { AgentDirectory, Board, WorkspaceOption } from '../../shared/api';
 import { agentQueryOptions, boardQueryOptions, useWorkspaces } from '../lib/api';
 import { currentRun, runLabel, selectAgents } from '../lib/agents';
-import { workspaceDestination } from '../lib/dashboard-search';
+import { workspaceActivityDestination } from '../lib/dashboard-search';
 import { overviewCards } from '../lib/overview';
 import { cn } from '../lib/utils';
 import { ErrorNotice, Loading, StatusBadge } from './issue-parts';
@@ -22,19 +22,30 @@ function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
   const activeAgents = selectAgents(agents.data?.identities ?? [], '', true);
   const staleBoard = !online || !!board.error;
   const staleAgents = !online || !!agents.error;
+  const dashboardDestination = workspaceActivityDestination(workspace, { kind: 'board' });
   return (
     <article className="min-w-0 rounded-xl border border-border bg-card shadow-sm">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4">
         <div className="min-w-0">
-          <Link
-            to="/"
-            search={workspaceDestination(workspace.id, { kind: 'board' })}
-            className="flex items-center gap-2 font-semibold hover:text-primary"
-          >
-            <GitBranch className="size-4 shrink-0 text-primary" />
-            <span className="break-all">{workspace.name}</span>
-            <ArrowUpRight className="size-3.5 shrink-0" />
-          </Link>
+          {dashboardDestination ? (
+            <Link
+              to="/"
+              search={dashboardDestination}
+              className="flex items-center gap-2 font-semibold hover:text-primary"
+            >
+              <GitBranch className="size-4 shrink-0 text-primary" />
+              <span className="break-all">{workspace.name}</span>
+              <ArrowUpRight className="size-3.5 shrink-0" />
+            </Link>
+          ) : (
+            <div
+              className="flex items-center gap-2 font-semibold text-muted-foreground"
+              title="Dashboard unavailable while this weaver is offline"
+            >
+              <GitBranch className="size-4 shrink-0" />
+              <span className="break-all">{workspace.name}</span>
+            </div>
+          )}
           <p className="mt-1 break-all text-[10px] text-muted-foreground">
             {workspace.path.replace(/\/\.millstrand$/, '')}
           </p>
@@ -50,7 +61,7 @@ function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
           )}
         >
           {!online
-            ? 'Offline · last-known data only'
+            ? 'Offline · last-known data only · links unavailable'
             : board.error || agents.error
               ? 'Partially disconnected'
               : board.isPending || agents.isPending
@@ -95,26 +106,45 @@ function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
             </p>
           )}
           <div className="space-y-2">
-            {cards.map((card) => (
-              <Link
-                key={card.id}
-                to="/"
-                search={workspaceDestination(workspace.id, { kind: 'card', id: card.id })}
-                className="block rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-accent"
-                aria-label={`Open ${card.title} in ${workspace.name}`}
-              >
-                <span className="flex flex-wrap items-center gap-2 text-[10px]">
-                  <span className="issue-id">{card.id}</span>
-                  <StatusBadge status={card.lane} />
-                  <span className="ml-auto uppercase text-muted-foreground">{card.priority}</span>
-                </span>
-                <strong className="mt-2 block break-words text-sm">{card.title}</strong>
-                <span className="mt-2 block break-all text-[11px] text-muted-foreground">
-                  {card.owner ?? 'Unassigned'}
-                  {staleBoard ? ' · last known' : ''}
-                </span>
-              </Link>
-            ))}
+            {cards.map((card) => {
+              const destination = workspaceActivityDestination(workspace, {
+                kind: 'card',
+                id: card.id,
+              });
+              const content = (
+                <>
+                  <span className="flex flex-wrap items-center gap-2 text-[10px]">
+                    <span className="issue-id">{card.id}</span>
+                    <StatusBadge status={card.lane} />
+                    <span className="ml-auto uppercase text-muted-foreground">{card.priority}</span>
+                  </span>
+                  <strong className="mt-2 block break-words text-sm">{card.title}</strong>
+                  <span className="mt-2 block break-all text-[11px] text-muted-foreground">
+                    {card.owner ?? 'Unassigned'}
+                    {staleBoard ? ' · last known' : ''}
+                  </span>
+                </>
+              );
+              return destination ? (
+                <Link
+                  key={card.id}
+                  to="/"
+                  search={destination}
+                  className="block rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-accent"
+                  aria-label={`Open ${card.title} in ${workspace.name}`}
+                >
+                  {content}
+                </Link>
+              ) : (
+                <div
+                  key={card.id}
+                  className="rounded-lg border border-border p-3 opacity-70"
+                  title="Card unavailable while this weaver is offline"
+                >
+                  {content}
+                </div>
+              );
+            })}
           </div>
         </section>
         <section
@@ -158,14 +188,12 @@ function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
           <div className="space-y-2">
             {activeAgents.map((agent) => {
               const run = currentRun(agent);
-              return (
-                <Link
-                  key={agent.id}
-                  to="/"
-                  search={workspaceDestination(workspace.id, { kind: 'agent', id: agent.id })}
-                  className="block rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-accent"
-                  aria-label={`View agent ${agent.id} in ${workspace.name}`}
-                >
+              const destination = workspaceActivityDestination(workspace, {
+                kind: 'agent',
+                id: agent.id,
+              });
+              const content = (
+                <>
                   <span className="flex flex-wrap items-center gap-2 text-xs">
                     <Bot className="size-4 text-primary" />
                     <strong className="break-all">{run?.alias ?? agent.harness}</strong>
@@ -189,7 +217,26 @@ function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
                       Target · {run.target}
                     </span>
                   )}
+                </>
+              );
+              return destination ? (
+                <Link
+                  key={agent.id}
+                  to="/"
+                  search={destination}
+                  className="block rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-accent"
+                  aria-label={`View agent ${agent.id} in ${workspace.name}`}
+                >
+                  {content}
                 </Link>
+              ) : (
+                <div
+                  key={agent.id}
+                  className="rounded-lg border border-border p-3 opacity-70"
+                  title="Agent unavailable while this weaver is offline"
+                >
+                  {content}
+                </div>
               );
             })}
           </div>

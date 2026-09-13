@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseWorkspaces, workspaceId } from './workspaces.ts';
+import { parseWorkspaces, WorkspaceDirectory, workspaceId } from './workspaces.ts';
 
 describe('weaver discovery', () => {
   const defaultPath = '/work/main/.millstrand';
@@ -39,5 +39,27 @@ describe('weaver discovery', () => {
     expect(() =>
       parseWorkspaces([{ config_dir: '../other', state: 'running' }], defaultPath),
     ).toThrow('absolute path');
+  });
+
+  it('bypasses its recent discovery snapshot when refresh is forced', async () => {
+    let discoveries = 0;
+    const directory = new WorkspaceDirectory(defaultPath, async () => {
+      discoveries += 1;
+      return parseWorkspaces(
+        [
+          {
+            config_dir: defaultPath,
+            state: discoveries === 1 ? 'running' : 'stopped',
+          },
+        ],
+        defaultPath,
+      );
+    });
+
+    expect((await directory.list())[0]?.status).toBe('running');
+    expect((await directory.list())[0]?.status).toBe('running');
+    expect(discoveries).toBe(1);
+    expect((await directory.list(true))[0]?.status).toBe('offline');
+    expect(discoveries).toBe(2);
   });
 });
