@@ -2,8 +2,17 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { basename, dirname } from 'node:path';
 import { parseAgents } from './agents.ts';
+import {
+  agentLaunchArgs,
+  parseAgentOptions,
+  parseAgentReply,
+  parsePromptContext,
+} from './agent-prompts.ts';
 import type {
   AgentDirectory,
+  AgentOption,
+  AgentPrompt,
+  AgentReply,
   Board,
   Card,
   CardDetail,
@@ -64,6 +73,7 @@ export class StrandData {
   private readonly agentDirectories = new ReadCache<AgentDirectory>();
   private readonly details = new ReadCache<CardDetail>();
   private readonly graphs = new ReadCache<CardGraph>();
+  private readonly replies = new ReadCache<AgentReply>();
 
   constructor(readonly workspace: string) {}
 
@@ -122,6 +132,41 @@ export class StrandData {
         identities: parseAgents(rows),
       };
     });
+  }
+
+  async agentOptions(): Promise<AgentOption[]> {
+    return parseAgentOptions(await this.run(['agent', 'list']));
+  }
+
+  agentReply(id: string): Promise<AgentReply> {
+    return this.replies.get(id, async () => {
+      const [summary, raw] = await Promise.all([
+        this.run(['agent', 'show', id]),
+        this.run(['show', id]),
+      ]);
+      const row = object(raw, 'run');
+      const attrs = object(row['attributes'], 'run.attributes');
+      return { ...parseAgentReply(summary), prompt: parsePromptContext(attrs['harness/context']) };
+    });
+  }
+
+  async promptAgent(cardId: string, input: AgentPrompt): Promise<AgentReply> {
+    await this.card(cardId);
+    if (
+      input.targetId !== cardId &&
+      !(await this.graph(cardId)).nodes.some((node) => node.id === input.targetId)
+    )
+      throw new HttpError(404, 'That strand is not in the selected card’s graph.');
+    if (!(await this.agentOptions()).some((agent) => agent.name === input.alias))
+      throw new HttpError(
+        400,
+        'That agent is not available headlessly in this weaver. Choose an available alias.',
+      );
+    const reply = parseAgentReply(
+      await this.run(agentLaunchArgs(this.workspace, dirname(this.workspace), cardId, input)),
+    );
+    this.agentDirectories.clear();
+    return { ...reply, prompt: { cardId, text: input.prompt } };
   }
 
   private async card(id: string): Promise<Card> {

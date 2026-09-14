@@ -1,6 +1,10 @@
 import { Bot, Search, X } from 'lucide-react';
+import { useEffect } from 'react';
 import type { AgentIdentity, AgentRun } from '../../shared/api';
-import { useAgents } from '../lib/api';
+import { useAgents, useAgentReply, useBoard } from '../lib/api';
+import { useAgentPromptStore } from '../agent-prompt-store';
+import { runIsFinished } from '../lib/agent-notifications';
+import { Markdown } from './issue-detail';
 import {
   agentIsActive,
   currentRun,
@@ -193,6 +197,7 @@ function AgentCard({
       <span className="mt-2 block break-words text-[11px] text-muted-foreground">
         {run?.model ?? agent.model ?? 'Model not recorded'}
       </span>
+      {run?.target && <span className="mt-2 block break-words text-xs">{run.title}</span>}
       <span className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3 text-[10px] text-muted-foreground">
         <span>{agent.harness}</span>
         <span>{agent.runs.length} runs</span>
@@ -204,7 +209,7 @@ function AgentCard({
 
 export function AgentDetail({ id }: { id: string }) {
   const query = useAgents();
-  const { closeAgent, openCard } = useDashboardNavigation();
+  const { closeAgent, openCard, agentRun, focusAgentRun } = useDashboardNavigation();
   const agent = query.data?.identities.find((item) => item.id === id);
   const run = agent ? currentRun(agent) : null;
   return (
@@ -248,6 +253,58 @@ export function AgentDetail({ id }: { id: string }) {
           </p>
         ) : (
           <div className="detail-body border-t border-border">
+            <section className="detail-section">
+              <h3 className="detail-section-title">Run history · {agent.runs.length}</h3>
+              {agent.runs.length === 0 && (
+                <p className="detail-empty">
+                  No published tracked runs. This identity’s live activity is unknown.
+                </p>
+              )}
+              {agent.runs.map((item) => (
+                <details
+                  key={item.id}
+                  className="agent-run"
+                  open={item.id === (agentRun ?? run?.id)}
+                >
+                  <summary
+                    onClick={(event) => {
+                      event.preventDefault();
+                      focusAgentRun(item.id);
+                    }}
+                  >
+                    <span className="font-medium">{item.alias}</span>{' '}
+                    <span className="issue-id">{item.id}</span>
+                    <RunStatus run={item} stale={!!query.error} />
+                  </summary>
+                  <p className="mb-4 mt-3 text-sm">{item.title}</p>
+                  {item.id === (agentRun ?? run?.id) && <AgentRunReply id={item.id} />}
+                  <dl className="property-list">
+                    <dt>Provider</dt>
+                    <dd>
+                      {item.harness} · {item.mode}
+                    </dd>
+                    <dt>Model</dt>
+                    <dd>{item.model ?? 'Not recorded'}</dd>
+                    <dt>Effort</dt>
+                    <dd>{item.effort ?? 'Not recorded'}</dd>
+                    <dt>Directory</dt>
+                    <dd className="font-mono text-xs">{item.cwd ?? 'Not recorded'}</dd>
+                    <dt>Target</dt>
+                    <dd>{item.target ?? 'No explicit target'}</dd>
+                    {item.rootTargets.length > 0 && (
+                      <>
+                        <dt>Work roots</dt>
+                        <dd>{item.rootTargets.join(', ')}</dd>
+                      </>
+                    )}
+                    <dt>Started</dt>
+                    <dd>{item.startedAt ?? 'Not recorded'}</dd>
+                    <dt>Finished</dt>
+                    <dd>{item.finishedAt ?? 'Not recorded'}</dd>
+                  </dl>
+                </details>
+              ))}
+            </section>
             <dl className="property-list mb-7">
               <dt>Provider</dt>
               <dd>{run?.harness ?? agent.harness}</dd>
@@ -290,55 +347,84 @@ export function AgentDetail({ id }: { id: string }) {
                 </p>
               )}
             </section>
-            <section className="detail-section">
-              <h3 className="detail-section-title">Run history · {agent.runs.length}</h3>
-              {agent.runs.length === 0 && (
-                <p className="detail-empty">
-                  No published tracked runs. This identity’s live activity is unknown.
-                </p>
-              )}
-              {agent.runs.map((item) => (
-                <details
-                  key={item.id}
-                  className="agent-run"
-                  open={item.status === 'running' || item.status === 'ready'}
-                >
-                  <summary>
-                    <span className="font-medium">{item.alias}</span>{' '}
-                    <span className="issue-id">{item.id}</span>
-                    <RunStatus run={item} stale={!!query.error} />
-                  </summary>
-                  <p className="mb-4 mt-3 text-sm">{item.title}</p>
-                  <dl className="property-list">
-                    <dt>Provider</dt>
-                    <dd>
-                      {item.harness} · {item.mode}
-                    </dd>
-                    <dt>Model</dt>
-                    <dd>{item.model ?? 'Not recorded'}</dd>
-                    <dt>Effort</dt>
-                    <dd>{item.effort ?? 'Not recorded'}</dd>
-                    <dt>Directory</dt>
-                    <dd className="font-mono text-xs">{item.cwd ?? 'Not recorded'}</dd>
-                    <dt>Target</dt>
-                    <dd>{item.target ?? 'No explicit target'}</dd>
-                    {item.rootTargets.length > 0 && (
-                      <>
-                        <dt>Work roots</dt>
-                        <dd>{item.rootTargets.join(', ')}</dd>
-                      </>
-                    )}
-                    <dt>Started</dt>
-                    <dd>{item.startedAt ?? 'Not recorded'}</dd>
-                    <dt>Finished</dt>
-                    <dd>{item.finishedAt ?? 'Not recorded'}</dd>
-                  </dl>
-                </details>
-              ))}
-            </section>
           </div>
         )}
       </SheetContent>
     </Sheet>
+  );
+}
+
+function AgentRunReply({ id }: { id: string }) {
+  const query = useAgentReply(id, true);
+  const board = useBoard();
+  const nav = useDashboardNavigation();
+  const markRead = useAgentPromptStore((s) => s.markRead);
+  const reply = query.data;
+  useEffect(() => {
+    if (nav.workspace && reply && runIsFinished(reply) && !query.error) markRead(nav.workspace, id);
+  }, [nav.workspace, id, reply, query.error, markRead]);
+  const cardId = reply?.prompt?.cardId ?? reply?.target ?? null;
+  const card = board.data?.cards.find((card) => card.id === cardId);
+  return (
+    <section className="mb-5 space-y-3" aria-label="Prompt and agent reply">
+      {card && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            if (reply?.target !== card.id) nav.exploreGraph(card.id);
+            else nav.openCard(card.id);
+          }}
+        >
+          View work · {card.id}
+        </Button>
+      )}
+      {reply?.prompt && (
+        <div className="rounded-lg bg-accent p-3">
+          <h4 className="mb-2 text-xs font-semibold">Your prompt</h4>
+          <p className="whitespace-pre-wrap break-words text-sm">{reply.prompt.text}</p>
+        </div>
+      )}
+      {query.error && (
+        <div role="alert" className="text-xs text-destructive">
+          Reply unavailable: {query.error.message}{' '}
+          <button
+            className="underline"
+            onClick={() => {
+              void query.refetch();
+            }}
+          >
+            Retry reply
+          </button>
+        </div>
+      )}
+      {!reply ? (
+        !query.error && <Loading text="Loading reply…" />
+      ) : (
+        <>
+          {reply.error && (
+            <p role="alert" className="break-words text-xs text-destructive">
+              {reply.error}
+            </p>
+          )}
+          {reply.result !== null ? (
+            <div className="rounded-lg border border-border p-3">
+              <h4 className="mb-2 text-xs font-semibold">Agent reply</h4>
+              <Markdown text={reply.result} />
+            </div>
+          ) : (
+            <p role="status" className="text-xs text-muted-foreground">
+              {reply.status === 'ready'
+                ? 'Queued · waiting for the agent to start.'
+                : reply.status === 'running'
+                  ? 'Working on your prompt. The reply will appear here.'
+                  : reply.status === 'unknown'
+                    ? 'Run state is unavailable. Waiting for an update.'
+                    : 'This run ended without a reply.'}
+            </p>
+          )}
+        </>
+      )}
+    </section>
   );
 }

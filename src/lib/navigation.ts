@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useDashboardStore } from '../store';
+import { useAgentPromptStore } from '../agent-prompt-store';
 import type { CardType, Lane, Priority, SavedView, ViewFilter } from '../../shared/api';
 import { emptyFilter, workspaceFilter, type WorkspaceView } from './board';
 import {
@@ -49,8 +50,20 @@ export function useDashboardNavigation() {
     openCard: (issue: string) => update({ issue, agent: null, detailTab: 'overview' }),
     openAgent: (agent: string) => {
       useDashboardStore.getState().setSidebarOpen(false);
-      update({ agent, issue: null });
+      update({ agent, agentRun: null, issue: null });
     },
+    openAgentRun: (identity: string | null, runId: string) => {
+      useDashboardStore.getState().setSidebarOpen(false);
+      update({
+        mode: 'agents',
+        agent: identity,
+        agentRun: runId,
+        issue: null,
+        agentQuery: '',
+        activeAgentsOnly: false,
+      });
+    },
+    focusAgentRun: (agentRun: string) => update({ agentRun }, true),
     closeAgent: () => update({ agent: null }),
     closeCard: () => update({ issue: null }),
     setMode: (mode: Presentation) => update({ mode }),
@@ -106,7 +119,8 @@ export function useDashboardKeys() {
   const client = useQueryClient();
   const keys = useDashboardStore((s) => s.shortcuts);
   const overlay = useDashboardStore((s) => s.overlay.kind);
-  const enabled = overlay === 'closed' && issue === null && agent === null;
+  const composer = useAgentPromptStore((s) => s.composer.kind);
+  const enabled = overlay === 'closed' && composer === 'closed' && issue === null && agent === null;
   const workspaceEnabled = enabled && mode !== 'overview';
   useHotkeys(
     hotkeys(keys.search),

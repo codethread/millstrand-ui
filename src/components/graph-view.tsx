@@ -17,6 +17,7 @@ import { useDashboardNavigation } from '../lib/navigation';
 import { Button } from './ui/button';
 import { ErrorNotice, Loading } from './issue-parts';
 import { Markdown } from './issue-detail';
+import { PromptAgentButton } from './agent-prompt';
 import '@xyflow/react/dist/style.css';
 
 function GraphCard({ data }: NodeProps<IssueGraphNode>) {
@@ -107,7 +108,23 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
           </p>
         </div>
       ) : (
-        <div className="graph-canvas">
+        <div
+          className="graph-canvas"
+          onKeyDownCapture={(event) => {
+            if (
+              (event.key !== 'Enter' && event.key !== ' ') ||
+              !(event.target instanceof HTMLElement)
+            )
+              return;
+            const id = event.target.closest<HTMLElement>('.react-flow__node')?.dataset['id'];
+            const item = layout.nodes.find((node) => node.id === id)?.data.item;
+            if (item) {
+              event.preventDefault();
+              event.stopPropagation();
+              selectNode(item);
+            }
+          }}
+        >
           <ReactFlow
             key={`${root ?? 'all'}-${includeClosed}-${layout.nodes.map((node) => node.id).join(',')}`}
             nodes={layout.nodes}
@@ -161,6 +178,11 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
                 </Button>
               </div>
               <h3>{selected.title}</h3>
+              {root && (
+                <PromptAgentButton
+                  target={{ cardId: root, id: selected.id, title: selected.title }}
+                />
+              )}
               <span className="text-xs text-muted-foreground">{selected.state}</span>
               {graphBody(selected.attributes) && <Markdown text={graphBody(selected.attributes)} />}
               <details>
