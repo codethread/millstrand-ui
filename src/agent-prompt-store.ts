@@ -1,14 +1,16 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { parseAgentPreferences } from './lib/agent-preferences';
-import { parsePromptReceipts, type PromptReceipts } from './lib/agent-notifications';
+import {
+  agentPreferenceKey,
+  agentPreferencePrefix,
+  readAgentPreferences,
+  type AgentPreferences,
+} from './lib/agent-preferences';
 
 export interface PromptTarget {
   cardId: string;
   id: string;
   title: string;
 }
-
 type Composer =
   | { kind: 'closed' }
   | {
@@ -19,9 +21,9 @@ type Composer =
       requestId: string;
     };
 
-interface AgentPromptState {
-  aliases: Record<string, string>;
-  receipts: PromptReceipts;
+interface AgentPromptState extends AgentPreferences {
+  persistenceError: string | null;
+  refreshPreferences: () => void;
   track: (workspace: string, id: string, requestId: string) => void;
   markRead: (workspace: string, id: string) => void;
   composer: Composer;
@@ -31,43 +33,73 @@ interface AgentPromptState {
   close: () => void;
 }
 
-export const useAgentPromptStore = create<AgentPromptState>()(
-  persist(
-    (set) => ({
-      aliases: {},
-      receipts: {},
-      track: (workspace, id, requestId) =>
+export function createAgentPromptStore(storage: Storage | null) {
+  return create<AgentPromptState>()((set, get) => {
+    function write(key: string, value: string) {
+      try {
+        if (!storage) throw new Error('Storage unavailable');
+        storage.setItem(key, value);
+        set({ persistenceError: null });
+      } catch {
+        set({
+          persistenceError:
+            'Browser storage is unavailable. Preferences and notifications are kept only for this session.',
+        });
+      }
+    }
+    let preferences: AgentPreferences = { aliases: {}, receipts: {} };
+    try {
+      preferences = readAgentPreferences(storage);
+    } catch {
+      /* Keep session state when storage is blocked. */
+    }
+    return {
+      ...preferences,
+      persistenceError: null,
+      refreshPreferences: () => {
+        try {
+          set(readAgentPreferences(storage));
+        } catch {
+          /* Retain the last successful preferences. */
+        }
+      },
+      track: (workspace, id, requestId) => {
+        write(agentPreferenceKey('receipt', workspace, id), requestId);
+        let read = get().receipts[workspace]?.[id]?.read ?? false;
+        try {
+          read ||= storage?.getItem(agentPreferenceKey('read', workspace, id)) === requestId;
+        } catch {
+          /* Use session state. */
+        }
         set((s) => ({
           receipts: {
             ...s.receipts,
-            [workspace]: Object.fromEntries(
-              Object.entries({ ...s.receipts[workspace], [id]: { requestId, read: false } }).slice(
-                -200,
-              ),
-            ),
+            [workspace]: { ...s.receipts[workspace], [id]: { requestId, read } },
           },
-        })),
-      markRead: (workspace, id) =>
-        set((s) => {
-          const receipt = s.receipts[workspace]?.[id];
-          return !receipt || receipt.read
-            ? {}
-            : {
-                receipts: {
-                  ...s.receipts,
-                  [workspace]: { ...s.receipts[workspace], [id]: { ...receipt, read: true } },
-                },
-              };
-        }),
+        }));
+      },
+      markRead: (workspace, id) => {
+        const receipt = get().receipts[workspace]?.[id];
+        if (!receipt || receipt.read) return;
+        write(agentPreferenceKey('read', workspace, id), receipt.requestId);
+        set((s) => ({
+          receipts: {
+            ...s.receipts,
+            [workspace]: { ...s.receipts[workspace], [id]: { ...receipt, read: true } },
+          },
+        }));
+      },
       composer: { kind: 'closed' },
-      setAlias: (workspace, alias) =>
+      setAlias: (workspace, alias) => {
+        write(agentPreferenceKey('alias', workspace), alias);
         set((s) => ({
           aliases: { ...s.aliases, [workspace]: alias },
           composer:
             s.composer.kind === 'composing'
               ? { ...s.composer, requestId: newRequestId() }
               : s.composer,
-        })),
+        }));
+      },
       open: (target, trigger) =>
         set({ composer: { kind: 'composing', target, trigger, prompt: '', requestId: '' } }),
       edit: (prompt) =>
@@ -77,26 +109,23 @@ export const useAgentPromptStore = create<AgentPromptState>()(
             : {},
         ),
       close: () => set({ composer: { kind: 'closed' } }),
-    }),
-    {
-      name: 'millstrand-ui-agent-preferences',
-      partialize: (state) => ({ aliases: state.aliases, receipts: state.receipts }),
-      merge: (persisted, current) => ({
-        ...current,
-        aliases: parseAgentPreferences(
-          typeof persisted === 'object' && persisted !== null && 'aliases' in persisted
-            ? persisted.aliases
-            : null,
-        ),
-        receipts: parsePromptReceipts(
-          typeof persisted === 'object' && persisted !== null && 'receipts' in persisted
-            ? persisted.receipts
-            : null,
-        ),
-      }),
-    },
-  ),
-);
+    };
+  });
+}
+
+function browserStorage(): Storage | null {
+  try {
+    return typeof window === 'undefined' ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+export const useAgentPromptStore = createAgentPromptStore(browserStorage());
+if (typeof window !== 'undefined')
+  window.addEventListener('storage', (event) => {
+    if (event.key === null || event.key.startsWith(agentPreferencePrefix))
+      useAgentPromptStore.getState().refreshPreferences();
+  });
 
 function newRequestId(): string {
   // crypto.randomUUID is unavailable on ordinary HTTP LAN origins.

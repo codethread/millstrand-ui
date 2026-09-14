@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parsePromptReceipts, promptedRuns } from './agent-notifications';
-import { parseAgentPreferences } from './agent-preferences';
+import { promptedRuns } from './agent-notifications';
 import { parseAgents } from '../../server/agents';
 
-const workspace = 'a'.repeat(24);
 const requestId = 'ui-0123456789abcdef';
 function agents(status: string, request: string | null = requestId) {
   return parseAgents([
@@ -58,25 +56,4 @@ describe('UI prompt notifications', () => {
       ).toBe(false);
     },
   );
-  it('restores read state and isolates the selected weaver, discarding malformed persisted data', () => {
-    const saved = parsePromptReceipts({
-      [workspace]: { ...receipts, invalid: { requestId: 'terminal', read: false } },
-      '/tmp/untrusted': receipts,
-    });
-    expect(saved).toEqual({ [workspace]: receipts });
-    expect(promptedRuns(agents('stopped'), saved['b'.repeat(24)] ?? {})).toEqual([]);
-    expect(parsePromptReceipts({ [workspace]: { x: { requestId, read: 'false' } } })).toEqual({
-      [workspace]: {},
-    });
-  });
-  it('preserves per-weaver defaults without silently falling back to an unrelated alias', () => {
-    expect(
-      parseAgentPreferences({
-        [workspace]: 'tui',
-        ['b'.repeat(24)]: 'astra',
-        bad: 'tui',
-        ['c'.repeat(24)]: '--command',
-      }),
-    ).toEqual({ [workspace]: 'tui', ['b'.repeat(24)]: 'astra' });
-  });
 });

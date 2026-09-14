@@ -29,6 +29,7 @@ function AgentChoice({
   const query = useAgentOptions(workspace, enabled);
   const alias = useAgentPromptStore((s) => s.aliases[workspace] ?? 'tui');
   const setAlias = useAgentPromptStore((s) => s.setAlias);
+  const persistenceError = useAgentPromptStore((s) => s.persistenceError);
   const available = query.data?.some((agent) => agent.name === alias) ?? false;
   return (
     <div className="space-y-2 text-xs">
@@ -55,6 +56,11 @@ function AgentChoice({
         </select>
       </label>
       <p className="text-foreground">Saved in this browser, separately for each weaver.</p>
+      {persistenceError && (
+        <p role="alert" className="text-red-700 dark:text-red-300">
+          {persistenceError}
+        </p>
+      )}
       {!enabled ? (
         <p className="text-foreground">Connect this weaver to choose an agent.</p>
       ) : query.error ? (
@@ -151,7 +157,6 @@ function ComposePrompt({ workspace }: { workspace: string }) {
               },
               {
                 onSuccess: (reply) => {
-                  s.track(workspace, reply.id, composer.requestId);
                   s.close();
                   nav.openAgentRun(reply.identity, reply.id);
                 },

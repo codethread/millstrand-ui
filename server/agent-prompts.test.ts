@@ -88,8 +88,14 @@ describe('prompt boundaries', () => {
 });
 
 describe('scoped launch process', () => {
-  function mockWorkspace() {
+  function mockWorkspace(worktree: string | null = null, registered = [process.cwd()]) {
     exec.mockImplementation(async (_file, argv) => {
+      if (_file === 'git')
+        return {
+          stdout: registered
+            .map((path) => `worktree ${path}\0HEAD abc\0branch refs/heads/feature\0\0`)
+            .join(''),
+        };
       const args = Array.isArray(argv) ? argv : [];
       const operation = args.slice(2).join(' ');
       let value: unknown;
@@ -101,7 +107,7 @@ describe('scoped launch process', () => {
               title: 'Feature',
               state: 'active',
               created_at: '2026-09-14',
-              attributes: {},
+              attributes: { worktree },
             },
           ],
         };
@@ -152,6 +158,26 @@ describe('scoped launch process', () => {
     );
     expect(exec.mock.calls.some((call) => JSON.stringify(call[1]).includes('"run"'))).toBe(false);
   });
+  it('launches in the selected card’s recorded worktree while retaining its canonical weaver', async () => {
+    mockWorkspace(process.cwd());
+    const data = new StrandData('/repo/.millstrand');
+    await data.promptAgent('card1', prompt);
+    expect(exec.mock.calls.at(-1)?.[1]).toEqual([
+      '--workspace',
+      '/repo/.millstrand',
+      ...agentLaunchArgs('/repo/.millstrand', process.cwd(), 'card1', prompt),
+    ]);
+  });
+  it.each(['/other-repository', '/missing-worktree', 'relative/path'])(
+    'rejects unavailable or foreign recorded worktree %s',
+    async (path) => {
+      mockWorkspace(path, ['/missing-worktree']);
+      await expect(
+        new StrandData('/repo/.millstrand').promptAgent('card1', prompt),
+      ).rejects.toThrow('recorded worktree is unavailable');
+      expect(exec.mock.calls.some((call) => JSON.stringify(call[1]).includes('"run"'))).toBe(false);
+    },
+  );
   it('allows a graph descendant and rejects unrelated strand targets', async () => {
     mockWorkspace();
     const data = new StrandData('/repo/.millstrand');

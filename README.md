@@ -126,13 +126,14 @@ Change it on All weavers or in the compose dialog. Choices come from that weaver
 available headless harnesses; missing Harnesses support or an unavailable alias
 is shown explicitly. Prompts are passed as command arguments, never shell code;
 the API validates the selected card/graph target and alias and owns the execution
-directory. Retries of an unchanged submission reuse the CLI request ID.
+directory, using the card’s recorded worktree when it is registered in the same
+repository (otherwise a card without a worktree uses the weaver root). Retries of an unchanged submission reuse the CLI request ID.
 
 The header's agent icon tracks prompts sent from this browser in the current
 weaver. It shows active runs and unread finished runs (including failures).
 Choose a notification to open that exact run; viewing its finished reply marks
-it read. Launch receipts and read state are saved locally for the latest 200
-prompts per weaver. Workflow, terminal, and desktop agent runs remain visible in
+it read. Launch receipts, read state, and per-weaver aliases use independent
+local storage keys and synchronize across tabs. Workflow, terminal, and desktop agent runs remain visible in
 Agents but are excluded from these header notifications. Prompt text and replies
 are stored with the tracked Harnesses run, not in local preferences.
 

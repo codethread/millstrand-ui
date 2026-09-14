@@ -1,4 +1,12 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  mutationOptions,
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
+import { useAgentPromptStore } from '../agent-prompt-store';
 import { useSearch } from '@tanstack/react-router';
 import type {
   AgentDirectory,
@@ -80,14 +88,22 @@ export function useAgentReply(id: string, enabled: boolean) {
 export function usePromptAgent(cardId: string) {
   const workspace = useWorkspace();
   const client = useQueryClient();
-  return useMutation({
+  return useMutation(agentPromptMutationOptions(client, workspace, cardId));
+}
+export function agentPromptMutationOptions(
+  client: QueryClient,
+  workspace: string | null,
+  cardId: string,
+) {
+  return mutationOptions({
     mutationFn: (input: AgentPrompt) =>
       request<AgentReply>(`/cards/${encodeURIComponent(cardId)}/agent-runs`, workspace, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       }),
-    onSuccess: (reply) => {
+    onSuccess: (reply, input) => {
+      if (workspace) useAgentPromptStore.getState().track(workspace, reply.id, input.requestId);
       client.setQueryData(['agent-reply', workspace, reply.id], reply);
       void client.invalidateQueries({ queryKey: ['agents', workspace] });
     },

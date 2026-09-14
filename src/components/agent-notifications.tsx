@@ -12,6 +12,7 @@ export function AgentNotifications() {
   const query = useAgents();
   const nav = useDashboardNavigation();
   const receipts = useAgentPromptStore((s) => s.receipts);
+  const persistenceError = useAgentPromptStore((s) => s.persistenceError);
   const [open, setOpen] = useState(false);
   const runs = promptedRuns(query.data?.identities ?? [], receipts[nav.workspace ?? ''] ?? {});
   const active = runs.filter(({ run }) => run.status === 'ready' || run.status === 'running');
@@ -41,6 +42,11 @@ export function AgentNotifications() {
         className="max-h-[70dvh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto"
       >
         <h2 className="text-sm font-semibold">Your prompted agents</h2>
+        {persistenceError && (
+          <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-300">
+            {persistenceError}
+          </p>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">
           This weaver · prompts sent from this browser.
         </p>
