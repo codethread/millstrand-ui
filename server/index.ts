@@ -180,6 +180,17 @@ const server = createServer((request, response) => {
       json(response, 200, await strand.board());
       return;
     }
+    if (path === '/api/reviews' && method === 'GET') {
+      const { strand } = await workspaces.select(url.searchParams.get('workspace'));
+      json(response, 200, await strand.reviews());
+      return;
+    }
+    const reviewId = /^\/api\/reviews\/([a-zA-Z0-9_-]+)$/.exec(path)?.[1];
+    if (reviewId !== undefined && method === 'GET') {
+      const { strand } = await workspaces.select(url.searchParams.get('workspace'));
+      json(response, 200, await strand.review(reviewId));
+      return;
+    }
     if (path === '/api/agents' && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
       json(response, 200, await strand.agents());

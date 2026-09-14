@@ -1,3 +1,4 @@
+import type { ReviewScope, ReviewStage } from '../../shared/reviews';
 import { flushSync } from 'react-dom';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -33,11 +34,19 @@ export function useDashboardNavigation() {
       filter: view?.filter ?? emptyFilter(),
       activeViewId: view?.id ?? null,
       graphRoot: null,
-      mode: search.mode === 'agents' || search.mode === 'overview' ? 'board' : search.mode,
+      mode:
+        search.mode === 'agents' || search.mode === 'reviews' || search.mode === 'overview'
+          ? 'board'
+          : search.mode,
     });
   }
   return {
     ...search,
+    openReview: (review: string) => update({ mode: 'reviews', review, issue: null, agent: null }),
+    closeReview: () => update({ review: null }),
+    setReviewQuery: (reviewQuery: string) => update({ reviewQuery }, true),
+    setReviewScope: (reviewScope: ReviewScope) => update({ reviewScope }),
+    setReviewStage: (reviewStage: ReviewStage | null) => update({ reviewStage }),
     pinWorkspace: (workspace: string) => update({ workspace }, true),
     selectWorkspace: (workspace: string) => {
       useDashboardStore.getState().resetWorkspace();
@@ -66,7 +75,7 @@ export function useDashboardNavigation() {
     focusAgentRun: (agentRun: string) => update({ agentRun }, true),
     closeAgent: () => update({ agent: null }),
     closeCard: () => update({ issue: null }),
-    setMode: (mode: Presentation) => update({ mode }),
+    setMode: (mode: Presentation) => update({ mode, issue: null, agent: null }),
     exploreGraph: (graphRoot: string) =>
       update({ graphRoot, mode: 'graph', issue: null, agent: null }),
     setGraphRoot: (graphRoot: string | null) => update({ graphRoot }),
@@ -99,7 +108,7 @@ export function useDashboardNavigation() {
         filter: workspaceFilter(view),
         activeViewId: null,
         graphRoot: null,
-        mode: search.mode === 'agents' ? 'board' : search.mode,
+        mode: search.mode === 'agents' || search.mode === 'reviews' ? 'board' : search.mode,
       });
     },
     selectView,
@@ -126,7 +135,15 @@ export function useDashboardKeys() {
     hotkeys(keys.search),
     () => {
       flushSync(() => useDashboardStore.getState().setContentFullscreen(false));
-      document.getElementById(mode === 'agents' ? 'agent-search' : 'issue-search')?.focus();
+      document
+        .getElementById(
+          mode === 'agents'
+            ? 'agent-search'
+            : mode === 'reviews'
+              ? 'review-search'
+              : 'issue-search',
+        )
+        ?.focus();
     },
     { preventDefault: true, enabled: workspaceEnabled },
     [keys.search, workspaceEnabled, mode],

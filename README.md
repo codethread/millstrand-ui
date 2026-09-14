@@ -186,3 +186,17 @@ every five seconds.
 Default shortcuts: `/` searches, `1`/`2`/`3` switch layouts, `r` refreshes, and `?`
 opens keyboard settings. Bindings are editable and saved per browser. A blank
 binding disables it; shortcuts pause in text fields and issue panels.
+
+### Reviews
+
+Open **Reviews** in a weaver’s sidebar for its review inbox. The inbox contains
+current, active reviews awaiting a local decision; **All reviews** also includes
+completed and outdated revisions. Search MR, repository, commit, or reviewer
+metadata and filter by execution stage. Selection and filters live in the URL.
+
+A selected review shows the complete report, expandable reviewer results and
+errors, review history, activity, and related strands. Agent runs link to their
+existing inspection view when their identity is available. Decisions remain CLI
+operations. The server reads `strand review list --all true` and
+`strand review show ID`; weavers without those operations show a configuration
+message. Temporary refresh failures keep the last successful data visible.

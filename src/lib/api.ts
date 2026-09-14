@@ -1,3 +1,4 @@
+import type { ReviewDetail, ReviewDirectory } from '../../shared/reviews';
 import {
   mutationOptions,
   queryOptions,
@@ -176,5 +177,22 @@ export function useLabels(id: string) {
       client.setQueryData(['card', workspace, id], detail);
       await client.invalidateQueries({ queryKey: ['board', workspace] });
     },
+  });
+}
+
+export function useReviews() {
+  const workspace = useWorkspace();
+  return useQuery({
+    queryKey: ['reviews', workspace],
+    queryFn: () => request<ReviewDirectory>('/reviews', workspace),
+    refetchInterval: 5000,
+  });
+}
+export function useReview(id: string) {
+  const workspace = useWorkspace();
+  return useQuery({
+    queryKey: ['review', workspace, id],
+    queryFn: () => request<ReviewDetail>(`/reviews/${encodeURIComponent(id)}`, workspace),
+    refetchInterval: 5000,
   });
 }
