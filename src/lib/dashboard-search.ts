@@ -1,3 +1,4 @@
+import { reviewStages, type ReviewScope, type ReviewStage } from '../../shared/reviews';
 import type {
   CardType,
   LabelTerm,
@@ -8,7 +9,7 @@ import type {
 } from '../../shared/api';
 import { emptyFilter } from './board';
 
-export type Presentation = 'overview' | 'board' | 'outline' | 'graph' | 'agents';
+export type Presentation = 'overview' | 'board' | 'outline' | 'graph' | 'agents' | 'reviews';
 export type DetailTab = 'overview' | 'activity' | 'attributes';
 export interface DashboardSearch {
   mode: Presentation;
@@ -16,6 +17,10 @@ export interface DashboardSearch {
   issue: string | null;
   agent: string | null;
   agentRun: string | null;
+  review: string | null;
+  reviewQuery: string;
+  reviewScope: ReviewScope;
+  reviewStage: ReviewStage | null;
   filter: ViewFilter;
   activeViewId: string | null;
   graphRoot: string | null;
@@ -71,12 +76,17 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
       mode === 'board' ||
       mode === 'outline' ||
       mode === 'graph' ||
-      mode === 'agents'
+      mode === 'agents' ||
+      mode === 'reviews'
         ? mode
         : workspace || issue || agent
           ? 'board'
           : 'overview',
     workspace,
+    review: text(search.review),
+    reviewQuery: text(search.reviewQuery) ?? '',
+    reviewScope: search.reviewScope === 'all' ? 'all' : 'inbox',
+    reviewStage: reviewStages.find((stage) => stage === search.reviewStage) ?? null,
     issue,
     agent,
     agentRun: agent ? text(search.agentRun) : null,
@@ -93,6 +103,10 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
 }
 
 export const dashboardSearchDefaults = {
+  review: null,
+  reviewQuery: '',
+  reviewScope: 'inbox',
+  reviewStage: null,
   workspace: null,
   issue: null,
   agent: null,
@@ -125,7 +139,7 @@ export function manualFilterSearch(
     filter,
     activeViewId: null,
     graphRoot: null,
-    mode: search.mode === 'agents' ? 'board' : search.mode,
+    mode: search.mode === 'agents' || search.mode === 'reviews' ? 'board' : search.mode,
   };
 }
 

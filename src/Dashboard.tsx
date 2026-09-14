@@ -1,3 +1,5 @@
+import { ReviewsView, ReviewSearchControls } from './components/reviews-view';
+import { reviewInInbox } from './lib/reviews';
 import { lazy, Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -9,6 +11,7 @@ import {
   CircleDot,
   Filter,
   GitBranch,
+  GitPullRequest,
   Keyboard,
   LayoutGrid,
   ListTree,
@@ -23,7 +26,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useAgents, useBoard, useViews, useWorkspaces } from './lib/api';
+import { useAgents, useReviews, useBoard, useViews, useWorkspaces } from './lib/api';
 import {
   boardSummary,
   emptyFilter,
@@ -75,6 +78,7 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
   const active = board ? boardSummary(board) : null;
   const nav = useDashboardNavigation();
   const agents = useAgents();
+  const reviews = useReviews();
   const workspaceViews = [
     { id: 'all', label: 'All issues', count: active?.active ?? null, icon: LayoutGrid },
     { id: 'progress', label: 'In progress', count: active?.inProgress ?? null, icon: CircleDot },
@@ -112,6 +116,7 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
         {workspaceViews.map(({ id, label, count, icon: Icon }) => {
           const selected =
             nav.mode !== 'agents' &&
+            nav.mode !== 'reviews' &&
             nav.activeViewId === null &&
             matchesWorkspaceView(nav.filter, id);
           return (
@@ -143,6 +148,22 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
             {agents.error ? '?' : (agents.data?.identities.filter(agentIsActive).length ?? '…')}
           </span>
         </button>
+        <button
+          className={cn('nav-item', nav.mode === 'reviews' && 'active')}
+          aria-pressed={nav.mode === 'reviews'}
+          onClick={() => {
+            nav.setMode('reviews');
+            s.setSidebarOpen(false);
+          }}
+        >
+          <GitPullRequest />
+          Reviews
+          <span className="nav-count">
+            {reviews.data?.kind === 'available'
+              ? reviews.data.reviews.filter(reviewInInbox).length
+              : '—'}
+          </span>
+        </button>
         {board && (
           <>
             <div className="sidebar-section-label mt-7">
@@ -157,7 +178,10 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
                   <button
                     className={cn(
                       'nav-item flex-1',
-                      nav.mode !== 'agents' && nav.activeViewId === view.id && 'active',
+                      nav.mode !== 'agents' &&
+                        nav.mode !== 'reviews' &&
+                        nav.activeViewId === view.id &&
+                        'active',
                     )}
                     onClick={() => {
                       nav.selectView(view);
@@ -221,8 +245,13 @@ function SidebarContents({ board, views, connected, refreshing }: SidebarProps) 
             </TooltipTrigger>
             <TooltipContent>
               Refreshes every 5 seconds · last update{' '}
-              {(nav.mode === 'agents' ? agents.data?.fetchedAt : board?.fetchedAt) ??
-                'waiting for first update'}
+              {(nav.mode === 'reviews'
+                ? reviews.data?.kind === 'available'
+                  ? reviews.data.fetchedAt
+                  : null
+                : nav.mode === 'agents'
+                  ? agents.data?.fetchedAt
+                  : board?.fetchedAt) ?? 'waiting for first update'}
             </TooltipContent>
           </Tooltip>
           <Button
@@ -351,6 +380,7 @@ export function Dashboard() {
 function WorkspaceDashboard() {
   const board = useBoard();
   const agents = useAgents();
+  const reviews = useReviews();
   const views = useViews();
   const workspaces = useWorkspaces();
   const s = useDashboardStore();
@@ -364,7 +394,7 @@ function WorkspaceDashboard() {
     useDashboardStore.getState().resetWorkspace();
     useAgentPromptStore.getState().close();
   }, [nav.workspace]);
-  if (!board.data && nav.mode !== 'agents')
+  if (!board.data && nav.mode !== 'agents' && nav.mode !== 'reviews')
     return (
       <div className="startup">
         <div className="brand">
@@ -408,10 +438,27 @@ function WorkspaceDashboard() {
       <Sidebar
         board={data}
         views={views.data ?? []}
-        connected={nav.mode === 'agents' ? !agents.error : !board.error}
-        refreshing={nav.mode === 'agents' ? agents.isFetching : board.isFetching}
+        connected={
+          nav.mode === 'reviews'
+            ? !reviews.error
+            : nav.mode === 'agents'
+              ? !agents.error
+              : !board.error
+        }
+        refreshing={
+          nav.mode === 'reviews'
+            ? reviews.isFetching
+            : nav.mode === 'agents'
+              ? agents.isFetching
+              : board.isFetching
+        }
       />
-      <main className="main-workspace" aria-label={nav.mode === 'agents' ? 'Agents' : 'Issues'}>
+      <main
+        className="main-workspace"
+        aria-label={
+          nav.mode === 'reviews' ? 'Reviews' : nav.mode === 'agents' ? 'Agents' : 'Issues'
+        }
+      >
         <header className="workspace-header">
           <div className="view-toolbar">
             <Button
@@ -423,7 +470,12 @@ function WorkspaceDashboard() {
             >
               <Menu />
             </Button>
-            {nav.mode === 'agents' ? (
+            {nav.mode === 'reviews' ? (
+              <h1 className="flex h-[38px] items-center gap-2 text-sm! tracking-normal!">
+                <GitPullRequest className="size-4 text-primary" />
+                Reviews
+              </h1>
+            ) : nav.mode === 'agents' ? (
               <h1 className="flex h-[38px] items-center gap-2 text-sm! tracking-normal!">
                 <Bot className="size-4 text-primary" />
                 Agents
@@ -444,7 +496,9 @@ function WorkspaceDashboard() {
               </div>
             )}
             <AgentNotifications />
-            {nav.mode === 'agents' ? (
+            {nav.mode === 'reviews' ? (
+              <ReviewSearchControls />
+            ) : nav.mode === 'agents' ? (
               <AgentSearchControls />
             ) : (
               <div className="toolbar-actions">
@@ -477,7 +531,7 @@ function WorkspaceDashboard() {
               </div>
             )}
           </div>
-          {nav.mode !== 'agents' && (
+          {nav.mode !== 'agents' && nav.mode !== 'reviews' && (
             <div className="view-context">
               <span>
                 {cards.length} {cards.length === 1 ? 'issue' : 'issues'}
@@ -521,8 +575,12 @@ function WorkspaceDashboard() {
             </div>
           )}
         </header>
-        {board.error && nav.mode !== 'agents' && <ErrorNotice error={board.error} />}
-        {views.error && nav.mode !== 'agents' && <ErrorNotice error={views.error} />}
+        {board.error && nav.mode !== 'agents' && nav.mode !== 'reviews' && (
+          <ErrorNotice error={board.error} />
+        )}
+        {views.error && nav.mode !== 'agents' && nav.mode !== 'reviews' && (
+          <ErrorNotice error={views.error} />
+        )}
         {agents.error && (
           <div
             role="alert"
@@ -551,7 +609,9 @@ function WorkspaceDashboard() {
           >
             {s.contentFullscreen ? <Minimize /> : <Maximize />}
           </Button>
-          {nav.mode === 'agents' ? (
+          {nav.mode === 'reviews' ? (
+            <ReviewsView />
+          ) : nav.mode === 'agents' ? (
             <AgentsView />
           ) : nav.mode === 'graph' ? (
             <Suspense fallback={<Loading text="Loading graph…" />}>

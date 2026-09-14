@@ -1,3 +1,5 @@
+import type { ReviewDetail, ReviewDirectory } from '../shared/reviews.ts';
+import { parseReviewList, parseReviewDetail } from './reviews.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
@@ -76,7 +78,42 @@ export class StrandData {
   private readonly graphs = new ReadCache<CardGraph>();
   private readonly replies = new ReadCache<AgentReply>();
 
+  private readonly reviewDirectories = new ReadCache<ReviewDirectory>();
+  private readonly reviewDetails = new ReadCache<ReviewDetail>();
+
   constructor(readonly workspace: string) {}
+
+  reviews(): Promise<ReviewDirectory> {
+    return this.reviewDirectories.get('reviews', async () => {
+      try {
+        return {
+          kind: 'available',
+          workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
+          fetchedAt: new Date().toISOString(),
+          reviews: parseReviewList(await this.run(['review', 'list', '--all'])),
+        };
+      } catch (error) {
+        if (
+          error instanceof HttpError &&
+          /unknown (operation|subcommand|command)|operation .*not found|no such (operation|command)/i.test(
+            error.message,
+          )
+        )
+          return {
+            kind: 'unsupported',
+            message:
+              'Reviews are not available in this weaver. Load a spool that provides strand review list and strand review show.',
+          };
+        throw error;
+      }
+    });
+  }
+
+  review(id: string): Promise<ReviewDetail> {
+    return this.reviewDetails.get(id, async () =>
+      parseReviewDetail(await this.run(['review', 'show', id])),
+    );
+  }
 
   private async run(args: string[]): Promise<unknown> {
     try {

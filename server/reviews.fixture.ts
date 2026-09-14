@@ -1,0 +1,22 @@
+export const review = {
+  id: 'r123',
+  title: 'Review MR',
+  state: 'active',
+  stage: 'reviewed',
+  decision: 'pending',
+  current: true,
+  createdAt: null,
+  completedAt: null,
+  repo: null,
+  mr: {
+    iid: 12,
+    title: 'Fix race',
+    url: 'https://example.com/mr/12',
+    sha: 'abc',
+    baseSha: null,
+    sourceBranch: null,
+    targetBranch: null,
+  },
+  reviewers: [{ id: 'seat1', name: 'reviewer', runId: null, status: 'completed', substatus: null }],
+  reportAvailable: true,
+};
