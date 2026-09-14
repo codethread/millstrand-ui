@@ -7,7 +7,6 @@ import { useDashboardNavigation } from '../lib/navigation';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
-import { ErrorNotice } from './issue-parts';
 
 export function WeaverAgentSetting({ workspace }: { workspace: WorkspaceOption }) {
   return (
@@ -55,11 +54,11 @@ function AgentChoice({
           ))}
         </select>
       </label>
-      <p className="text-muted-foreground">Saved in this browser, separately for each weaver.</p>
+      <p className="text-foreground">Saved in this browser, separately for each weaver.</p>
       {!enabled ? (
-        <p className="text-muted-foreground">Connect this weaver to choose an agent.</p>
+        <p className="text-foreground">Connect this weaver to choose an agent.</p>
       ) : query.error ? (
-        <div role="alert" className="text-destructive">
+        <div role="alert" className="text-red-700 dark:text-red-300">
           Harnesses unavailable: {query.error.message}{' '}
           <button
             className="underline"
@@ -71,10 +70,10 @@ function AgentChoice({
           </button>
         </div>
       ) : query.isPending ? (
-        <p className="text-muted-foreground">Loading available agents…</p>
+        <p className="text-foreground">Loading available agents…</p>
       ) : (
         !available && (
-          <p role="alert" className="text-destructive">
+          <p role="alert" className="text-red-700 dark:text-red-300">
             {alias} is not available here. Choose an available agent before sending.
           </p>
         )
@@ -176,10 +175,17 @@ function ComposePrompt({ workspace }: { workspace: string }) {
               onChange={(event) => s.edit(event.target.value)}
             />
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-foreground">
             Starts a new agent run in this weaver. Follow its progress and reply in Agents.
           </p>
-          {mutation.error && <ErrorNotice error={mutation.error} />}
+          {mutation.error && (
+            <p
+              role="alert"
+              className="rounded-md border border-destructive p-3 text-sm text-red-700 dark:text-red-300"
+            >
+              {mutation.error.message}
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" type="button" disabled={mutation.isPending} onClick={s.close}>
               Cancel
