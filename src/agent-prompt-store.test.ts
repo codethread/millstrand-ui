@@ -26,6 +26,41 @@ const other = 'b'.repeat(24);
 const requestId = 'ui-0123456789abcdef';
 
 describe('independent browser preference keys', () => {
+  it('renews the retry key when another tab changes the composing weaver’s alias', () => {
+    const storage = memoryStorage();
+    const first = createAgentPromptStore(storage);
+    const second = createAgentPromptStore(storage);
+    first.getState().open({ cardId: 'card1', id: 'card1', title: 'Work' }, null, workspace);
+    first.getState().edit('Please help');
+    const submitted = first.getState().composer;
+    if (submitted.kind !== 'composing') throw new Error('Expected an open composer');
+    // A launch may already have been accepted, even if its response was lost.
+    first.getState().track(workspace, 'accepted-run', submitted.requestId);
+    second.getState().setAlias(workspace, 'astra');
+    first.getState().refreshPreferences();
+    const retry = first.getState().composer;
+    if (retry.kind !== 'composing') throw new Error('Expected the draft to remain open');
+    expect(retry.requestId).not.toBe(submitted.requestId);
+    expect(retry.prompt).toBe('Please help');
+    expect(first.getState().aliases[workspace]).toBe('astra');
+    expect(first.getState().receipts[workspace]?.['accepted-run']?.requestId).toBe(
+      submitted.requestId,
+    );
+  });
+  it('keeps the retry key stable for unrelated preference and receipt refreshes', () => {
+    const storage = memoryStorage();
+    const first = createAgentPromptStore(storage);
+    const second = createAgentPromptStore(storage);
+    first.getState().open({ cardId: 'card1', id: 'card1', title: 'Work' }, null, workspace);
+    first.getState().edit('Please help');
+    const before = first.getState().composer;
+    second.getState().setAlias(other, 'astra');
+    second.getState().track(workspace, 'other-run', requestId);
+    first.getState().refreshPreferences();
+    first.getState().setAlias(other, 'sol');
+    first.getState().setAlias(workspace, 'tui');
+    expect(first.getState().composer).toEqual(before);
+  });
   it('does not let a stale tab or transient composer actions overwrite receipts and aliases', () => {
     const storage = memoryStorage();
     const first = createAgentPromptStore(storage);

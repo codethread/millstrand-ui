@@ -97,7 +97,9 @@ export function PromptAgentButton({ target }: { target: PromptTarget }) {
       size="sm"
       disabled={workspace === null}
       title={workspace === null ? 'Waiting for weaver discovery before prompting' : undefined}
-      onClick={(event) => open(target, event.currentTarget)}
+      onClick={(event) => {
+        if (workspace) open(target, event.currentTarget, workspace);
+      }}
     >
       <MessageSquare />
       Prompt agent
@@ -131,7 +133,7 @@ function ComposePrompt({ workspace }: { workspace: string }) {
     >
       <DialogContent
         onCloseAutoFocus={(event) => {
-          if (composer.trigger.isConnected) {
+          if (composer.trigger?.isConnected) {
             event.preventDefault();
             composer.trigger.focus();
           }

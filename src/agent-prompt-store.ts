@@ -16,7 +16,8 @@ type Composer =
   | {
       kind: 'composing';
       target: PromptTarget;
-      trigger: HTMLElement;
+      workspace: string;
+      trigger: HTMLElement | null;
       prompt: string;
       requestId: string;
     };
@@ -28,7 +29,7 @@ interface AgentPromptState extends AgentPreferences {
   markRead: (workspace: string, id: string) => void;
   composer: Composer;
   setAlias: (workspace: string, alias: string) => void;
-  open: (target: PromptTarget, trigger: HTMLElement) => void;
+  open: (target: PromptTarget, trigger: HTMLElement | null, workspace: string) => void;
   edit: (prompt: string) => void;
   close: () => void;
 }
@@ -58,7 +59,16 @@ export function createAgentPromptStore(storage: Storage | null) {
       persistenceError: null,
       refreshPreferences: () => {
         try {
-          set(readAgentPreferences(storage));
+          const preferences = readAgentPreferences(storage);
+          set((s) => ({
+            ...preferences,
+            composer:
+              s.composer.kind === 'composing' &&
+              (s.aliases[s.composer.workspace] ?? 'tui') !==
+                (preferences.aliases[s.composer.workspace] ?? 'tui')
+                ? { ...s.composer, requestId: newRequestId() }
+                : s.composer,
+          }));
         } catch {
           /* Retain the last successful preferences. */
         }
@@ -95,13 +105,17 @@ export function createAgentPromptStore(storage: Storage | null) {
         set((s) => ({
           aliases: { ...s.aliases, [workspace]: alias },
           composer:
-            s.composer.kind === 'composing'
+            s.composer.kind === 'composing' &&
+            s.composer.workspace === workspace &&
+            (s.aliases[workspace] ?? 'tui') !== alias
               ? { ...s.composer, requestId: newRequestId() }
               : s.composer,
         }));
       },
-      open: (target, trigger) =>
-        set({ composer: { kind: 'composing', target, trigger, prompt: '', requestId: '' } }),
+      open: (target, trigger, workspace) =>
+        set({
+          composer: { kind: 'composing', target, workspace, trigger, prompt: '', requestId: '' },
+        }),
       edit: (prompt) =>
         set((s) =>
           s.composer.kind === 'composing'
