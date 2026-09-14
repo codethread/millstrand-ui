@@ -19,6 +19,7 @@ export function parseAgents(value: unknown): AgentIdentity[] {
       const statuses: AgentRunStatus[] = ['ready', 'running', 'stopped', 'failed'];
       const run: AgentRun = {
         id: row.id,
+        requestId: maybeString(attrs['harness/request-id'], 'run.requestId'),
         title: row.title,
         alias: string(attrs['harness/alias'], 'run.alias'),
         harness: string(attrs['harness/harness'], 'run.harness'),

@@ -16,6 +16,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { CardDetail, Note, Task } from '../../shared/api';
+import { PromptAgentButton } from './agent-prompt';
 import { useCard, useLabels, useTaskNotes } from '../lib/api';
 import { formatDate, relativeTime } from '../lib/board';
 import { useDashboardNavigation } from '../lib/navigation';
@@ -376,6 +377,7 @@ export function IssueDetail({ id }: { id: string }) {
                 Issue details for {detail.card.title}
               </SheetDescription>
               <div className="detail-meta">
+                <PromptAgentButton target={{ cardId: id, id, title: detail.card.title }} />
                 <StatusBadge status={detail.card.lane} />
                 <span className="detail-meta-separator" />
                 <IssueAgents owner={detail.card.owner} target={detail.card.id} />

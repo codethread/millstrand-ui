@@ -9,6 +9,17 @@ import {
 } from './dashboard-search';
 
 describe('shareable dashboard navigation', () => {
+  it('preserves the exact agent run destination and clears it when opening a card', () => {
+    const state = parseDashboardSearch({
+      mode: 'agents',
+      workspace: 'weaver-a',
+      agent: 'tiger',
+      agentRun: 'run-a',
+    });
+    expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(state)))).toEqual(state);
+    expect(parseDashboardSearch({ issue: 'card-a', agentRun: 'run-a' }).agentRun).toBeNull();
+    expect(workspaceDestination('weaver-b', { kind: 'card', id: 'card-b' }).agentRun).toBeNull();
+  });
   it('opens the overview at home and a dashboard for workspace/item links', () => {
     expect(parseDashboardSearch({}).mode).toBe('overview');
     expect(parseDashboardSearch({ workspace: 'weaver-a' }).mode).toBe('board');

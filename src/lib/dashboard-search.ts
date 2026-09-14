@@ -15,6 +15,7 @@ export interface DashboardSearch {
   workspace: string | null;
   issue: string | null;
   agent: string | null;
+  agentRun: string | null;
   filter: ViewFilter;
   activeViewId: string | null;
   graphRoot: string | null;
@@ -78,6 +79,7 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
     workspace,
     issue,
     agent,
+    agentRun: agent ? text(search.agentRun) : null,
     filter,
     activeViewId: text(search.activeViewId),
     graphRoot: text(search.graphRoot),
@@ -94,6 +96,7 @@ export const dashboardSearchDefaults = {
   workspace: null,
   issue: null,
   agent: null,
+  agentRun: null,
   filter: emptyFilter(),
   activeViewId: null,
   graphRoot: null,

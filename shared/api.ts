@@ -35,6 +35,7 @@ export type AgentRunStatus = 'ready' | 'running' | 'stopped' | 'failed' | 'unkno
 
 export interface AgentRun {
   id: string;
+  requestId: string | null;
   title: string;
   alias: string;
   harness: string;
@@ -73,6 +74,33 @@ export interface AgentDirectory {
   workspace: { path: string; name: string };
   fetchedAt: string;
   identities: AgentIdentity[];
+}
+
+export interface AgentOption {
+  name: string;
+  description: string | null;
+  model: string | null;
+}
+
+export interface AgentPrompt {
+  targetId: string;
+  alias: string;
+  prompt: string;
+  requestId: string;
+}
+
+/** The allowlisted run inspection response; provider logs and injected prompts stay private. */
+export interface AgentReply {
+  id: string;
+  title: string;
+  alias: string;
+  identity: string | null;
+  target: string | null;
+  status: AgentRunStatus;
+  substatus: string | null;
+  result: string | null;
+  error: string | null;
+  prompt: { cardId: string; text: string } | null;
 }
 
 export interface WorkspaceOption {
@@ -165,6 +193,9 @@ export interface ApiError {
 /**
  * GET /api/workspaces → WorkspaceOption[] (known local mill weavers)
  * GET /api/agents → AgentDirectory (identities, tracked runs, and owned work)
+ * GET /api/agent-options → AgentOption[] (available headless harnesses and aliases)
+ * GET /api/agent-runs/:id → AgentReply
+ * POST /api/cards/:id/agent-runs, AgentPrompt → AgentReply
  * GET /api/board → Board
  * GET /api/cards/:id → CardDetail
  * GET /api/cards/:id/graph → CardGraph

@@ -13,6 +13,7 @@ import {
 function run(change: Partial<AgentRun> = {}): AgentRun {
   return {
     id: 'run1',
+    requestId: null,
     title: 'Work',
     alias: 'luna-high',
     harness: 'pi',

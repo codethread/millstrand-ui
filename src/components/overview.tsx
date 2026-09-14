@@ -9,6 +9,7 @@ import { overviewCards } from '../lib/overview';
 import { cn } from '../lib/utils';
 import { ErrorNotice, Loading, StatusBadge } from './issue-parts';
 import { Button } from './ui/button';
+import { WeaverAgentSetting } from './agent-prompt';
 
 interface WorkspaceSnapshot {
   workspace: WorkspaceOption;
@@ -69,6 +70,7 @@ function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
                 : 'Live · 5s refresh'}
         </span>
       </header>
+      <WeaverAgentSetting workspace={workspace} />
       <div className="grid min-w-0 lg:grid-cols-2">
         <section className="min-w-0 p-4" aria-label={`${workspace.name} active cards`}>
           <h3 className="mb-3 text-xs font-semibold">

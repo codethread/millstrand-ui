@@ -1,9 +1,19 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { basename, dirname } from 'node:path';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import { stat } from 'node:fs/promises';
 import { parseAgents } from './agents.ts';
+import {
+  agentLaunchArgs,
+  parseAgentOptions,
+  parseAgentReply,
+  parsePromptContext,
+} from './agent-prompts.ts';
 import type {
   AgentDirectory,
+  AgentOption,
+  AgentPrompt,
+  AgentReply,
   Board,
   Card,
   CardDetail,
@@ -64,6 +74,7 @@ export class StrandData {
   private readonly agentDirectories = new ReadCache<AgentDirectory>();
   private readonly details = new ReadCache<CardDetail>();
   private readonly graphs = new ReadCache<CardGraph>();
+  private readonly replies = new ReadCache<AgentReply>();
 
   constructor(readonly workspace: string) {}
 
@@ -122,6 +133,68 @@ export class StrandData {
         identities: parseAgents(rows),
       };
     });
+  }
+
+  async agentOptions(): Promise<AgentOption[]> {
+    return parseAgentOptions(await this.run(['agent', 'list']));
+  }
+
+  agentReply(id: string): Promise<AgentReply> {
+    return this.replies.get(id, async () => {
+      const [summary, raw] = await Promise.all([
+        this.run(['agent', 'show', id]),
+        this.run(['show', id]),
+      ]);
+      const row = object(raw, 'run');
+      const attrs = object(row['attributes'], 'run.attributes');
+      return { ...parseAgentReply(summary), prompt: parsePromptContext(attrs['harness/context']) };
+    });
+  }
+
+  async promptAgent(cardId: string, input: AgentPrompt): Promise<AgentReply> {
+    const card = await this.card(cardId);
+    if (
+      input.targetId !== cardId &&
+      !(await this.graph(cardId)).nodes.some((node) => node.id === input.targetId)
+    )
+      throw new HttpError(404, 'That strand is not in the selected card’s graph.');
+    if (!(await this.agentOptions()).some((agent) => agent.name === input.alias))
+      throw new HttpError(
+        400,
+        'That agent is not available headlessly in this weaver. Choose an available alias.',
+      );
+    const cwd = await this.agentDirectory(card);
+    const reply = parseAgentReply(
+      await this.run(agentLaunchArgs(this.workspace, cwd, cardId, input)),
+    );
+    this.agentDirectories.clear();
+    return { ...reply, prompt: { cardId, text: input.prompt } };
+  }
+
+  private async agentDirectory(card: Card): Promise<string> {
+    const root = dirname(this.workspace);
+    if (card.worktree === null) return root;
+    try {
+      if (!isAbsolute(card.worktree)) throw new Error('Worktree path must be absolute.');
+      const { stdout } = await exec('git', ['-C', root, 'worktree', 'list', '--porcelain', '-z'], {
+        encoding: 'utf8',
+        timeout: 10000,
+        maxBuffer: 1024 * 1024,
+      });
+      const known = stdout
+        .split('\0')
+        .filter((field) => field.startsWith('worktree '))
+        .map((field) => resolve(field.slice('worktree '.length)));
+      const cwd = resolve(card.worktree);
+      if (!known.includes(cwd) || !(await stat(cwd)).isDirectory())
+        throw new Error('The recorded worktree is missing or belongs to another repository.');
+      return cwd;
+    } catch {
+      throw new HttpError(
+        409,
+        'The card’s recorded worktree is unavailable or is not registered in this weaver’s repository. Repair the card’s worktree before prompting.',
+      );
+    }
   }
 
   private async card(id: string): Promise<Card> {

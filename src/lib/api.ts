@@ -1,7 +1,18 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  mutationOptions,
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
+import { useAgentPromptStore } from '../agent-prompt-store';
 import { useSearch } from '@tanstack/react-router';
 import type {
   AgentDirectory,
+  AgentOption,
+  AgentPrompt,
+  AgentReply,
   Board,
   CardDetail,
   CardGraph,
@@ -55,6 +66,48 @@ export function useBoard() {
 }
 export function useAgents() {
   return useQuery(agentQueryOptions(useWorkspace()));
+}
+export function useAgentOptions(workspace: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['agent-options', workspace],
+    queryFn: () => request<AgentOption[]>('/agent-options', workspace),
+    enabled,
+    staleTime: 30000,
+    retry: false,
+  });
+}
+export function useAgentReply(id: string, enabled: boolean) {
+  const workspace = useWorkspace();
+  return useQuery({
+    queryKey: ['agent-reply', workspace, id],
+    queryFn: () => request<AgentReply>(`/agent-runs/${encodeURIComponent(id)}`, workspace),
+    enabled,
+    refetchInterval: enabled ? 5000 : false,
+  });
+}
+export function usePromptAgent(cardId: string) {
+  const workspace = useWorkspace();
+  const client = useQueryClient();
+  return useMutation(agentPromptMutationOptions(client, workspace, cardId));
+}
+export function agentPromptMutationOptions(
+  client: QueryClient,
+  workspace: string | null,
+  cardId: string,
+) {
+  return mutationOptions({
+    mutationFn: (input: AgentPrompt) =>
+      request<AgentReply>(`/cards/${encodeURIComponent(cardId)}/agent-runs`, workspace, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+    onSuccess: (reply, input) => {
+      if (workspace) useAgentPromptStore.getState().track(workspace, reply.id, input.requestId);
+      client.setQueryData(['agent-reply', workspace, reply.id], reply);
+      void client.invalidateQueries({ queryKey: ['agents', workspace] });
+    },
+  });
 }
 export function useViews() {
   const workspace = useWorkspace();

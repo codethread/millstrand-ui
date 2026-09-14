@@ -111,8 +111,31 @@ Agent data refreshes independently every five seconds; failed refreshes mark
 retained data as last-known rather than claiming it is live. Agents can be browsed
 even when a workspace does not publish Kanban. Inspection uses a bounded core
 strand list (up to 10,000 strands) and exposes only selected metadata—not provider
-environment variables, injected prompts, or credentials. All agent controls are
-read-only; there are no launch, stop, retry-run, or assignment actions.
+environment variables, injected prompts, or credentials.
+
+Use **Prompt agent** from a card's detail panel in Board, Outline, or Graph (or a
+focused graph's strand inspector). The small compose dialog starts a headless
+`strand agent run` in that weaver and opens its existing Agents detail view.
+That view shows your prompt, the tracked status, a link back to the work, and the
+reply when available. Each submission starts a new run; there are no stop,
+assignment, or session-resume controls. A failed run can still have a useful reply,
+which is shown alongside its failure.
+
+The default alias is **tui**, saved separately for each weaver in this browser.
+Change it on All weavers or in the compose dialog. Choices come from that weaver's
+available headless harnesses; missing Harnesses support or an unavailable alias
+is shown explicitly. Prompts are passed as command arguments, never shell code;
+the API validates the selected card/graph target and alias and owns the execution
+directory, using the card’s recorded worktree when it is registered in the same
+repository (otherwise a card without a worktree uses the weaver root). Retries of an unchanged submission reuse the CLI request ID.
+
+The header's agent icon tracks prompts sent from this browser in the current
+weaver. It shows active runs and unread finished runs (including failures).
+Choose a notification to open that exact run; viewing its finished reply marks
+it read. Launch receipts, read state, and per-weaver aliases use independent
+local storage keys and synchronize across tabs. Workflow, terminal, and desktop agent runs remain visible in
+Agents but are excluded from these header notifications. Prompt text and replies
+are stored with the tracked Harnesses run, not in local preferences.
 
 ## Develop
 

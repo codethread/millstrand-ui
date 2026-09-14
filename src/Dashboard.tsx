@@ -47,6 +47,9 @@ import { ErrorNotice, LabelPill, Loading, StatusIcon } from './components/issue-
 import { IssueDetail } from './components/issue-detail';
 import { WorkspaceSwitcher } from './components/workspace-switcher';
 import { Overview } from './components/overview';
+import { AgentPromptDialog } from './components/agent-prompt';
+import { useAgentPromptStore } from './agent-prompt-store';
+import { AgentNotifications } from './components/agent-notifications';
 import { DashboardOverlays } from './components/overlays';
 import { AgentDetail, AgentSearchControls, AgentsView } from './components/agents-view';
 import { agentIsActive } from './lib/agents';
@@ -359,6 +362,7 @@ function WorkspaceDashboard() {
   }, [nav, defaultWorkspace]);
   useEffect(() => {
     useDashboardStore.getState().resetWorkspace();
+    useAgentPromptStore.getState().close();
   }, [nav.workspace]);
   if (!board.data && nav.mode !== 'agents')
     return (
@@ -439,6 +443,7 @@ function WorkspaceDashboard() {
                 ))}
               </div>
             )}
+            <AgentNotifications />
             {nav.mode === 'agents' ? (
               <AgentSearchControls />
             ) : (
@@ -564,6 +569,7 @@ function WorkspaceDashboard() {
       {nav.issue && <IssueDetail key={`${nav.workspace}:${nav.issue}`} id={nav.issue} />}
       {nav.agent && <AgentDetail key={nav.agent} id={nav.agent} />}
       <DashboardOverlays board={data} views={views.data ?? []} viewsReady={views.isSuccess} />
+      <AgentPromptDialog />
     </div>
   );
 }
