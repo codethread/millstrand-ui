@@ -1,7 +1,7 @@
 import type { ReviewScope, ReviewStage, ReviewSummary } from '../../shared/reviews';
 
 export function reviewInInbox(review: ReviewSummary): boolean {
-  return review.current && review.state !== 'closed' && review.decision === 'pending';
+  return review.state === 'active' && review.decision === 'pending';
 }
 export function reviewLabel(review: ReviewSummary): string {
   if (review.decision === 'done') return 'Done';

@@ -90,7 +90,7 @@ export class StrandData {
           kind: 'available',
           workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
           fetchedAt: new Date().toISOString(),
-          reviews: parseReviewList(await this.run(['review', 'list', '--all', 'true'])),
+          reviews: parseReviewList(await this.run(['review', 'list', '--all'])),
         };
       } catch (error) {
         if (

@@ -31,7 +31,7 @@ export function ReviewSearchControls() {
       </div>
       <select
         aria-label="Review stage"
-        className="h-8 rounded-md border bg-background px-2 text-xs"
+        className="h-8 rounded-md border border-border bg-background px-2 text-xs"
         value={nav.reviewStage ?? ''}
         onChange={(event) =>
           nav.setReviewStage(reviewStages.find((stage) => stage === event.target.value) ?? null)
@@ -53,7 +53,7 @@ function ReviewStatus({ review }: { review: ReviewSummary }) {
   return (
     <span
       className={cn(
-        'inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium',
+        'inline-flex rounded-full border border-border px-2 py-0.5 text-[10px] font-medium',
         review.stage === 'reviewed' &&
           review.decision === 'pending' &&
           'border-emerald-200 bg-emerald-50 text-emerald-800',
@@ -69,13 +69,13 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
   const agents = useAgents();
   return (
     <>
-      <section className="border-b p-5 md:p-7">
+      <section className="border-b border-border p-5 md:p-7">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <ReviewStatus review={detail} />
           <span
             className={cn('text-xs', detail.current ? 'text-muted-foreground' : 'text-amber-700')}
           >
-            {detail.current ? 'Current revision' : 'Outdated revision'}
+            {detail.current ? 'Current at last poll' : 'Outdated at last poll'}
           </span>
           <code className="ml-auto text-[10px] text-muted-foreground">{detail.id}</code>
         </div>
@@ -108,7 +108,8 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
         </div>
         {!detail.current && (
           <p className="mt-3 rounded-md bg-amber-50 p-3 text-xs text-amber-900">
-            This review covers an older revision. Read the current review before making a decision.
+            This revision was no longer current or open in the last successful poll. Its evidence is
+            preserved.{detail.decision === 'pending' && ' It still awaits a local decision.'}
           </p>
         )}
       </section>
@@ -127,7 +128,7 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
           </p>
         )}
       </section>
-      <section className="border-t p-5 md:p-7" aria-label="Reviewer evidence">
+      <section className="border-t border-border p-5 md:p-7" aria-label="Reviewer evidence">
         <h3 className="mb-4 text-sm font-semibold">
           Reviewer evidence{' '}
           <span className="text-muted-foreground">· {detail.reviewers.length}</span>
@@ -143,7 +144,7 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
             return (
               <details
                 key={seat.id}
-                className="overflow-hidden rounded-lg border"
+                className="overflow-hidden rounded-lg border border-border"
                 open={detail.report === null}
               >
                 <summary className="cursor-pointer px-4 py-3 text-sm">
@@ -152,7 +153,7 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
                     {[seat.status, seat.substatus].filter(Boolean).join(' · ') || 'Waiting'}
                   </span>
                 </summary>
-                <div className="space-y-4 border-t p-4">
+                <div className="space-y-4 border-t border-border p-4">
                   {seat.runId && (
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <code className="break-all text-muted-foreground">Run {seat.runId}</code>
@@ -190,11 +191,14 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
         </div>
       </section>
       {detail.links.length > 0 && (
-        <section className="border-t p-5 md:p-7">
+        <section className="border-t border-border p-5 md:p-7">
           <h3 className="mb-3 text-sm font-semibold">Related work</h3>
           <div className="flex flex-wrap gap-2">
             {detail.links.map((link) => (
-              <span key={`${link.type}:${link.id}`} className="rounded-md border px-3 py-2 text-xs">
+              <span
+                key={`${link.type}:${link.id}`}
+                className="rounded-md border border-border px-3 py-2 text-xs"
+              >
                 {link.title} <code className="text-muted-foreground">{link.id}</code> · {link.type}
               </span>
             ))}
@@ -202,13 +206,13 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
         </section>
       )}
       {detail.history.length > 0 && (
-        <section className="border-t p-5 md:p-7">
+        <section className="border-t border-border p-5 md:p-7">
           <h3 className="mb-3 text-sm font-semibold">Review history</h3>
           <div className="space-y-2">
             {detail.history.map((review) => (
               <button
                 key={review.id}
-                className="flex w-full flex-wrap items-center gap-2 rounded-md border p-3 text-left text-xs hover:bg-muted"
+                className="flex w-full flex-wrap items-center gap-2 rounded-md border border-border p-3 text-left text-xs hover:bg-muted"
                 onClick={() => nav.openReview(review.id)}
               >
                 <code>{review.mr.sha?.slice(0, 12) ?? review.id}</code>
@@ -223,7 +227,7 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
         </section>
       )}
       {detail.notes.length > 0 && (
-        <details className="border-t p-5 md:p-7">
+        <details className="border-t border-border p-5 md:p-7">
           <summary className="cursor-pointer text-sm font-semibold">
             Activity · {detail.notes.length} notes
           </summary>
@@ -248,7 +252,7 @@ function SelectedReview({ id }: { id: string }) {
   const nav = useDashboardNavigation();
   return (
     <article className="min-w-0 flex-1 overflow-y-auto bg-background" aria-label="Selected review">
-      <div className="sticky top-0 z-10 flex items-center border-b bg-background/95 px-4 py-2">
+      <div className="sticky top-0 z-10 flex items-center border-b border-border bg-background/95 px-4 py-2">
         <Button variant="ghost" size="sm" onClick={nav.closeReview}>
           <ArrowLeft />
           Back to reviews
@@ -292,7 +296,7 @@ export function ReviewsView() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {query.error && (
-        <div className="border-b p-3">
+        <div className="border-b border-border p-3">
           <ErrorNotice error={query.error} />
           {data && (
             <p className="mt-1 text-xs text-muted-foreground">Showing last known reviews.</p>
@@ -308,11 +312,11 @@ export function ReviewsView() {
         <div className="flex min-h-0 flex-1">
           <div
             className={cn(
-              'flex min-h-0 w-full shrink-0 flex-col border-r md:w-80 lg:w-96',
+              'flex min-h-0 w-full shrink-0 flex-col border-r border-border md:w-80 lg:w-96',
               nav.review && 'hidden md:flex',
             )}
           >
-            <div className="flex items-center gap-2 border-b p-3">
+            <div className="flex items-center gap-2 border-b border-border p-3">
               {(['inbox', 'all'] as const).map((scope) => (
                 <button
                   key={scope}
@@ -339,7 +343,7 @@ export function ReviewsView() {
                   onClick={() => nav.openReview(review.id)}
                   aria-pressed={nav.review === review.id}
                   className={cn(
-                    'block w-full border-b p-4 text-left hover:bg-muted/50',
+                    'block w-full border-b border-border p-4 text-left hover:bg-muted/50',
                     nav.review === review.id && 'bg-muted',
                   )}
                 >
@@ -381,7 +385,7 @@ export function ReviewsView() {
                     {nav.reviewQuery || nav.reviewStage
                       ? 'Try another search or stage.'
                       : nav.reviewScope === 'inbox'
-                        ? 'Current reviews awaiting a local decision appear here. Browse all reviews for completed and older revisions.'
+                        ? 'Reviews awaiting a local decision appear here, including outdated revisions. Browse all reviews for completed and older revisions.'
                         : 'Reviews created through strand will appear here.'}
                   </p>
                 </div>

@@ -13,7 +13,7 @@ describe('review inbox', () => {
       { ...review, id: 'running', stage: 'running' },
     ],
   });
-  it('shows only current undecided active reviews in the inbox and retains history in all', () => {
+  it('keeps outdated undecided reviews in the inbox and retains completed history in all', () => {
     expect(selectReviews(rows, 'inbox', null, '').map((row) => row.id)).toEqual([
       'r123',
       'running',
@@ -23,7 +23,7 @@ describe('review inbox', () => {
   it('combines stage with case-insensitive terms across MR and reviewer metadata', () => {
     expect(
       selectReviews(rows, 'inbox', 'reviewed', 'FIX REVIEWER 12').map((row) => row.id),
-    ).toEqual(['r123']);
+    ).toEqual(['older', 'r123']);
     expect(selectReviews(rows, 'all', null, 'missing')).toEqual([]);
   });
   it('keeps selection and filters shareable, resets them across workspaces, and exits for issue filters', () => {
