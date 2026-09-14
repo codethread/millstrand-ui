@@ -283,6 +283,18 @@ export function ReviewsView() {
   const query = useReviews();
   const nav = useDashboardNavigation();
   const data = query.data;
+  if (!data && query.error)
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="p-5">
+          <ErrorNotice error={query.error} />
+          <Button className="mt-3" variant="outline" size="sm" onClick={() => void query.refetch()}>
+            Retry
+          </Button>
+        </div>
+        {nav.review && <SelectedReview key={nav.review} id={nav.review} />}
+      </div>
+    );
   if (data?.kind === 'unsupported')
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
