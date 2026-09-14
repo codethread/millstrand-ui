@@ -15,6 +15,7 @@ describe('review inbox', () => {
   });
   it('keeps outdated undecided reviews in the inbox and retains completed history in all', () => {
     expect(selectReviews(rows, 'inbox', null, '').map((row) => row.id)).toEqual([
+      'older',
       'r123',
       'running',
     ]);
