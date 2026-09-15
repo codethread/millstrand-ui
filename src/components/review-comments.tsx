@@ -113,10 +113,22 @@ function Comment({
         }}
         proposalEditor={
           <>
-            {store.error && (
-              <p role="alert" className="text-sm text-destructive">
-                {store.error}
-              </p>
+            {store.errors[key] && (
+              <div className="space-y-2">
+                <p role="alert" className="text-sm text-destructive">
+                  {store.errors[key].message}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => store.retry(key)}>
+                    Retry draft storage
+                  </Button>
+                  {store.errors[key].kind === 'read' && (
+                    <Button size="sm" variant="outline" onClick={() => store.discard(key)}>
+                      Discard unread saved draft
+                    </Button>
+                  )}
+                </div>
+              </div>
             )}
             <details>
               <summary className="cursor-pointer text-xs">Original reviewer text</summary>
@@ -145,7 +157,7 @@ function Comment({
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!mutable}
+                disabled={!mutable || store.errors[key]?.kind === 'read'}
                 onClick={() => store.open(key, comment.candidate.text, comment.candidate.version)}
               >
                 Edit revised text
@@ -183,7 +195,10 @@ function Comment({
                         {
                           id: comment.id,
                           inclusion: comment.inclusion,
-                          candidate: { expectedVersion: saved.candidateVersion, text: draft.text },
+                          candidate: {
+                            expectedVersion: saved.candidateVersion,
+                            text: draft.text,
+                          },
                         },
                       ],
                     },

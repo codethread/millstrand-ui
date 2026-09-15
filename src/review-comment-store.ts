@@ -11,8 +11,9 @@ interface SavedDraft {
 }
 interface DraftStore {
   drafts: Record<string, SavedDraft>;
-  error: string | null;
+  errors: Record<string, { kind: 'read' | 'write'; message: string }>;
   load: (key: string) => void;
+  retry: (key: string) => void;
   open: (key: string, text: string, version: number) => void;
   edit: (key: string, text: string) => void;
   discard: (key: string) => void;
@@ -49,7 +50,10 @@ export function parseSavedCommentDraft(value: unknown): SavedDraft {
   if (typeof state !== 'object' || state === null || !('kind' in state))
     throw new Error('Invalid draft state');
   if (state.kind === 'closed')
-    return { state: { kind: 'closed' }, candidateVersion: value.candidateVersion };
+    return {
+      state: { kind: 'closed' },
+      candidateVersion: value.candidateVersion,
+    };
   if (state.kind !== 'editing' || !('draft' in state)) throw new Error('Invalid draft state');
   const draft = state.draft;
   if (
@@ -66,12 +70,36 @@ export function parseSavedCommentDraft(value: unknown): SavedDraft {
   )
     throw new Error('Invalid draft');
   return {
-    state: { kind: 'editing', draft: { id: draft.id, text: draft.text, edit: draft.edit } },
+    state: {
+      kind: 'editing',
+      draft: { id: draft.id, text: draft.text, edit: draft.edit },
+    },
     candidateVersion: value.candidateVersion,
   };
 }
 
 export const useReviewCommentStore = create<DraftStore>((set, get) => {
+  function clearError(key: string) {
+    set((s) => {
+      const errors = { ...s.errors };
+      delete errors[key];
+      return { errors };
+    });
+  }
+  function fail(key: string, kind: 'read' | 'write', message: string) {
+    set((s) => ({ errors: { ...s.errors, [key]: { kind, message } } }));
+  }
+  function read(key: string) {
+    try {
+      const raw = localStorage.getItem(key);
+      const draft = raw === null ? null : parseSavedCommentDraft(JSON.parse(raw));
+      if (draft !== null && !get().drafts[key])
+        set((s) => ({ drafts: { ...s.drafts, [key]: draft } }));
+      clearError(key);
+    } catch {
+      fail(key, 'read', 'Saved draft could not be read. Existing in-memory edits are retained.');
+    }
+  }
   function newDraft(text: string): CommentDraftState {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
     return commentDraftReducer(
@@ -87,36 +115,39 @@ export const useReviewCommentStore = create<DraftStore>((set, get) => {
     set((s) => ({ drafts: { ...s.drafts, [key]: draft } }));
     try {
       localStorage.setItem(key, JSON.stringify(draft));
-      set({ error: null });
+      clearError(key);
     } catch {
-      set({
-        error: 'Draft could not be saved in this browser. Keep this page open or copy your edits.',
-      });
+      fail(
+        key,
+        'write',
+        'Draft could not be saved in this browser. Keep this page open or copy your edits.',
+      );
     }
   }
   return {
     drafts: {},
-    error: null,
+    errors: {},
     focus: null,
     focusComment: (focus) => set({ focus }),
     rebase: (key, version) => {
       const existing = get().drafts[key];
       if (existing?.state.kind === 'editing')
-        save(key, { candidateVersion: version, state: newDraft(existing.state.draft.text) });
+        save(key, {
+          candidateVersion: version,
+          state: newDraft(existing.state.draft.text),
+        });
     },
     load: (key) => {
       if (get().drafts[key]) return;
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          const draft = parseSavedCommentDraft(JSON.parse(raw));
-          set((s) => ({ drafts: { ...s.drafts, [key]: draft } }));
-        }
-      } catch {
-        set({ error: 'Saved draft could not be read. Existing in-memory edits are retained.' });
-      }
+      read(key);
+    },
+    retry: (key) => {
+      const draft = get().drafts[key];
+      if (get().errors[key]?.kind === 'write' && draft) save(key, draft);
+      else read(key);
     },
     open: (key, text, version) => {
+      if (get().errors[key]?.kind === 'read') return;
       const existing = get().drafts[key];
       if (existing?.state.kind === 'editing') return;
       save(key, {
@@ -127,18 +158,36 @@ export const useReviewCommentStore = create<DraftStore>((set, get) => {
     edit: (key, text) => {
       const draft = get().drafts[key];
       if (draft)
-        save(key, { ...draft, state: commentDraftReducer(draft.state, { type: 'edit', text }) });
+        save(key, {
+          ...draft,
+          state: commentDraftReducer(draft.state, { type: 'edit', text }),
+        });
     },
     discard: (key) => {
       const draft = get().drafts[key];
       if (draft) save(key, { ...draft, state: { kind: 'closed' } });
+      else {
+        try {
+          localStorage.removeItem(key);
+          clearError(key);
+        } catch {
+          fail(
+            key,
+            'read',
+            'Saved draft could not be discarded. Retry or copy its stored data before continuing.',
+          );
+        }
+      }
     },
     adopted: (key, submitted) => {
       const draft = get().drafts[key];
       if (draft)
         save(key, {
           ...draft,
-          state: commentDraftReducer(draft.state, { type: 'adopted', submitted }),
+          state: commentDraftReducer(draft.state, {
+            type: 'adopted',
+            submitted,
+          }),
         });
     },
   };

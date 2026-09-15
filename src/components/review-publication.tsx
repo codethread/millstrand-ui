@@ -36,7 +36,7 @@ export function ReviewPublication({
       attempt.curationVersion !== snapshot.review.curation.version);
   const block = sendReviewBlock(snapshot, {
     hydrated: workspace !== null && hydrated === signature,
-    storageError: store.error !== null,
+    storageError: keys.some((key) => store.errors[key] !== undefined),
     unsaved,
     refreshing: refreshing || curating,
     readError,
@@ -45,7 +45,10 @@ export function ReviewPublication({
   const retry = attempt !== null || snapshot.review.publication.state !== 'unpublished';
   const published =
     snapshot.review.publication.state === 'published' || mutation.data?.state === 'published';
-  const receipts = snapshot.comments.map((comment) => ({ id: comment.id, ...comment.publication }));
+  const receipts = snapshot.comments.map((comment) => ({
+    id: comment.id,
+    ...comment.publication,
+  }));
   return (
     <div className="space-y-3 rounded-lg border border-border p-4" aria-label="Send review">
       <p className="text-sm">
