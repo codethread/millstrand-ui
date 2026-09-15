@@ -1,6 +1,6 @@
 import { ArrowUpRight, Inbox, Layers } from 'lucide-react';
 import type { Card } from '../../shared/api';
-import { lanes, selectOutline } from '../lib/board';
+import { selectBoardLanes, selectOutline } from '../lib/board';
 import { useDashboardNavigation } from '../lib/navigation';
 import { IssueAgents } from './agents-view';
 import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
@@ -53,11 +53,7 @@ function IssueCard({ card, allCards }: { card: Card; allCards: Card[] }) {
 
 export function BoardView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
   const includeClosed = useDashboardNavigation().filter.includeClosed;
-  const columns = lanes.filter((lane) =>
-    lane.id === 'unknown'
-      ? cards.some((card) => card.lane === 'unknown')
-      : lane.id !== 'closed' || includeClosed,
-  );
+  const columns = selectBoardLanes(cards, includeClosed);
   return (
     <div className="board-canvas">
       <div className="board-columns">

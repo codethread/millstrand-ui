@@ -1,6 +1,7 @@
 /** Normalized dashboard contract. Missing source values become explicit nulls. */
 export type CardType = 'epic' | 'feature';
-export type Lane = 'refinement' | 'pending' | 'claimed' | 'in_review' | 'closed' | 'unknown';
+export type Lane =
+  'refinement' | 'pending' | 'claimed' | 'in_review' | 'in_production' | 'closed' | 'unknown';
 export type Priority = 'p1' | 'p2' | 'p3' | 'p4';
 export type TaskStatus = 'ready' | 'doing' | 'blocked' | 'closed';
 export type JsonValue =

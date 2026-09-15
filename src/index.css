@@ -759,6 +759,9 @@ h1 {
 .status-in_review {
   color: light-dark(#9180b1, #9c8db9);
 }
+.status-in_production {
+  color: light-dark(#538b99, #85b3bf);
+}
 .status-closed {
   color: light-dark(#708f7c, #98aea1);
 }

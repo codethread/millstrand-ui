@@ -55,7 +55,7 @@ localhost when using a tunnel or when the network is not trusted.
 ## All-weaver overview
 
 The home page (`/?mode=overview`) shows work in motion across every discovered
-local weaver: only in-progress/review cards and active agents (running, queued,
+local weaver: only in-progress/review/production cards and active agents (running, queued,
 or stopping). Busy workspaces appear first, with summary counts; quiet, loading,
 and offline weavers are listed compactly below. Expand one to inspect its status
 or open its dashboard. **All weavers** in any dashboard returns to this overview.
@@ -171,6 +171,9 @@ header. Click it again or press Escape to restore them. Your filters and layout
 stay intact; the search shortcut also restores the header and focuses search.
 
 Use Board for lanes, Outline for epic/feature context, and Graph for relationships.
+The optional **In production** column appears after **In review** when matching
+cards use the spool's `in_production` lane. It supports filters and saved views
+and keeps production observation work visible in the all-weaver overview.
 Choose a graph focus to load one card's task subtree and dependencies. Solid arrows
 point from parent to child; dashed arrows point from a dependent to its prerequisite.
 Scroll to zoom, drag to pan, and click a node to inspect it. Views above 150 nodes

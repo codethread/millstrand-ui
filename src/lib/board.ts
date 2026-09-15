@@ -5,9 +5,22 @@ export const lanes: { id: Lane; title: string; description: string }[] = [
   { id: 'pending', title: 'Ready', description: 'Ready to be picked up' },
   { id: 'claimed', title: 'In progress', description: 'Work in motion' },
   { id: 'in_review', title: 'In review', description: 'Ready for a second look' },
+  {
+    id: 'in_production',
+    title: 'In production',
+    description: 'Validation and release observation',
+  },
   { id: 'closed', title: 'Completed', description: 'Finished and filed' },
   { id: 'unknown', title: 'Other', description: 'Outside the usual lanes' },
 ];
+
+export function selectBoardLanes(cards: Card[], includeClosed: boolean) {
+  return lanes.filter((lane) => {
+    if (lane.id === 'in_production' || lane.id === 'unknown')
+      return cards.some((card) => card.lane === lane.id);
+    return lane.id !== 'closed' || includeClosed;
+  });
+}
 
 export function emptyFilter(): ViewFilter {
   return {

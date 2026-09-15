@@ -55,7 +55,15 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], where: s
   return found;
 }
 
-const lanes = ['refinement', 'pending', 'claimed', 'in_review', 'closed', 'unknown'] as const;
+const lanes = [
+  'refinement',
+  'pending',
+  'claimed',
+  'in_review',
+  'in_production',
+  'closed',
+  'unknown',
+] as const;
 const priorities = ['p1', 'p2', 'p3', 'p4'] as const;
 const cardTypes = ['epic', 'feature'] as const;
 

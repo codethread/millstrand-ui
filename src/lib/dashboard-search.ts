@@ -59,6 +59,7 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
       'pending',
       'claimed',
       'in_review',
+      'in_production',
       'closed',
       'unknown',
     ]),

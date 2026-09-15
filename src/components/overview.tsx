@@ -364,7 +364,7 @@ export function Overview() {
           <p className="mb-5 rounded-lg border border-dashed border-border p-5 text-sm text-muted-foreground">
             {partial
               ? 'No activity in the available snapshots yet. Some weavers are loading or unavailable.'
-              : 'No in-progress cards, review cards, or active agents across your weavers.'}
+              : 'No in-progress, review, or production cards, or active agents across your weavers.'}
           </p>
         )}
         {other.length > 0 && (
