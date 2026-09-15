@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from './ui/dialog';
+import { DeleteCardDialog } from './card-actions';
 import { ErrorNotice, LabelPill } from './issue-parts';
 
 export function DashboardOverlays({
@@ -60,6 +61,8 @@ export function DashboardOverlays({
       },
     );
   }
+  if (overlay.kind === 'delete-card')
+    return <DeleteCardDialog key={overlay.card.id} card={overlay.card} />;
   return (
     <Dialog
       open={overlay.kind !== 'closed'}

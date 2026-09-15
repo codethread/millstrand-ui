@@ -1,3 +1,4 @@
+import { moveCardArgs } from './card-actions.ts';
 import type { ReviewDetail, ReviewDirectory } from '../shared/reviews.ts';
 import {
   reviewPublicationBlock,
@@ -30,6 +31,7 @@ import type {
   Card,
   CardDetail,
   CardGraph,
+  CardAction,
   LabelChange,
   Note,
 } from '../shared/api.ts';
@@ -421,6 +423,22 @@ export class StrandData {
     return array(await this.run(['notes', taskId]), 'task notes')
       .map(parseNote)
       .reverse();
+  }
+
+  async changeCard(id: string, action: CardAction): Promise<{ ok: true }> {
+    // Validate against a fresh board, never a potentially stale polling snapshot.
+    this.boards.clear();
+    await this.card(id);
+    try {
+      await this.run(action.kind === 'delete' ? ['burn', id] : moveCardArgs(id, action.lane));
+      return { ok: true };
+    } finally {
+      // Even a timeout may follow a committed mutation.
+      this.boards.clear();
+      this.details.clear();
+      this.graphs.clear();
+      this.agentDirectories.clear();
+    }
   }
 
   async changeLabels(id: string, change: LabelChange): Promise<CardDetail> {

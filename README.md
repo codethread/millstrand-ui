@@ -2,7 +2,7 @@
 
 A web interface for exploring Millstrand workspaces. Its first surface covers
 Kanban cards, tasks, dependencies, and activity through a local Node server.
-Only card labels and saved dashboard views are currently editable.
+Card lanes, card labels, and saved dashboard views are editable; cards can also be deleted.
 
 |                                                                                                                         |                                                                                                           |
 | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -48,8 +48,8 @@ ssh -N -L 4173:127.0.0.1:4173 user@host
 ```
 
 Open `http://localhost:4173` locally. This MVP has no login: any client able to
-reach the server can browse discovered local weavers and edit their card labels
-and saved views. Bind to
+reach the server can browse discovered local weavers, move or delete cards, and edit
+card labels and saved views. Bind to
 localhost when using a tunnel or when the network is not trusted.
 
 ## All-weaver overview
@@ -81,8 +81,17 @@ show an error with the workspace menu still available.
 
 Label edits use `strand kanban label add/rm`, so they persist in the workspace
 and appear in the terminal dashboard too. Label slugs use lowercase letters,
-numbers, and hyphens. Issue state, title, body, ownership, and graph links are
-read-only in this app.
+numbers, and hyphens. Title, body, ownership, and graph links are otherwise read-only in this app.
+
+Right-click a Board card or Outline feature row, or use its **…** actions button,
+to move it to another lane or delete it. The current lane is disabled. The button
+also provides touch and keyboard access. Moves edit only that card's state/lane:
+Completed closes it with outcome `done`; other lanes reactivate it and clear closure
+metadata. These are board edits, not workflow transitions: they do not assign an
+owner, run landing, or change child cards/tasks. Filters remain unchanged, so a moved
+card may disappear from the current view. Deletion requires confirmation and permanently
+removes only that card and its incident links through `strand burn`; child cards and
+tasks remain. Failed actions are shown without automatically retrying them.
 
 Custom views persist on the **server**, shared by browsers viewing the same
 workspace. They live in
