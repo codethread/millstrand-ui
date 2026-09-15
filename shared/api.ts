@@ -2,6 +2,9 @@
 export type CardType = 'epic' | 'feature';
 export type Lane =
   'refinement' | 'pending' | 'claimed' | 'in_review' | 'in_production' | 'closed' | 'unknown';
+export type CardLane = Exclude<Lane, 'unknown'>;
+export type CardAction = { kind: 'move'; lane: CardLane } | { kind: 'delete' };
+
 export type Priority = 'p1' | 'p2' | 'p3' | 'p4';
 export type TaskStatus = 'ready' | 'doing' | 'blocked' | 'closed';
 export type JsonValue =
@@ -220,6 +223,8 @@ export interface ApiError {
  * GET /api/cards/:id/graph → CardGraph
  * GET /api/cards/:id/tasks/:taskId/notes → Note[]
  * PATCH /api/cards/:id/labels, LabelChange → CardDetail
+ * PATCH /api/cards/:id/lane, { lane: CardLane } → { ok: true }
+ * DELETE /api/cards/:id → { ok: true } (only this card and its incident links)
  * GET /api/views → SavedView[]
  * PUT /api/views, SavedView[] → SavedView[]
  * Scoped routes accept ?workspace=<WorkspaceOption.id>; omission uses the startup workspace.

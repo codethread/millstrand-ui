@@ -53,6 +53,7 @@ import { Overview } from './components/overview';
 import { AgentPromptDialog } from './components/agent-prompt';
 import { useAgentPromptStore } from './agent-prompt-store';
 import { AgentNotifications } from './components/agent-notifications';
+import { CardActionFeedback } from './components/card-actions';
 import { DashboardOverlays } from './components/overlays';
 import { AgentDetail, AgentSearchControls, AgentsView } from './components/agents-view';
 import { agentIsActive } from './lib/agents';
@@ -597,6 +598,7 @@ function WorkspaceDashboard() {
             </button>
           </div>
         )}
+        <CardActionFeedback />
         <section className="working-content" aria-label={`${nav.mode} content`}>
           <Button
             variant="outline"

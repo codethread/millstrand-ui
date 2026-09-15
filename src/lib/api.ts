@@ -9,6 +9,7 @@ import {
   mutationOptions,
   queryOptions,
   useMutation,
+  useMutationState,
   useIsMutating,
   useQuery,
   useQueries,
@@ -16,7 +17,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { useAgentPromptStore } from '../agent-prompt-store';
-import { useSearch } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import type {
   AgentDirectory,
   AgentOption,
@@ -25,6 +26,7 @@ import type {
   Board,
   CardDetail,
   CardGraph,
+  CardAction,
   LabelChange,
   Note,
   SavedView,
@@ -186,6 +188,67 @@ export function useLabels(id: string) {
       await client.invalidateQueries({ queryKey: ['board', workspace] });
     },
   });
+}
+
+export function cardActionMutationOptions(client: QueryClient, workspace: string | null) {
+  return mutationOptions({
+    mutationKey: ['card-action', workspace],
+    mutationFn: ({ id, action }: { id: string; action: CardAction }) =>
+      request<{ ok: true }>(
+        `/cards/${encodeURIComponent(id)}${action.kind === 'move' ? '/lane' : ''}`,
+        workspace,
+        {
+          method: action.kind === 'delete' ? 'DELETE' : 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          ...(action.kind === 'move' ? { body: JSON.stringify({ lane: action.lane }) } : {}),
+        },
+      ),
+    onSettled: async () => {
+      await Promise.all(
+        ['board', 'card', 'graph', 'agents'].map((key) =>
+          client.invalidateQueries({ queryKey: [key, workspace] }),
+        ),
+      );
+    },
+    retry: false,
+  });
+}
+
+export function useCardAction() {
+  const workspace = useWorkspace();
+  const navigate = useNavigate({ from: '/' });
+  return useMutation({
+    ...cardActionMutationOptions(useQueryClient(), workspace),
+    onSuccess: (_result, { id, action }) => {
+      if (action.kind === 'delete')
+        void navigate({
+          from: '/',
+          to: '/',
+          search: (old) =>
+            'workspace' in old && old.workspace === workspace
+              ? {
+                  ...old,
+                  issue: old.issue === id ? null : old.issue,
+                  graphRoot: old.graphRoot === id ? null : old.graphRoot,
+                }
+              : old,
+          replace: true,
+        });
+    },
+  });
+}
+
+export function useCardActionFeedback() {
+  const workspace = useWorkspace();
+  const states = useMutationState({
+    filters: { mutationKey: ['card-action', workspace] },
+    select: (mutation) => ({ status: mutation.state.status, error: mutation.state.error }),
+  });
+  return states.at(-1) ?? null;
+}
+
+export function useCardActionPending() {
+  return useIsMutating({ mutationKey: ['card-action', useWorkspace()] }) > 0;
 }
 
 export function useReviews() {

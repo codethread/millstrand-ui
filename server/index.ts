@@ -9,6 +9,7 @@ import { HttpError, parseLabelChange, parseViews, requestValue } from './parse.t
 import { parseCurateReview, parsePublishReview } from './review-comments.ts';
 import { WorkspaceDirectory } from './workspaces.ts';
 import { parseAgentPrompt } from './agent-prompts.ts';
+import { parseCardLane } from './card-actions.ts';
 
 const exec = promisify(execFile);
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
@@ -247,7 +248,7 @@ const server = createServer((request, response) => {
       return;
     }
     const match =
-      /^\/api\/cards\/([a-zA-Z0-9_-]+)(?:\/(graph|labels|tasks|agent-runs)(?:\/([a-zA-Z0-9_-]+)\/notes)?)?$/.exec(
+      /^\/api\/cards\/([a-zA-Z0-9_-]+)(?:\/(graph|labels|lane|tasks|agent-runs)(?:\/([a-zA-Z0-9_-]+)\/notes)?)?$/.exec(
         path,
       );
     const id = match?.[1];
@@ -272,11 +273,18 @@ const server = createServer((request, response) => {
           200,
           await strand.changeLabels(id, requestValue(parseLabelChange, await body(request))),
         );
-      } else
-        throw new HttpError(
-          405,
-          'This action is not available. Cards are read-only except for labels.',
+      } else if (method === 'PATCH' && action === 'lane' && taskId === undefined) {
+        json(
+          response,
+          200,
+          await strand.changeCard(id, {
+            kind: 'move',
+            lane: requestValue(parseCardLane, await body(request)),
+          }),
         );
+      } else if (method === 'DELETE' && action === undefined) {
+        json(response, 200, await strand.changeCard(id, { kind: 'delete' }));
+      } else throw new HttpError(405, 'This card action is not available.');
       return;
     }
     if (path === '/api' || path.startsWith('/api/'))
