@@ -1,5 +1,6 @@
 import type { AgentOption, AgentPrompt, AgentReply, AgentRunStatus } from '../shared/api.ts';
 import type { ReviewDetail } from '../shared/reviews.ts';
+import { reviewVersion } from './review-comments.ts';
 import { array, maybeString, object, string } from './parse.ts';
 
 export function parseAgentOptions(value: unknown): AgentOption[] {
@@ -30,12 +31,18 @@ export function parseAgentPrompt(value: unknown): AgentPrompt {
   const row = object(value, 'agent prompt');
   if (
     Object.keys(row).some(
-      (key) => !['targetId', 'targetKind', 'alias', 'prompt', 'requestId'].includes(key),
+      (key) => !['targetId', 'targetKind', 'comment', 'alias', 'prompt', 'requestId'].includes(key),
     )
   )
     throw new Error('Unsupported agent prompt field.');
-  if (row['targetKind'] !== undefined && row['targetKind'] !== 'review')
+  if (
+    row['targetKind'] !== undefined &&
+    row['targetKind'] !== 'review' &&
+    row['targetKind'] !== 'review-comment'
+  )
     throw new Error('Unsupported prompt target kind.');
+  if (row['targetKind'] !== 'review-comment' && row['comment'] !== undefined)
+    throw new Error('Unexpected comment reference');
   const targetId = boundedString(row['targetId'], 'Target', 100);
   const alias = boundedString(row['alias'], 'Agent alias', 100);
   const requestId = boundedString(row['requestId'], 'Request ID', 100);
@@ -43,6 +50,27 @@ export function parseAgentPrompt(value: unknown): AgentPrompt {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(alias)) throw new Error('Invalid agent alias.');
   if (!/^ui-[a-zA-Z0-9_-]{16,80}$/.test(requestId)) throw new Error('Invalid request ID.');
   const prompt = boundedString(row['prompt'], 'Prompt', 12000);
+  if (row['targetKind'] === 'review-comment') {
+    const comment = object(row['comment'], 'Comment reference');
+    const id = boundedString(comment['id'], 'Comment ID', 100);
+    if (
+      !/^[a-zA-Z0-9_-]+$/.test(id) ||
+      Object.keys(comment).some((key) => !['id', 'revision', 'candidateVersion'].includes(key))
+    )
+      throw new Error('Invalid comment reference');
+    return {
+      targetId,
+      alias,
+      requestId,
+      prompt,
+      targetKind: 'review-comment',
+      comment: {
+        id,
+        revision: boundedString(comment['revision'], 'Review revision', 500),
+        candidateVersion: reviewVersion(comment['candidateVersion']),
+      },
+    };
+  }
   return {
     targetId,
     alias,
@@ -81,6 +109,20 @@ export function parsePromptContext(value: unknown): AgentReply['prompt'] {
   if (value === undefined || value === null) return null;
   const context = object(value, 'run context');
   if (context['source'] !== 'millstrand-ui') return null;
+  if (context['targetKind'] === 'review-comment') {
+    const reference = object(context['comment'], 'Prompt comment');
+    return {
+      kind: 'review-comment',
+      cardId: string(context['card'], 'prompt.card'),
+      text: string(context['prompt'], 'prompt.text'),
+      context: string(context['reviewContext'], 'prompt.reviewContext'),
+      comment: {
+        id: string(reference['id'], 'Comment ID'),
+        revision: string(reference['revision'], 'Revision'),
+        candidateVersion: reviewVersion(reference['candidateVersion']),
+      },
+    };
+  }
   return {
     cardId: string(context['card'], 'prompt.card'),
     text: string(context['prompt'], 'prompt.text'),
@@ -134,7 +176,10 @@ export function agentLaunchArgs(
       card: cardId,
       target: input.targetId,
       prompt: input.prompt,
-      ...(reviewContext === null ? {} : { targetKind: 'review', reviewContext }),
+      ...(reviewContext === null
+        ? {}
+        : { targetKind: input.targetKind ?? 'review', reviewContext }),
+      ...(input.targetKind === 'review-comment' ? { comment: input.comment } : {}),
     }),
     '--request-id',
     input.requestId,

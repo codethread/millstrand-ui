@@ -1,0 +1,41 @@
+export const commentsFixture = {
+  review: {
+    id: 'review1',
+    revision: 'frozen-head',
+    state: 'active',
+    stage: 'reviewed',
+    current: true,
+    decision: 'pending',
+    repo: '/repo',
+    mr: {
+      projectId: 10,
+      iid: 20,
+      url: 'https://example.com/mr/20',
+      headSha: 'head',
+      baseSha: 'base',
+      startSha: 'start',
+      sourceBranch: 'feature',
+      targetBranch: 'main',
+    },
+    curation: { version: 1, mutable: true },
+    publication: { state: 'unpublished', published: 0, failed: 0 },
+  },
+  comments: [
+    {
+      id: 'comment1',
+      title: 'Check the guard',
+      severity: 'P2',
+      category: 'correctness',
+      reviewer: 'reviewer',
+      inclusion: 'included',
+      candidate: {
+        text: 'Original comment',
+        version: 1,
+        source: { kind: 'reviewer', reviewer: 'reviewer', runId: 'original-run' },
+        original: { text: 'Original comment', reviewer: 'reviewer', runId: 'original-run' },
+      },
+      position: { kind: 'line', oldPath: 'before.ts', newPath: 'after.ts', side: 'new', line: 12 },
+      publication: { state: 'unpublished', discussionId: null, retryable: true, error: null },
+    },
+  ],
+};

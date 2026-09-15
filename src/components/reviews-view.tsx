@@ -7,6 +7,7 @@ import { reviewInInbox, reviewLabel, reviewPromptTarget, selectReviews } from '.
 import { cn } from '../lib/utils';
 import { Markdown } from './issue-detail';
 import { PromptAgentButton } from './agent-prompt';
+import { ReviewComments } from './review-comments';
 import { ErrorNotice, Loading } from './issue-parts';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -135,6 +136,7 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
           </p>
         )}
       </section>
+      <ReviewComments id={detail.id} />
       <section className="border-t border-border p-5 md:p-7" aria-label="Reviewer evidence">
         <h3 className="mb-4 text-sm font-semibold">
           Reviewer evidence{' '}

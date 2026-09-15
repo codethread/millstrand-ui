@@ -82,12 +82,17 @@ export interface AgentOption {
   model: string | null;
 }
 
-export interface AgentPrompt {
-  targetKind?: 'review';
+export type AgentPrompt = {
   targetId: string;
   alias: string;
   prompt: string;
   requestId: string;
+} & ({ targetKind?: 'review' } | { targetKind: 'review-comment'; comment: CommentPromptReference });
+
+export interface CommentPromptReference {
+  id: string;
+  revision: string;
+  candidateVersion: number;
 }
 
 /** The allowlisted run inspection response; provider logs and injected prompts stay private. */
@@ -105,6 +110,13 @@ export interface AgentReply {
     | (
         | { kind: 'card'; cardId: string; text: string }
         | { kind: 'review'; cardId: string; text: string; context: string }
+        | {
+            kind: 'review-comment';
+            cardId: string;
+            text: string;
+            context: string;
+            comment: CommentPromptReference;
+          }
       )
     | null;
 }
