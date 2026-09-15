@@ -18,10 +18,12 @@
     "start": "node --experimental-transform-types server/index.ts",
     "preview": "vite preview --host 0.0.0.0",
     "check": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings",
+    "lint:fix": "oxlint --fix",
     "test": "vitest run --passWithNoTests",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "quality": "pnpm format:check && pnpm check && pnpm test && pnpm build",
+    "quality": "pnpm format:check && pnpm lint && pnpm check && pnpm test && pnpm build",
     "setup:repo": "sh scripts/setup-repo.sh"
   },
   "dependencies": {
@@ -57,6 +59,8 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
+    "oxlint": "^1.83.0",
+    "oxlint-tsgolint": "^7.0.2001",
     "prettier": "^3.9.6",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",

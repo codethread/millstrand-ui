@@ -115,7 +115,8 @@ function LabelsEditor({ detail }: { detail: CardDetail }) {
   function addLabels(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const value = String(new FormData(form).get('labels') ?? '');
+    const entry = new FormData(form).get('labels');
+    const value = typeof entry === 'string' ? entry : '';
     const labels = value
       .split(',')
       .map((label) => label.trim())

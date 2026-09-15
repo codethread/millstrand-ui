@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PublishReview, ReviewComments } from '../../shared/review-comments';
 import { sendReviewBlock } from '../lib/review-publication';
 import { usePublishReview, useReviewMutationPending } from '../lib/api';
@@ -17,18 +17,25 @@ export function ReviewPublication({
 }) {
   const { workspace } = useDashboardNavigation();
   const store = useReviewCommentStore();
+  const loadDraft = store.load;
   const mutation = usePublishReview(snapshot.review.id);
   const curating = useReviewMutationPending(snapshot.review.id, 'curate');
   const [attempt, setAttempt] = useState<PublishReview | null>(null);
   const [hydrated, setHydrated] = useState<string | null>(null);
-  const keys = snapshot.comments.map((comment) =>
-    reviewDraftKey(workspace ?? '', snapshot.review.id, snapshot.review.revision, comment.id),
+  const keys = useMemo(
+    () =>
+      snapshot.comments.map((comment) =>
+        reviewDraftKey(workspace ?? '', snapshot.review.id, snapshot.review.revision, comment.id),
+      ),
+    [workspace, snapshot.comments, snapshot.review.id, snapshot.review.revision],
   );
   const signature = JSON.stringify(keys);
   useEffect(() => {
-    for (const key of keys) store.load(key);
+    for (const key of keys) loadDraft(key);
+    // Loading browser storage is an external synchronization; record when this snapshot is done.
+    // oxlint-disable-next-line react/set-state-in-effect
     setHydrated(signature);
-  }, [signature, store.load]);
+  }, [keys, loadDraft, signature]);
   const unsaved = keys.some((key) => store.drafts[key]?.state.kind === 'editing');
   const changed =
     attempt !== null &&
@@ -97,11 +104,11 @@ export function ReviewPublication({
         </p>
       )}
       {(mutation.data || snapshot.review.publication.state !== 'unpublished') && (
-        <p role="status" className="text-sm">
+        <output className="block text-sm">
           {published
             ? 'All included comments were published.'
             : 'Some comments remain unpublished or need reconciliation. Retry the same saved snapshot after inspecting the receipts.'}
-        </p>
+        </output>
       )}
       {retry && (
         <ul className="space-y-1 text-xs">

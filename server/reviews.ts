@@ -70,16 +70,16 @@ export function parseReviewDetail(value: unknown): ReviewDetail {
     ...parseReview(row),
     report: maybeString(row['report'], 'review.report'),
     worktree: maybeString(row['worktree'], 'review.worktree'),
-    reviewers: array(row['reviewers'], 'review.reviewers').map((value) => {
-      const item = object(value, 'reviewer');
+    reviewers: array(row['reviewers'], 'review.reviewers').map((entry) => {
+      const item = object(entry, 'reviewer');
       return {
         ...seat(item),
         result: maybeString(item['result'], 'reviewer.result'),
         error: maybeString(item['error'], 'reviewer.error'),
       };
     }),
-    notes: array(row['notes'], 'review.notes').map((value) => {
-      const item = object(value, 'review note');
+    notes: array(row['notes'], 'review.notes').map((entry) => {
+      const item = object(entry, 'review note');
       return {
         id: string(item['id'], 'note.id'),
         text: string(item['text'], 'note.text'),
@@ -88,8 +88,8 @@ export function parseReviewDetail(value: unknown): ReviewDetail {
         kind: maybeString(item['kind'], 'note.kind'),
       };
     }),
-    links: array(row['links'], 'review.links').map((value) => {
-      const item = object(value, 'review link');
+    links: array(row['links'], 'review.links').map((entry) => {
+      const item = object(entry, 'review link');
       return {
         id: string(item['id'], 'link.id'),
         title: string(item['title'], 'link.title'),

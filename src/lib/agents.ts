@@ -1,4 +1,5 @@
 import type { AgentIdentity, AgentRun, AgentRunStatus } from '../../shared/api';
+import { sorted } from '../../shared/array';
 
 export function currentRun(agent: AgentIdentity): AgentRun | null {
   return (
@@ -39,8 +40,8 @@ export function selectAgents(
     stopped: 3,
     unknown: 4,
   };
-  return agents
-    .filter((agent) => {
+  return sorted(
+    agents.filter((agent) => {
       const text = [
         agent.id,
         agent.harness,
@@ -50,8 +51,9 @@ export function selectAgents(
         .join(' ')
         .toLowerCase();
       return (!activeOnly || agentIsActive(agent)) && words.every((word) => text.includes(word));
-    })
-    .sort((a, b) => order[agentStatus(a)] - order[agentStatus(b)] || a.id.localeCompare(b.id));
+    }),
+    (a, b) => order[agentStatus(a)] - order[agentStatus(b)] || a.id.localeCompare(b.id),
+  );
 }
 
 export function runTargets(run: AgentRun, id: string): boolean {

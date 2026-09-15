@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Card, LabelTerm, SavedView, ViewFilter } from '../shared/api';
 
-export type ShortcutAction = 'search' | 'board' | 'outline' | 'graph' | 'refresh' | 'help';
+export const shortcutActions = ['search', 'board', 'outline', 'graph', 'refresh', 'help'] as const;
+export type ShortcutAction = (typeof shortcutActions)[number];
 export const defaultShortcuts: Record<ShortcutAction, string> = {
   search: '/',
   board: '1',

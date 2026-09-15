@@ -159,11 +159,11 @@ pnpm quality
 ```
 
 Development runs the API on port 4173 and Vite on port 5173. Open
-`http://<host-lan-address>:5173`; Vite proxies API calls to the server. The check
-commands run strict TypeScript, focused Vitest tests, and the production build.
+`http://<host-lan-address>:5173`; Vite proxies API calls to the server.
 
-`pnpm quality` checks formatting, strict TypeScript, focused Vitest tests, and
-the production build. The app uses React, Zustand, TanStack Query and Router,
+`pnpm lint` runs zero-warning, type-aware Oxlint checks for TypeScript and React.
+`pnpm quality` checks formatting, Oxlint, strict TypeScript, focused Vitest tests,
+and the production build. The app uses React, Zustand, TanStack Query and Router,
 Tailwind, shadcn/Radix components, and React Flow with Dagre layout. See
 [AGENTS.md](./AGENTS.md) for the intended code structure and type discipline.
 

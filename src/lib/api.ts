@@ -44,6 +44,8 @@ async function request<T>(path: string, workspace: string | null, init?: Request
         : `Request failed (${response.status})`;
     throw new Error(message);
   }
+  // Fetch exposes JSON as `any`; endpoint contracts provide the type at this boundary.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   return response.json() as Promise<T>;
 }
 

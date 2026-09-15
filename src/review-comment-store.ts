@@ -78,6 +78,18 @@ export function parseSavedCommentDraft(value: unknown): SavedDraft {
   };
 }
 
+function newDraft(text: string): CommentDraftState {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return commentDraftReducer(
+    { kind: 'closed' },
+    {
+      type: 'open',
+      id: Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(''),
+      text,
+    },
+  );
+}
+
 export const useReviewCommentStore = create<DraftStore>((set, get) => {
   function clearError(key: string) {
     set((s) => {
@@ -99,17 +111,6 @@ export const useReviewCommentStore = create<DraftStore>((set, get) => {
     } catch {
       fail(key, 'read', 'Saved draft could not be read. Existing in-memory edits are retained.');
     }
-  }
-  function newDraft(text: string): CommentDraftState {
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    return commentDraftReducer(
-      { kind: 'closed' },
-      {
-        type: 'open',
-        id: Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''),
-        text,
-      },
-    );
   }
   function save(key: string, draft: SavedDraft) {
     set((s) => ({ drafts: { ...s.drafts, [key]: draft } }));

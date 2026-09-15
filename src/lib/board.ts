@@ -1,4 +1,5 @@
 import type { Board, Card, Lane, SavedView, ViewFilter } from '../../shared/api';
+import { sorted } from '../../shared/array';
 
 export const lanes: { id: Lane; title: string; description: string }[] = [
   { id: 'refinement', title: 'Refinement', description: 'Ideas taking shape' },
@@ -89,14 +90,13 @@ export function matchesCard(card: Card, filter: ViewFilter): boolean {
 }
 
 export function selectCards(cards: Card[], filter: ViewFilter): Card[] {
-  return cards
-    .filter((card) => matchesCard(card, filter))
-    .sort(
-      (a, b) =>
-        a.priority.localeCompare(b.priority) ||
-        b.createdAt.localeCompare(a.createdAt) ||
-        a.id.localeCompare(b.id),
-    );
+  return sorted(
+    cards.filter((card) => matchesCard(card, filter)),
+    (a, b) =>
+      a.priority.localeCompare(b.priority) ||
+      b.createdAt.localeCompare(a.createdAt) ||
+      a.id.localeCompare(b.id),
+  );
 }
 
 export interface OutlineGroup {
@@ -159,6 +159,6 @@ export function relativeTime(value: string): string {
 }
 
 export function labelColor(label: string): string {
-  const hash = [...label].reduce((value, char) => value + char.charCodeAt(0), 0);
+  const hash = Array.from(label).reduce((value, char) => value + char.charCodeAt(0), 0);
   return ['violet', 'blue', 'amber', 'green', 'rose'][hash % 5] ?? 'violet';
 }

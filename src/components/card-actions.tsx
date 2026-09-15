@@ -96,15 +96,13 @@ export function CardActionFeedback() {
   if (state?.error) return <ErrorNotice error={state.error} />;
   if (state?.status === 'pending')
     return (
-      <p role="status" className="px-5 py-2 text-sm text-muted-foreground">
-        Updating card…
-      </p>
+      <output className="block px-5 py-2 text-sm text-muted-foreground">Updating card…</output>
     );
   if (state?.status === 'success')
     return (
-      <p role="status" className="px-5 py-2 text-sm text-muted-foreground">
+      <output className="block px-5 py-2 text-sm text-muted-foreground">
         Card updated. Current filters may hide it.
-      </p>
+      </output>
     );
   return null;
 }
