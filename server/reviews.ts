@@ -52,7 +52,7 @@ export function parseReview(value: unknown): ReviewSummary {
       iid: iid ?? null,
       url,
       title: maybeString(mr['title'], 'review.mr.title'),
-      sha: maybeString(mr['headSha'] ?? mr['sha'], 'review.mr.headSha'),
+      sha: maybeString(mr['headSha'], 'review.mr.headSha'),
       baseSha: maybeString(mr['baseSha'], 'review.mr.baseSha'),
       sourceBranch: maybeString(mr['sourceBranch'], 'review.mr.sourceBranch'),
       targetBranch: maybeString(mr['targetBranch'], 'review.mr.targetBranch'),

@@ -12,7 +12,7 @@ export const review = {
     iid: 12,
     title: 'Fix race',
     url: 'https://example.com/mr/12',
-    sha: 'abc',
+    headSha: 'abc',
     baseSha: null,
     sourceBranch: null,
     targetBranch: null,

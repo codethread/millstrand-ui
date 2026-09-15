@@ -42,7 +42,7 @@ export function parseSavedCommentDraft(value: unknown): SavedDraft {
   if (
     typeof value.candidateVersion !== 'number' ||
     !Number.isSafeInteger(value.candidateVersion) ||
-    value.candidateVersion < 0
+    value.candidateVersion < 1
   )
     throw new Error('Invalid draft version');
   const state = value.state;

@@ -1,7 +1,12 @@
 import { useEffect, useRef } from 'react';
 import type { AgentReply } from '../../shared/api';
 import type { ReviewComment, ReviewComments as Snapshot } from '../../shared/review-comments';
-import { useReviewComments, useCurateReview, useReviewProposals } from '../lib/api';
+import {
+  useReviewComments,
+  useCurateReview,
+  useReviewProposals,
+  useReviewMutationPending,
+} from '../lib/api';
 import { useDashboardNavigation } from '../lib/navigation';
 import { useAgentPromptStore } from '../agent-prompt-store';
 import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
@@ -11,6 +16,7 @@ import {
 } from '../lib/review-comments';
 import { ReviewCommentCard } from './review-comment-card';
 import { ReviewCommentProposal } from './review-comment-proposal';
+import { ReviewPublication } from './review-publication';
 import { Markdown } from './issue-detail';
 import { Button } from './ui/button';
 
@@ -25,6 +31,7 @@ function Comment({
 }) {
   const nav = useDashboardNavigation();
   const mutation = useCurateReview(snapshot.review.id);
+  const publishing = useReviewMutationPending(snapshot.review.id, 'publish');
   const store = useReviewCommentStore();
   const openPrompt = useAgentPromptStore((s) => s.open);
   const element = useRef<HTMLDivElement>(null);
@@ -46,7 +53,7 @@ function Comment({
   }, [key, store.load]);
   const saved = store.drafts[key];
   const draft = saved?.state.kind === 'editing' ? saved.state.draft : null;
-  const mutable = snapshot.review.current && snapshot.review.curation.mutable;
+  const mutable = !publishing && snapshot.review.current && snapshot.review.curation.mutable;
   const proposals = replies.filter(
     (reply) =>
       reply.prompt?.kind === 'review-comment' &&
@@ -234,6 +241,14 @@ export function ReviewComments({ id }: { id: string }) {
   return (
     <section aria-label="Review comments" className="space-y-4 border-t border-border p-5 md:p-7">
       <h3 className="text-sm font-semibold">Review comments</h3>
+      {query.data && (
+        <ReviewPublication
+          key={`${id}:${query.data.review.revision}`}
+          snapshot={query.data}
+          refreshing={query.isFetching}
+          readError={query.error !== null}
+        />
+      )}
       {query.error && (
         <p role="alert" className="text-sm text-destructive">
           Comments unavailable: {query.error.message}{' '}

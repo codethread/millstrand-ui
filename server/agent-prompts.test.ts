@@ -133,8 +133,11 @@ describe('scoped launch process', () => {
             },
           ],
         };
-      else if (operation === `review show ${reviewDetail.id}`) value = { review: readReview() };
-      else if (operation === 'agent list') value = options;
+      else if (operation === `review show ${reviewDetail.id}`) {
+        const current = readReview();
+        const { sha, ...mr } = current.mr;
+        value = { review: { ...current, mr: { ...mr, headSha: sha } } };
+      } else if (operation === 'agent list') value = options;
       else if (operation === 'kanban-export card1')
         value = {
           'root-id': 'card1',

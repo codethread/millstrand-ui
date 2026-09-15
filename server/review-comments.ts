@@ -3,6 +3,10 @@ import type {
   ReviewComments,
   ReviewCommentPosition,
   ReviewCommentSide,
+  PublishReview,
+  ReviewPublicationReceipt,
+  CommentPublicationState,
+  ReviewPublicationState,
 } from '../shared/review-comments.ts';
 import { array, maybeString, object, string } from './parse.ts';
 
@@ -18,9 +22,79 @@ export function reviewVersion(value: unknown): number {
   return value;
 }
 
+export function candidateVersion(value: unknown): number {
+  const version = reviewVersion(value);
+  if (version < 1) throw new Error('Candidate version must be a positive integer');
+  return version;
+}
+
 function boolean(value: unknown): boolean {
   if (typeof value !== 'boolean') throw new Error('Expected boolean');
   return value;
+}
+
+function commentPublicationState(value: unknown): CommentPublicationState {
+  if (
+    value !== 'unpublished' &&
+    value !== 'publishing' &&
+    value !== 'reconciling' &&
+    value !== 'published' &&
+    value !== 'excluded' &&
+    value !== 'failed'
+  )
+    throw new Error('Invalid comment publication state');
+  return value;
+}
+function reviewPublicationState(value: unknown): ReviewPublicationState {
+  if (
+    value !== 'unpublished' &&
+    value !== 'publishing' &&
+    value !== 'published' &&
+    value !== 'partial' &&
+    value !== 'failed'
+  )
+    throw new Error('Invalid review publication state');
+  return value;
+}
+
+export function parsePublishReview(value: unknown): PublishReview {
+  const row = object(value, 'Publish request');
+  if (Object.keys(row).some((key) => !['revision', 'curationVersion'].includes(key)))
+    throw new Error('Publish accepts only the saved revision and curation version');
+  return {
+    revision: nonblank(row['revision'], 'Revision'),
+    curationVersion: reviewVersion(row['curationVersion']),
+  };
+}
+
+export function parseReviewPublicationReceipt(value: unknown): ReviewPublicationReceipt {
+  const row = object(value, 'Publication receipt');
+  const state = row['state'];
+  if (state !== 'published' && state !== 'partial' && state !== 'failed')
+    throw new Error('Invalid publication outcome');
+  const comments = array(row['comments'], 'Publication comments').map((value) => {
+    const comment = object(value, 'Comment receipt');
+    return {
+      id: identifier(comment['id']),
+      state: commentPublicationState(comment['state']),
+      retryable: boolean(comment['retryable']),
+      discussionId: maybeString(comment['discussionId'], 'Discussion ID'),
+      error: maybeString(comment['error'], 'Publication error'),
+    };
+  });
+  if (new Set(comments.map((comment) => comment.id)).size !== comments.length)
+    throw new Error('Duplicate publication receipts');
+  if (
+    !comments.length ||
+    (state === 'published' && comments.some((comment) => comment.state !== 'published'))
+  )
+    throw new Error('Publication outcome does not match comment receipts');
+  return {
+    reviewId: identifier(row['reviewId']),
+    ...parsePublishReview({ revision: row['revision'], curationVersion: row['curationVersion'] }),
+    state,
+    comments,
+  };
 }
 
 function inclusion(value: unknown): 'included' | 'dismissed' {
@@ -39,6 +113,7 @@ export function parseReviewComments(value: unknown): ReviewComments {
   const review = object(row['review'], 'Review');
   const mr = object(review['mr'], 'MR');
   const curation = object(review['curation'], 'Curation');
+  const publication = object(review['publication'], 'Review publication');
   const result: ReviewComments = {
     review: {
       id: identifier(review['id']),
@@ -55,12 +130,17 @@ export function parseReviewComments(value: unknown): ReviewComments {
         headSha: nonblank(mr['headSha'], 'Head SHA'),
         baseSha: nonblank(mr['baseSha'], 'Base SHA'),
         startSha: nonblank(mr['startSha'], 'Start SHA'),
-        sourceBranch: nonblank(mr['sourceBranch'], 'Source branch'),
-        targetBranch: nonblank(mr['targetBranch'], 'Target branch'),
+        sourceBranch: maybeString(mr['sourceBranch'], 'Source branch'),
+        targetBranch: maybeString(mr['targetBranch'], 'Target branch'),
       },
       curation: {
         version: reviewVersion(curation['version']),
         mutable: boolean(curation['mutable']),
+      },
+      publication: {
+        state: reviewPublicationState(publication['state']),
+        published: reviewVersion(publication['published']),
+        failed: reviewVersion(publication['failed']),
       },
     },
     comments: array(row['comments'], 'Comments').map((value) => {
@@ -80,7 +160,7 @@ export function parseReviewComments(value: unknown): ReviewComments {
         inclusion: inclusion(comment['inclusion']),
         candidate: {
           text: nonblank(candidate['text'], 'Candidate text'),
-          version: reviewVersion(candidate['version']),
+          version: candidateVersion(candidate['version']),
           source:
             kind === 'reviewer'
               ? {
@@ -101,7 +181,7 @@ export function parseReviewComments(value: unknown): ReviewComments {
         },
         position: parseReviewCommentPosition(comment['position']),
         publication: {
-          state: nonblank(publication['state'], 'Publication state'),
+          state: commentPublicationState(publication['state']),
           discussionId: maybeString(publication['discussionId'], 'Discussion ID'),
           retryable: boolean(publication['retryable']),
           error: maybeString(publication['error'], 'Publication error'),
@@ -138,7 +218,7 @@ export function parseCurateReview(value: unknown): CurateReview {
         ? {}
         : {
             candidate: {
-              expectedVersion: reviewVersion(candidate['expectedVersion']),
+              expectedVersion: candidateVersion(candidate['expectedVersion']),
               text: nonblank(candidate['text'], 'Candidate text'),
             },
           }),

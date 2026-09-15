@@ -1,6 +1,12 @@
 import type { ReviewDetail, ReviewDirectory } from '../shared/reviews.ts';
-import type { CurateReview, ReviewComments } from '../shared/review-comments.ts';
-import { parseReviewComments } from './review-comments.ts';
+import {
+  reviewPublicationBlock,
+  type CurateReview,
+  type ReviewComments,
+  type PublishReview,
+  type ReviewPublicationReceipt,
+} from '../shared/review-comments.ts';
+import { parseReviewComments, parseReviewPublicationReceipt } from './review-comments.ts';
 import { parseReviewList, parseReviewDetail } from './reviews.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -125,6 +131,49 @@ export class StrandData {
     if (snapshot.review.id !== id)
       throw new HttpError(502, 'Review comments returned a different review.');
     return snapshot;
+  }
+
+  async publishReview(id: string, input: PublishReview): Promise<ReviewPublicationReceipt> {
+    const snapshot = await this.reviewComments(id);
+    if (
+      snapshot.review.revision !== input.revision ||
+      snapshot.review.curation.version !== input.curationVersion
+    )
+      throw new HttpError(409, 'The saved review snapshot changed. Refresh before sending.');
+    const blocked = reviewPublicationBlock(snapshot);
+    if (blocked) throw new HttpError(409, blocked);
+    try {
+      const receipt = parseReviewPublicationReceipt(
+        await this.run(['review', 'publish', id, '--request', JSON.stringify(input)]),
+      );
+      if (
+        receipt.reviewId !== id ||
+        receipt.revision !== input.revision ||
+        receipt.curationVersion !== input.curationVersion
+      )
+        throw new HttpError(
+          502,
+          'Publication returned a different snapshot receipt. Refresh to inspect the outcome before retrying.',
+        );
+      const included = new Set(
+        snapshot.comments
+          .filter((comment) => comment.inclusion === 'included')
+          .map((comment) => comment.id),
+      );
+      if (
+        receipt.comments.length !== included.size ||
+        receipt.comments.some((comment) => !included.has(comment.id))
+      )
+        throw new HttpError(
+          502,
+          'Publication returned incomplete or unrelated comment receipts. Refresh to inspect the outcome.',
+        );
+      return receipt;
+    } finally {
+      // A timeout may follow a remote effect. Never clear local curation or infer rollback.
+      this.reviewDetails.clear();
+      this.reviewDirectories.clear();
+    }
   }
 
   async curateReview(id: string, input: CurateReview): Promise<ReviewComments> {

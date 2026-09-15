@@ -232,3 +232,20 @@ Comment contracts and parsing live in `shared/review-comments.ts` and
 `src/components/review-comment-card.tsx`, `review-comment-proposal.tsx`, and
 `review-comments.tsx`. Local draft transitions and browser persistence are in
 `src/lib/review-comment-draft.ts` and `src/review-comment-store.ts`.
+
+**Send review** publishes only the included, saved candidates for the displayed
+review revision and curation version. Adopt or cancel unsaved drafts first;
+included comments with unsupported positions must be dismissed before sending.
+Sending locks curation for that snapshot. The server invokes
+`strand review publish ID --request JSON` with only the revision/version pointer;
+the coordinator validates the live merge request and diff anchors and owns all
+GitLab publication and deduplication.
+
+Per-comment receipts show published discussions and comments needing reconciliation.
+If a request fails or times out, some effects may already have occurred: refreshed
+receipts remain authoritative, and **Retry Send review** retries the same saved
+snapshot through the coordinator. It never silently clears drafts or republishes
+a completed review as new work. An interrupted overall summary can still be
+reconciled even if every comment already has a receipt. Sending does not complete
+the local review decision or remove its worktree. Publication UI/readiness rules
+are in `src/components/review-publication.tsx` and `src/lib/review-publication.ts`.

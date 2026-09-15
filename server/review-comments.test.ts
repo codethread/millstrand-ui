@@ -7,6 +7,24 @@ import {
 import { commentsFixture } from './review-comments.fixture';
 
 const position = { kind: 'line', oldPath: 'old.ts', newPath: 'new.ts', side: 'new', line: 12 };
+it('accepts real fixture nullable branches and omitted severity/publication optional fields', () => {
+  const comment = commentsFixture.comments[0];
+  if (!comment) throw new Error('Missing fixture comment');
+  const { severity: _severity, ...withoutSeverity } = comment;
+  const result = parseReviewComments({
+    ...commentsFixture,
+    review: {
+      ...commentsFixture.review,
+      mr: { ...commentsFixture.review.mr, sourceBranch: null, targetBranch: null },
+    },
+    comments: [{ ...withoutSeverity, publication: { state: 'unpublished', retryable: true } }],
+  });
+  expect(result.review.mr).toMatchObject({ sourceBranch: null, targetBranch: null });
+  expect(result.comments[0]).toMatchObject({
+    severity: null,
+    publication: { discussionId: null, error: null },
+  });
+});
 it('preserves original text, version and discriminated candidate provenance', () => {
   const parsed = parseReviewComments(commentsFixture);
   expect(parsed.comments[0]?.candidate).toEqual(commentsFixture.comments[0]?.candidate);

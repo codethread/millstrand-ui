@@ -6,7 +6,7 @@ import { basename, dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { HttpError, parseLabelChange, parseViews, requestValue } from './parse.ts';
-import { parseCurateReview } from './review-comments.ts';
+import { parseCurateReview, parsePublishReview } from './review-comments.ts';
 import { WorkspaceDirectory } from './workspaces.ts';
 import { parseAgentPrompt } from './agent-prompts.ts';
 
@@ -187,6 +187,19 @@ const server = createServer((request, response) => {
       return;
     }
     const reviewId = /^\/api\/reviews\/([a-zA-Z0-9_-]+)$/.exec(path)?.[1];
+    const publishReviewId = /^\/api\/reviews\/([a-zA-Z0-9_-]+)\/publish$/.exec(path)?.[1];
+    if (publishReviewId !== undefined && method === 'POST') {
+      const { strand } = await workspaces.select(url.searchParams.get('workspace'));
+      json(
+        response,
+        200,
+        await strand.publishReview(
+          publishReviewId,
+          requestValue(parsePublishReview, await body(request)),
+        ),
+      );
+      return;
+    }
     const reviewCommentsId = /^\/api\/reviews\/([a-zA-Z0-9_-]+)\/comments$/.exec(path)?.[1];
     if (reviewCommentsId !== undefined && (method === 'GET' || method === 'PATCH')) {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));

@@ -28,6 +28,8 @@ vi.mock('../lib/api', async (importOriginal) => ({
     ],
   }),
   useCurateReview: () => ({ mutate, isPending: false, error: null }),
+  usePublishReview: () => ({ mutate, isPending: false, error: null, data: undefined }),
+  useReviewMutationPending: () => false,
 }));
 
 it('shows completed proposals separately from canonical text without curating on arrival', () => {

@@ -85,7 +85,7 @@ it.each(['version', 'revision', 'locked', 'outdated', 'membership', 'candidate']
     mock(snapshot);
     const parsed = parseCurateReview(input);
     if (reason === 'candidate')
-      parsed.changes[0]!.candidate = { expectedVersion: 0, text: 'Edited' };
+      parsed.changes[0]!.candidate = { expectedVersion: 2, text: 'Edited' };
     await expect(
       new StrandData('/repo/.millstrand').curateReview('review1', parsed),
     ).rejects.toThrow();
@@ -119,7 +119,7 @@ it('rejects a stale comment prompt before agent launch', async () => {
   const input = parseAgentPrompt({
     targetKind: 'review-comment',
     targetId: 'review1',
-    comment: { id: 'comment1', revision: 'frozen-head', candidateVersion: 0 },
+    comment: { id: 'comment1', revision: 'frozen-head', candidateVersion: 2 },
     alias: 'tui',
     prompt: 'Revise',
     requestId: 'ui-0123456789abcdef',

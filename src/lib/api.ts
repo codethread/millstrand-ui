@@ -1,9 +1,15 @@
 import type { ReviewDetail, ReviewDirectory } from '../../shared/reviews';
-import type { CurateReview, ReviewComments } from '../../shared/review-comments';
+import type {
+  CurateReview,
+  ReviewComments,
+  PublishReview,
+  ReviewPublicationReceipt,
+} from '../../shared/review-comments';
 import {
   mutationOptions,
   queryOptions,
   useMutation,
+  useIsMutating,
   useQuery,
   useQueries,
   useQueryClient,
@@ -236,6 +242,7 @@ export function useCurateReview(id: string) {
   const workspace = useWorkspace();
   const client = useQueryClient();
   return useMutation({
+    mutationKey: ['review-curate', workspace, id],
     mutationFn: (input: CurateReview) =>
       request<ReviewComments>(`/reviews/${encodeURIComponent(id)}/comments`, workspace, {
         method: 'PATCH',
@@ -249,4 +256,37 @@ export function useCurateReview(id: string) {
       void client.invalidateQueries({ queryKey: ['review-comments', workspace, id] });
     },
   });
+}
+
+export function reviewPublishMutationOptions(
+  client: QueryClient,
+  workspace: string | null,
+  id: string,
+) {
+  return mutationOptions({
+    mutationKey: ['review-publish', workspace, id],
+    mutationFn: (input: PublishReview) =>
+      request<ReviewPublicationReceipt>(`/reviews/${encodeURIComponent(id)}/publish`, workspace, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+    onSettled: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['review-comments', workspace, id] }),
+        client.invalidateQueries({ queryKey: ['review', workspace, id] }),
+        client.invalidateQueries({ queryKey: ['reviews', workspace] }),
+      ]);
+    },
+    retry: false,
+  });
+}
+export function usePublishReview(id: string) {
+  const workspace = useWorkspace();
+  return useMutation(reviewPublishMutationOptions(useQueryClient(), workspace, id));
+}
+
+export function useReviewMutationPending(id: string, kind: 'curate' | 'publish'): boolean {
+  const workspace = useWorkspace();
+  return useIsMutating({ mutationKey: [`review-${kind}`, workspace, id] }) > 0;
 }

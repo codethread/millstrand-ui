@@ -1,6 +1,6 @@
 import type { AgentOption, AgentPrompt, AgentReply, AgentRunStatus } from '../shared/api.ts';
 import type { ReviewDetail } from '../shared/reviews.ts';
-import { reviewVersion } from './review-comments.ts';
+import { candidateVersion } from './review-comments.ts';
 import { array, maybeString, object, string } from './parse.ts';
 
 export function parseAgentOptions(value: unknown): AgentOption[] {
@@ -67,7 +67,7 @@ export function parseAgentPrompt(value: unknown): AgentPrompt {
       comment: {
         id,
         revision: boundedString(comment['revision'], 'Review revision', 500),
-        candidateVersion: reviewVersion(comment['candidateVersion']),
+        candidateVersion: candidateVersion(comment['candidateVersion']),
       },
     };
   }
@@ -119,7 +119,7 @@ export function parsePromptContext(value: unknown): AgentReply['prompt'] {
       comment: {
         id: string(reference['id'], 'Comment ID'),
         revision: string(reference['revision'], 'Revision'),
-        candidateVersion: reviewVersion(reference['candidateVersion']),
+        candidateVersion: candidateVersion(reference['candidateVersion']),
       },
     };
   }
