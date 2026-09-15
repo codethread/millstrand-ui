@@ -153,6 +153,7 @@ function ComposePrompt({ workspace }: { workspace: string }) {
             mutation.mutate(
               {
                 targetId: composer.target.id,
+                ...(composer.target.kind === 'review' ? { targetKind: 'review' as const } : {}),
                 alias,
                 prompt: composer.prompt,
                 requestId: composer.requestId,

@@ -367,22 +367,40 @@ function AgentRunReply({ id }: { id: string }) {
   const card = board.data?.cards.find((card) => card.id === cardId);
   return (
     <section className="mb-5 space-y-3" aria-label="Prompt and agent reply">
-      {card && (
+      {reply?.prompt?.kind === 'review' ? (
         <Button
           variant="outline"
           size="sm"
           onClick={() => {
-            if (reply?.target !== card.id) nav.exploreGraph(card.id);
-            else nav.openCard(card.id);
+            if (cardId) nav.openReview(cardId);
           }}
         >
-          View work · {card.id}
+          View review · {reply.prompt.cardId}
         </Button>
+      ) : (
+        card && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (reply?.target !== card.id) nav.exploreGraph(card.id);
+              else nav.openCard(card.id);
+            }}
+          >
+            View work · {card.id}
+          </Button>
+        )
       )}
       {reply?.prompt && (
         <div className="rounded-lg bg-accent p-3">
           <h4 className="mb-2 text-xs font-semibold">Your prompt</h4>
           <p className="whitespace-pre-wrap break-words text-sm">{reply.prompt.text}</p>
+          {reply.prompt.kind === 'review' && (
+            <details className="mt-3 text-xs">
+              <summary className="cursor-pointer">Review context sent to agent</summary>
+              <pre className="mt-2 whitespace-pre-wrap break-words">{reply.prompt.context}</pre>
+            </details>
+          )}
         </div>
       )}
       {query.error && (

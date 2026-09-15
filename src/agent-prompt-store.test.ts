@@ -30,7 +30,9 @@ describe('independent browser preference keys', () => {
     const storage = memoryStorage();
     const first = createAgentPromptStore(storage);
     const second = createAgentPromptStore(storage);
-    first.getState().open({ cardId: 'card1', id: 'card1', title: 'Work' }, null, workspace);
+    first
+      .getState()
+      .open({ kind: 'card', cardId: 'card1', id: 'card1', title: 'Work' }, null, workspace);
     first.getState().edit('Please help');
     const submitted = first.getState().composer;
     if (submitted.kind !== 'composing') throw new Error('Expected an open composer');
@@ -51,7 +53,9 @@ describe('independent browser preference keys', () => {
     const storage = memoryStorage();
     const first = createAgentPromptStore(storage);
     const second = createAgentPromptStore(storage);
-    first.getState().open({ cardId: 'card1', id: 'card1', title: 'Work' }, null, workspace);
+    first
+      .getState()
+      .open({ kind: 'card', cardId: 'card1', id: 'card1', title: 'Work' }, null, workspace);
     first.getState().edit('Please help');
     const before = first.getState().composer;
     second.getState().setAlias(other, 'astra');

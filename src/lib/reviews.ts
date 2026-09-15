@@ -1,4 +1,11 @@
 import type { ReviewScope, ReviewStage, ReviewSummary } from '../../shared/reviews';
+import type { PromptTarget } from '../agent-prompt-store';
+
+export function reviewPromptTarget(review: ReviewSummary): PromptTarget | null {
+  return reviewInInbox(review)
+    ? { kind: 'review', cardId: review.id, id: review.id, title: review.title }
+    : null;
+}
 
 export function reviewInInbox(review: ReviewSummary): boolean {
   return review.state === 'active' && review.decision === 'pending';

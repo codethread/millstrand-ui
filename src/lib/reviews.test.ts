@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseReviewList } from '../../server/reviews';
 import { review } from '../../server/reviews.fixture';
-import { selectReviews } from './reviews';
+import { reviewPromptTarget, selectReviews } from './reviews';
 import { parseDashboardSearch, workspaceDestination, manualFilterSearch } from './dashboard-search';
 import { emptyFilter } from './board';
 describe('review inbox', () => {
@@ -20,6 +20,20 @@ describe('review inbox', () => {
       'running',
     ]);
     expect(selectReviews(rows, 'all', null, '')).toHaveLength(4);
+  });
+  it('offers the existing prompt flow only for active pending reviews, including outdated ones', () => {
+    const row = rows[0]!;
+    expect(reviewPromptTarget(row)).toEqual({
+      kind: 'review',
+      cardId: row.id,
+      id: row.id,
+      title: row.title,
+    });
+    expect(reviewPromptTarget({ ...row, current: false })).not.toBeNull();
+    expect(reviewPromptTarget({ ...row, stage: 'running' })).not.toBeNull();
+    expect(reviewPromptTarget({ ...row, decision: 'done' })).toBeNull();
+    expect(reviewPromptTarget({ ...row, decision: 'dismissed' })).toBeNull();
+    expect(reviewPromptTarget({ ...row, state: 'closed' })).toBeNull();
   });
   it('combines stage with case-insensitive terms across MR and reviewer metadata', () => {
     expect(

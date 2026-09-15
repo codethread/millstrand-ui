@@ -180,7 +180,7 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
               <h3>{selected.title}</h3>
               {root && (
                 <PromptAgentButton
-                  target={{ cardId: root, id: selected.id, title: selected.title }}
+                  target={{ kind: 'card', cardId: root, id: selected.id, title: selected.title }}
                 />
               )}
               <span className="text-xs text-muted-foreground">{selected.state}</span>
