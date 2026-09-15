@@ -74,7 +74,7 @@ function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
       <div className="grid min-w-0 lg:grid-cols-2">
         <section className="min-w-0 p-4" aria-label={`${workspace.name} active cards`}>
           <h3 className="mb-3 text-xs font-semibold">
-            In progress / review{' '}
+            In progress / review / production{' '}
             <span className="text-muted-foreground">
               · {board.data ? cards.length : '—'}
               {staleBoard && board.data ? ' last known' : ''}
@@ -103,8 +103,8 @@ function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
           {board.data && cards.length === 0 && (
             <p className="py-3 text-xs text-muted-foreground">
               {staleBoard
-                ? 'No in-progress or review cards in the last snapshot.'
-                : 'No in-progress or review cards.'}
+                ? 'No in-progress, review, or production cards in the last snapshot.'
+                : 'No in-progress, review, or production cards.'}
             </p>
           )}
           <div className="space-y-2">
@@ -305,8 +305,8 @@ export function Overview() {
               Work in motion, across your dashboards.
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              In-progress and review cards · running, queued, or stopping sessions. Tracked process
-              state, not token activity.
+              In-progress, review, and production cards · running, queued, or stopping sessions.
+              Tracked process state, not token activity.
             </p>
           </div>
           <Button
@@ -343,7 +343,7 @@ export function Overview() {
         {options.length > 0 && (
           <div className="mb-5 flex flex-wrap gap-3 text-sm">
             <span className="rounded-lg border border-border bg-card px-4 py-3">
-              <strong>{cardCount}</strong> in progress / review
+              <strong>{cardCount}</strong> in progress / review / production
             </span>
             <span className="rounded-lg border border-border bg-card px-4 py-3">
               <strong>{agentCount}</strong> active agents
