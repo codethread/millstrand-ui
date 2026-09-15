@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { parseAgents } from './agents.ts';
+import { readAgentStrands } from './agent-inspection.ts';
 import {
   agentLaunchArgs,
   parseAgentOptions,
@@ -252,11 +253,7 @@ export class StrandData {
 
   agents(): Promise<AgentDirectory> {
     return this.agentDirectories.get('agents', async () => {
-      // The core list operation also works in worlds without the Harnesses spool.
-      // Read one extra row so a bounded read never silently hides an active agent.
-      const rows = array(await this.run(['list', '--limit', '10001']), 'agent strands');
-      if (rows.length > 10000)
-        throw new HttpError(503, 'Agent inspection is limited to workspaces with 10,000 strands.');
+      const rows = await readAgentStrands(this.workspace);
       return {
         workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
         fetchedAt: new Date().toISOString(),
