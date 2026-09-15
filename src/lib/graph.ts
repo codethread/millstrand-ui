@@ -1,4 +1,4 @@
-import dagre from '@dagrejs/dagre';
+import { graphlib, layout as runLayout } from '@dagrejs/dagre';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
 import type { Card, CardGraph, GraphNode, JsonValue } from '../../shared/api';
 
@@ -67,7 +67,7 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
   const items = graph.nodes.filter((item) => ids.has(item.id));
   if (items.length > 150) return { kind: 'too-large', count: items.length };
   const validEdges = graph.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
-  const layout = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  const layout = new graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   layout.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 95, marginx: 35, marginy: 35 });
   for (const item of items) layout.setNode(item.id, { width: 260, height: 110 });
   for (const edge of validEdges) {
@@ -75,7 +75,7 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
     if (edge.kind === 'parent-of') layout.setEdge(edge.from, edge.to, { weight: 3 });
     else layout.setEdge(edge.to, edge.from, { weight: 1 });
   }
-  dagre.layout(layout);
+  runLayout(layout);
   return {
     kind: 'ready',
     nodes: items.map((item) => {

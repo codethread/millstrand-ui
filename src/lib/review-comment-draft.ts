@@ -39,5 +39,7 @@ export function commentDraftReducer(
         state.draft.text === action.submitted.text
         ? { kind: 'closed' }
         : state;
+    default:
+      throw new Error(`Unknown comment draft action: ${JSON.stringify(action)}`);
   }
 }

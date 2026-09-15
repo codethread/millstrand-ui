@@ -13,8 +13,8 @@ import { WeaverAgentSetting } from './agent-prompt';
 
 interface WorkspaceSnapshot {
   workspace: WorkspaceOption;
-  board: UseQueryResult<Board, Error>;
-  agents: UseQueryResult<AgentDirectory, Error>;
+  board: UseQueryResult<Board>;
+  agents: UseQueryResult<AgentDirectory>;
 }
 
 function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
@@ -258,7 +258,7 @@ export function Overview() {
       enabled: workspace.status === 'running',
     })),
   });
-  const agents = useQueries({
+  const agentQueries = useQueries({
     queries: options.map((workspace) => ({
       ...agentQueryOptions(workspace.id),
       enabled: workspace.status === 'running',
@@ -268,7 +268,7 @@ export function Overview() {
   const snapshots = options.map((workspace, index): WorkspaceSnapshot => ({
     workspace,
     board: boards[index]!,
-    agents: agents[index]!,
+    agents: agentQueries[index]!,
   }));
   const busy = snapshots.filter(
     ({ board, agents }) =>

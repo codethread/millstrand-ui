@@ -72,8 +72,8 @@ export function parseReviewPublicationReceipt(value: unknown): ReviewPublication
   const state = row['state'];
   if (state !== 'published' && state !== 'partial' && state !== 'failed')
     throw new Error('Invalid publication outcome');
-  const comments = array(row['comments'], 'Publication comments').map((value) => {
-    const comment = object(value, 'Comment receipt');
+  const comments = array(row['comments'], 'Publication comments').map((item) => {
+    const comment = object(item, 'Comment receipt');
     return {
       id: identifier(comment['id']),
       state: commentPublicationState(comment['state']),
@@ -143,12 +143,12 @@ export function parseReviewComments(value: unknown): ReviewComments {
         failed: reviewVersion(publication['failed']),
       },
     },
-    comments: array(row['comments'], 'Comments').map((value) => {
-      const comment = object(value, 'Comment');
+    comments: array(row['comments'], 'Comments').map((item) => {
+      const comment = object(item, 'Comment');
       const candidate = object(comment['candidate'], 'Candidate');
       const source = object(candidate['source'], 'Source');
       const original = object(candidate['original'], 'Original');
-      const publication = object(comment['publication'], 'Publication');
+      const commentPublication = object(comment['publication'], 'Publication');
       const kind = source['kind'];
       if (kind !== 'reviewer' && kind !== 'user-adopted')
         throw new Error('Invalid candidate source');
@@ -181,10 +181,10 @@ export function parseReviewComments(value: unknown): ReviewComments {
         },
         position: parseReviewCommentPosition(comment['position']),
         publication: {
-          state: commentPublicationState(publication['state']),
-          discussionId: maybeString(publication['discussionId'], 'Discussion ID'),
-          retryable: boolean(publication['retryable']),
-          error: maybeString(publication['error'], 'Publication error'),
+          state: commentPublicationState(commentPublication['state']),
+          discussionId: maybeString(commentPublication['discussionId'], 'Discussion ID'),
+          retryable: boolean(commentPublication['retryable']),
+          error: maybeString(commentPublication['error'], 'Publication error'),
         },
       };
     }),
@@ -200,8 +200,8 @@ export function parseCurateReview(value: unknown): CurateReview {
     Object.keys(row).some((key) => !['revision', 'expectedVersion', 'by', 'changes'].includes(key))
   )
     throw new Error('Unknown curation field');
-  const changes = array(row['changes'], 'Changes').map((value) => {
-    const change = object(value, 'Change');
+  const changes = array(row['changes'], 'Changes').map((item) => {
+    const change = object(item, 'Change');
     if (Object.keys(change).some((key) => !['id', 'inclusion', 'candidate'].includes(key)))
       throw new Error('Unknown comment change');
     const candidate =

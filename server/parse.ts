@@ -15,6 +15,7 @@ import type {
   ViewFilter,
   WorkItem,
 } from '../shared/api.ts';
+import { sorted } from '../shared/array.ts';
 
 type ObjectValue = Record<string, JsonValue>;
 
@@ -31,13 +32,36 @@ export function object(value: unknown, where: string): ObjectValue {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${where} must be an object`);
   }
-  // This seam only accepts values decoded from JSON, whose leaves are JsonValue.
-  return value as ObjectValue;
+  return Object.fromEntries(Object.entries(value));
 }
 
-export function array(value: unknown, where: string): JsonValue[] {
+export function array(value: unknown, where: string): unknown[] {
   if (!Array.isArray(value)) throw new Error(`${where} must be an array`);
-  return value as JsonValue[];
+  return value.map((item) => item);
+}
+
+function jsonValue(value: unknown, where: string): JsonValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
+    return value;
+  if (Array.isArray(value)) return value.map((item) => jsonValue(item, where));
+  const row = object(value, where);
+  return Object.fromEntries(
+    Object.entries(row).flatMap(([key, item]) =>
+      item === undefined ? [] : [[key, jsonValue(item, `${where}.${key}`)]],
+    ),
+  );
+}
+
+function jsonObject(value: unknown, where: string): Record<string, JsonValue> {
+  const parsed = jsonValue(value, where);
+  if (parsed === null || Array.isArray(parsed) || typeof parsed !== 'object')
+    throw new Error(`${where} must be an object`);
+  return parsed;
 }
 
 export function string(value: unknown, where: string): string {
@@ -95,7 +119,7 @@ export function parseCard(value: unknown): Card {
     worktree: maybeString(read('worktree'), 'card.worktree'),
     source: maybeString(read('source', 'kanban/source'), 'card.source'),
     outcome: maybeString(read('outcome', 'kanban/outcome'), 'card.outcome'),
-    labels: [...new Set(labels)].sort(),
+    labels: sorted([...new Set(labels)]),
     createdAt: string(row['created_at'], 'card.created_at'),
     updatedAt: maybeString(row['updated_at'], 'card.updated_at'),
   };
@@ -132,7 +156,7 @@ export function parseWork(value: unknown): WorkItem {
     id: string(row['id'], 'work.id'),
     title: maybeString(row['title'], 'work.title') ?? '(untitled)',
     state: string(row['state'], 'work.state'),
-    attributes: object(row['attributes'], 'work.attributes'),
+    attributes: jsonObject(row['attributes'], 'work.attributes'),
     // Compact entity projections (active work and related strands) omit timestamps.
     createdAt: maybeString(row['created_at'], 'work.created_at'),
     updatedAt: maybeString(row['updated_at'], 'work.updated_at'),
@@ -147,8 +171,8 @@ export function parseRelation(value: unknown): Relation {
 
 export function parseGraph(value: unknown): CardGraph {
   const row = object(value, 'graph');
-  const nodes = array(row['strands'], 'graph.strands').map((value): GraphNode => {
-    const work = parseWork(value);
+  const nodes = array(row['strands'], 'graph.strands').map((item): GraphNode => {
+    const work = parseWork(item);
     const cardType =
       work.attributes['kanban/type'] ??
       (work.attributes['kanban/card'] === 'true' ? 'feature' : null);
@@ -161,8 +185,8 @@ export function parseGraph(value: unknown): CardGraph {
     return { ...work, kind };
   });
   const edges = (key: string, kind: GraphEdge['kind']): GraphEdge[] =>
-    array(row[key], `graph.${key}`).map((value) => {
-      const edge = object(value, 'edge');
+    array(row[key], `graph.${key}`).map((item) => {
+      const edge = object(item, 'edge');
       return {
         kind,
         from: string(edge['from_strand_id'], 'edge.from_strand_id'),
@@ -207,20 +231,18 @@ function parseFilter(value: unknown): ViewFilter {
     query: string(row['query'], 'view.filter.query'),
     mode: oneOf(row['mode'], ['and', 'or'], 'view.filter.mode'),
     terms,
-    lanes: array(row['lanes'], 'view.filter.lanes').map((value): Lane =>
-      oneOf(value, lanes, 'lane'),
-    ),
-    types: array(row['types'], 'view.filter.types').map((value) => oneOf(value, cardTypes, 'type')),
-    priorities: array(row['priorities'], 'view.filter.priorities').map((value): Priority =>
-      oneOf(value, priorities, 'priority'),
+    lanes: array(row['lanes'], 'view.filter.lanes').map((item): Lane => oneOf(item, lanes, 'lane')),
+    types: array(row['types'], 'view.filter.types').map((item) => oneOf(item, cardTypes, 'type')),
+    priorities: array(row['priorities'], 'view.filter.priorities').map((item): Priority =>
+      oneOf(item, priorities, 'priority'),
     ),
     includeClosed: row['includeClosed'],
   };
 }
 
 export function parseViews(value: unknown): SavedView[] {
-  const views = array(value, 'views').map((value): SavedView => {
-    const row = object(value, 'view');
+  const views = array(value, 'views').map((item): SavedView => {
+    const row = object(item, 'view');
     const id = string(row['id'], 'view.id');
     const name = string(row['name'], 'view.name').trim();
     if (id.length === 0 || id.length > 100)

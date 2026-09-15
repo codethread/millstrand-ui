@@ -81,7 +81,8 @@ async function body(request: IncomingMessage): Promise<unknown> {
   let length = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+    if (!Buffer.isBuffer(chunk)) throw new HttpError(400, 'Request body must contain bytes.');
+    const bytes = chunk;
     length += bytes.length;
     if (length > 128 * 1024) throw new HttpError(413, 'Request is too large.');
     chunks.push(bytes);

@@ -74,13 +74,10 @@ export function Avatar({ owner }: { owner: string | null }) {
 }
 export function Loading({ text = 'Loading workspace…' }: { text?: string }) {
   return (
-    <div
-      className="flex min-h-48 items-center justify-center gap-3 text-sm text-muted-foreground"
-      role="status"
-    >
+    <output className="flex min-h-48 items-center justify-center gap-3 text-sm text-muted-foreground">
       <LoaderCircle className="size-4 animate-spin" />
       {text}
-    </div>
+    </output>
   );
 }
 export function ErrorNotice({ error }: { error: Error }) {

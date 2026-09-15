@@ -1,4 +1,5 @@
 import type { AgentIdentity, AgentRun, AgentRunStatus, AgentWork } from '../shared/api.ts';
+import { sorted } from '../shared/array.ts';
 import { array, maybeString, parseWork, string } from './parse.ts';
 
 /** List projections omit large prompt/result values. Only expose inspection fields,
@@ -72,7 +73,8 @@ export function parseAgents(value: unknown): AgentIdentity[] {
         model: maybeString(attrs['identity/model'], 'identity.model'),
         effort: maybeString(attrs['identity/thinking-level'], 'identity.effort'),
         createdAt: string(row.createdAt, 'identity.createdAt'),
-        runs: (runs.get(id) ?? []).sort(
+        runs: sorted(
+          runs.get(id) ?? [],
           (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
         ),
         work: work.get(id) ?? [],

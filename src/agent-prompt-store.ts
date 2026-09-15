@@ -64,13 +64,13 @@ export function createAgentPromptStore(storage: Storage | null) {
       persistenceError: null,
       refreshPreferences: () => {
         try {
-          const preferences = readAgentPreferences(storage);
+          const refreshedPreferences = readAgentPreferences(storage);
           set((s) => ({
-            ...preferences,
+            ...refreshedPreferences,
             composer:
               s.composer.kind === 'composing' &&
               (s.aliases[s.composer.workspace] ?? 'tui') !==
-                (preferences.aliases[s.composer.workspace] ?? 'tui')
+                (refreshedPreferences.aliases[s.composer.workspace] ?? 'tui')
                 ? { ...s.composer, requestId: newRequestId() }
                 : s.composer,
           }));

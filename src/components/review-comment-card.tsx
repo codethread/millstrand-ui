@@ -39,14 +39,14 @@ export function ReviewCommentCard({
     >
       <header className="flex flex-wrap items-center gap-2 text-xs">
         <span className="min-w-0 break-all text-muted-foreground">{positionLabel}</span>
-        <span role="status" className="ml-auto rounded-full border border-border px-2 py-0.5">
+        <output className="ml-auto rounded-full border border-border px-2 py-0.5">
           {inclusion === 'included'
             ? 'Included'
             : inclusion === 'dismissed'
               ? 'Dismissed'
               : 'Undecided'}
           {busy && ' · Working…'}
-        </span>
+        </output>
       </header>
       <div className="min-w-0 break-words">
         <Markdown text={body} />
@@ -57,7 +57,7 @@ export function ReviewCommentCard({
           {errorText}
         </p>
       )}
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Comment actions">
+      <fieldset className="flex flex-wrap gap-2 border-0 p-0" aria-label="Comment actions">
         <Button
           type="button"
           size="sm"
@@ -90,7 +90,7 @@ export function ReviewCommentCard({
           <MessageSquare />
           Prompt agent
         </Button>
-      </div>
+      </fieldset>
       {proposalEditor}
     </article>
   );

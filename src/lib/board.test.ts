@@ -201,7 +201,7 @@ describe('optional board lanes', () => {
     ]);
     expect(selectBoardLanes([], false)).toEqual(selectBoardLanes(visible, false));
     expect(
-      selectCards(cards, { ...emptyFilter(), lanes: ['in_production'] }).map((card) => card.id),
+      selectCards(cards, { ...emptyFilter(), lanes: ['in_production'] }).map((item) => item.id),
     ).toEqual(['production']);
   });
 });

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { WorkspaceOption } from '../shared/api.ts';
+import { sorted } from '../shared/array.ts';
 import { array, HttpError, object, string } from './parse.ts';
 import { StrandData } from './strand.ts';
 import { ViewStore } from './views.ts';
@@ -34,7 +35,8 @@ export function parseWorkspaces(value: unknown, defaultPath: string): WorkspaceO
     byPath.set(canonicalPath, option(canonicalPath, state === 'running' ? 'running' : 'offline'));
   }
   if (!byPath.has(defaultPath)) byPath.set(defaultPath, option(defaultPath, 'offline'));
-  return [...byPath.values()].sort(
+  return sorted(
+    [...byPath.values()],
     (a, b) => a.name.localeCompare(b.name) || a.path.localeCompare(b.path),
   );
 }

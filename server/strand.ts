@@ -1,4 +1,5 @@
 import { moveCardArgs } from './card-actions.ts';
+import { reversed, sorted } from '../shared/array.ts';
 import type { ReviewDetail, ReviewDirectory } from '../shared/reviews.ts';
 import {
   reviewPublicationBlock,
@@ -192,7 +193,7 @@ export class StrandData {
         'Review curation changed or is locked. Refresh and inspect the current comment before retrying.',
       );
     for (const change of input.changes) {
-      const comment = current.comments.find((comment) => comment.id === change.id);
+      const comment = current.comments.find((candidate) => candidate.id === change.id);
       if (!comment) throw new HttpError(404, 'Comment is not in this review.');
       if (change.candidate && change.candidate.expectedVersion !== comment.candidate.version)
         throw new HttpError(409, 'The candidate changed. Your draft has been retained.');
@@ -246,9 +247,10 @@ export class StrandData {
         workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
         fetchedAt: new Date().toISOString(),
         cards,
-        labels: [...counts]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([label, count]) => ({ label, count })),
+        labels: sorted([...counts], ([a], [b]) => a.localeCompare(b)).map(([label, count]) => ({
+          label,
+          count,
+        })),
       };
     });
   }
@@ -318,7 +320,7 @@ export class StrandData {
     let context = review === null ? null : reviewPromptContext(review, this.workspace);
     if (input.targetKind === 'review-comment') {
       const snapshot = await this.reviewComments(cardId);
-      const comment = snapshot.comments.find((comment) => comment.id === input.comment.id);
+      const comment = snapshot.comments.find((candidate) => candidate.id === input.comment.id);
       if (!comment) throw new HttpError(404, 'Comment is not in this review.');
       if (
         !snapshot.review.current ||
@@ -377,7 +379,7 @@ export class StrandData {
   }
 
   private async card(id: string): Promise<Card> {
-    const card = (await this.board()).cards.find((card) => card.id === id);
+    const card = (await this.board()).cards.find((candidate) => candidate.id === id);
     if (!card) throw new HttpError(404, `Kanban card ${id} was not found in this workspace.`);
     return card;
   }
@@ -400,7 +402,7 @@ export class StrandData {
         body: body ?? '',
         attributes: attrs,
         tasks: array(raw['tasks'], 'card detail.tasks').map(parseTask),
-        notes: array(notesPayload, 'card notes').map(parseNote).reverse(),
+        notes: reversed(array(notesPayload, 'card notes').map(parseNote)),
         activeWork: array(raw['active-work'], 'card detail.active-work').map(parseWork),
         ready: array(raw['ready'], 'card detail.ready').map(parseWork),
         related: array(raw['related'], 'card detail.related').map(parseRelation),
@@ -420,9 +422,7 @@ export class StrandData {
     if (!detail.tasks.some((task) => task.id === taskId)) {
       throw new HttpError(404, 'That task does not belong to this kanban card.');
     }
-    return array(await this.run(['notes', taskId]), 'task notes')
-      .map(parseNote)
-      .reverse();
+    return reversed(array(await this.run(['notes', taskId]), 'task notes').map(parseNote));
   }
 
   async changeCard(id: string, action: CardAction): Promise<{ ok: true }> {

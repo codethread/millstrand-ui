@@ -3,6 +3,11 @@ import { MutationObserver, QueryClient } from '@tanstack/react-query';
 import { agentPromptMutationOptions } from './api';
 
 const track = vi.hoisted(() => vi.fn());
+
+function unresolvedResponse(_response: Response): never {
+  throw new Error('Response resolver was not initialized');
+}
+
 vi.mock('../agent-prompt-store', () => ({ useAgentPromptStore: { getState: () => ({ track }) } }));
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -10,7 +15,7 @@ afterEach(() => {
 });
 
 it('records the original weaver receipt even if the composer unmounts before the response', async () => {
-  let finish = (_response: Response) => {};
+  let finish: (response: Response) => void = unresolvedResponse;
   const response = new Promise<Response>((resolve) => {
     finish = resolve;
   });
