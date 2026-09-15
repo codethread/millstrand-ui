@@ -5,8 +5,24 @@ import {
   parseAgentPrompt,
   parseAgentReply,
   parsePromptContext,
+  reviewPromptContext,
 } from './agent-prompts.ts';
 import { StrandData } from './strand.ts';
+import { review } from './reviews.fixture.ts';
+import { parseReviewDetail } from './reviews.ts';
+
+const reviewDetail = parseReviewDetail({
+  review: {
+    ...review,
+    repo: '/repo',
+    worktree: null,
+    report: 'PRIVATE LONG REPORT',
+    reviewers: [{ ...review.reviewers[0], result: 'PRIVATE REVIEWER OUTPUT', error: null }],
+    notes: [],
+    links: [],
+    history: [],
+  },
+});
 
 const exec = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<{ stdout: string }>>());
 vi.mock('node:child_process', async () => {
@@ -52,6 +68,8 @@ describe('prompt boundaries', () => {
     { requestId: 'anything' },
     { cwd: '/arbitrary/path' },
     { attributes: { command: 'sh' } },
+    { targetKind: 'arbitrary' },
+    { reviewContext: 'client supplied context' },
   ])('rejects invalid launch fields %j', (change) => {
     expect(() => parseAgentPrompt({ ...prompt, ...change })).toThrow();
   });
@@ -149,6 +167,54 @@ describe('scoped launch process', () => {
     expect(last?.[2]).toMatchObject({ cwd: '/repo' });
     expect(last?.[2]).not.toHaveProperty('shell');
   });
+  it('dispatches a standalone review through the existing launch and retains inspectable context', async () => {
+    mockWorkspace();
+    const data = new StrandData('/repo/.millstrand');
+    vi.spyOn(data, 'review').mockResolvedValue(reviewDetail);
+    const input = parseAgentPrompt({
+      ...prompt,
+      targetKind: 'review',
+      targetId: reviewDetail.id,
+      prompt: '  dig into this further\nKeep my question intact  ',
+    });
+    const result = await data.promptAgent(reviewDetail.id, input);
+    const context = reviewPromptContext(reviewDetail, '/repo/.millstrand');
+    expect(result.prompt).toEqual({
+      kind: 'review',
+      cardId: reviewDetail.id,
+      text: input.prompt,
+      context,
+    });
+    const args = exec.mock.calls.at(-1)?.[1];
+    expect(args).toEqual([
+      '--workspace',
+      '/repo/.millstrand',
+      ...agentLaunchArgs('/repo/.millstrand', '/repo', reviewDetail.id, input, context),
+    ]);
+    const launch = agentLaunchArgs('/repo/.millstrand', '/repo', reviewDetail.id, input, context);
+    expect(launch[launch.indexOf('--prompt') + 1]).toContain(`User prompt:\n${input.prompt}`);
+    expect(parsePromptContext(JSON.parse(launch[launch.indexOf('--context') + 1] ?? ''))).toEqual(
+      result.prompt,
+    );
+    expect(exec.mock.calls.some((call) => JSON.stringify(call[1]).includes('kanban'))).toBe(false);
+    await expect(data.promptAgent('other', input)).rejects.toThrow('must match');
+  });
+  it('uses a registered review worktree and rejects a foreign one before dispatch', async () => {
+    mockWorkspace();
+    const data = new StrandData('/repo/.millstrand');
+    const read = vi
+      .spyOn(data, 'review')
+      .mockResolvedValue({ ...reviewDetail, worktree: process.cwd() });
+    const input = { ...prompt, targetKind: 'review' as const, targetId: reviewDetail.id };
+    await data.promptAgent(reviewDetail.id, input);
+    expect(exec.mock.calls.at(-1)?.[1]).toContain(process.cwd());
+    exec.mockClear();
+    read.mockResolvedValue({ ...reviewDetail, worktree: '/foreign' });
+    await expect(data.promptAgent(reviewDetail.id, input)).rejects.toThrow(
+      'The selected work item’s recorded worktree is unavailable',
+    );
+    expect(exec.mock.calls.some((call) => JSON.stringify(call[1]).includes('"run"'))).toBe(false);
+  });
   it('rejects unknown cards and aliases before any agent run', async () => {
     mockWorkspace();
     const data = new StrandData('/repo/.millstrand');
@@ -187,5 +253,32 @@ describe('scoped launch process', () => {
     expect(exec.mock.calls.some((call) => JSON.stringify(call[1]).includes('"run"'))).toBe(false);
     await data.promptAgent('card1', { ...prompt, targetId: 'task1' });
     expect(exec.mock.calls.at(-1)?.[1]).toContain('task1');
+  });
+});
+
+it('builds concise metadata context including missing and stale state without duplicating evidence', () => {
+  const context = reviewPromptContext({ ...reviewDetail, current: false }, '/repo/.millstrand');
+  for (const value of [
+    'r123',
+    'merge-request review',
+    'active',
+    'reviewed',
+    'pending',
+    'false',
+    '/repo',
+    '12',
+    'https://example.com/mr/12',
+    'abc',
+    'base: unavailable',
+    'not recorded',
+    'strand show r123',
+    'strand review show r123',
+  ])
+    expect(context).toContain(value);
+  expect(context).not.toMatch(/PRIVATE|result|diff/);
+  expect(parsePromptContext({ source: 'millstrand-ui', card: 'old', prompt: 'hello' })).toEqual({
+    kind: 'card',
+    cardId: 'old',
+    text: 'hello',
   });
 });

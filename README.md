@@ -197,6 +197,12 @@ metadata and filter by execution stage. Selection and filters live in the URL.
 A selected review shows the complete report, expandable reviewer results and
 errors, review history, activity, and related strands. Agent runs link to their
 existing inspection view when their identity is available. Decisions remain CLI
-operations. The server reads `strand review list --all` and
+operations. Pending active reviews also offer **Prompt agent**, using the same
+composer and default agent as cards. The run targets the review Strand itself;
+the server adds concise repository, MR, revision, state, and artifact-location
+context without copying the report or diff. Agents shows this context separately
+from your prompt and offers **View review** to return to the review. The recorded
+review worktree must pass the same registered-worktree validation as card launches.
+The server reads `strand review list --all` and
 `strand review show ID`; weavers without those operations show a configuration
 message. Temporary refresh failures keep the last successful data visible.

@@ -38,3 +38,32 @@ it('records the original weaver receipt even if the composer unmounts before the
   expect(client.getQueryData(['agent-reply', 'weaver-a', 'run1'])).toMatchObject({ id: 'run1' });
   client.clear();
 });
+
+it('dispatches review prompts through the existing card route with unchanged free-form text', async () => {
+  const fetch = vi.fn(async () =>
+    Response.json({ id: 'run-review', identity: 'tiger', status: 'ready' }),
+  );
+  vi.stubGlobal('fetch', fetch);
+  const client = new QueryClient();
+  const observer = new MutationObserver(
+    client,
+    agentPromptMutationOptions(client, 'weaver-a', 'review1'),
+  );
+  const input = {
+    targetId: 'review1',
+    targetKind: 'review' as const,
+    alias: 'tui',
+    prompt: 'dig into this further\nCheck the hypothesis.',
+    requestId: 'ui-0123456789abcdef',
+  };
+  await observer.mutate(input);
+  expect(fetch).toHaveBeenCalledWith(
+    expect.stringContaining('/cards/review1/agent-runs'),
+    expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  );
+  expect(track).toHaveBeenCalledExactlyOnceWith('weaver-a', 'run-review', input.requestId);
+  client.clear();
+});

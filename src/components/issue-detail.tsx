@@ -377,7 +377,9 @@ export function IssueDetail({ id }: { id: string }) {
                 Issue details for {detail.card.title}
               </SheetDescription>
               <div className="detail-meta">
-                <PromptAgentButton target={{ cardId: id, id, title: detail.card.title }} />
+                <PromptAgentButton
+                  target={{ kind: 'card', cardId: id, id, title: detail.card.title }}
+                />
                 <StatusBadge status={detail.card.lane} />
                 <span className="detail-meta-separator" />
                 <IssueAgents owner={detail.card.owner} target={detail.card.id} />

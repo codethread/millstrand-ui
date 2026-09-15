@@ -6,11 +6,11 @@ import {
   type AgentPreferences,
 } from './lib/agent-preferences';
 
-export interface PromptTarget {
+export type PromptTarget = {
   cardId: string;
   id: string;
   title: string;
-}
+} & ({ kind: 'card' } | { kind: 'review' });
 type Composer =
   | { kind: 'closed' }
   | {

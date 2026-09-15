@@ -10,6 +10,7 @@ import {
   parseAgentOptions,
   parseAgentReply,
   parsePromptContext,
+  reviewPromptContext,
 } from './agent-prompts.ts';
 import type {
   AgentDirectory,
@@ -189,7 +190,12 @@ export class StrandData {
   }
 
   async promptAgent(cardId: string, input: AgentPrompt): Promise<AgentReply> {
-    const card = await this.card(cardId);
+    if (input.targetKind === 'review' && input.targetId !== cardId)
+      throw new HttpError(404, 'The review target must match the selected review.');
+    const review = input.targetKind === 'review' ? await this.review(cardId) : null;
+    if (review !== null && review.id !== cardId)
+      throw new HttpError(404, 'The selected review was not found.');
+    const card = review ?? (await this.card(cardId));
     if (
       input.targetId !== cardId &&
       !(await this.graph(cardId)).nodes.some((node) => node.id === input.targetId)
@@ -201,14 +207,22 @@ export class StrandData {
         'That agent is not available headlessly in this weaver. Choose an available alias.',
       );
     const cwd = await this.agentDirectory(card);
+    const context = review === null ? null : reviewPromptContext(review, this.workspace);
     const reply = parseAgentReply(
-      await this.run(agentLaunchArgs(this.workspace, cwd, cardId, input)),
+      await this.run(agentLaunchArgs(this.workspace, cwd, cardId, input, context)),
     );
     this.agentDirectories.clear();
-    return { ...reply, prompt: { cardId, text: input.prompt } };
+    return {
+      ...reply,
+      prompt: {
+        cardId,
+        text: input.prompt,
+        ...(context === null ? { kind: 'card' as const } : { kind: 'review' as const, context }),
+      },
+    };
   }
 
-  private async agentDirectory(card: Card): Promise<string> {
+  private async agentDirectory(card: Pick<Card, 'worktree'>): Promise<string> {
     const root = dirname(this.workspace);
     if (card.worktree === null) return root;
     try {
@@ -229,7 +243,7 @@ export class StrandData {
     } catch {
       throw new HttpError(
         409,
-        'The card’s recorded worktree is unavailable or is not registered in this weaver’s repository. Repair the card’s worktree before prompting.',
+        'The selected work item’s recorded worktree is unavailable or is not registered in this weaver’s repository. Repair its recorded worktree before prompting.',
       );
     }
   }

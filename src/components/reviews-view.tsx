@@ -3,9 +3,10 @@ import { reviewStages, type ReviewDetail, type ReviewSummary } from '../../share
 import { useAgents, useReview, useReviews } from '../lib/api';
 import { formatDate } from '../lib/board';
 import { useDashboardNavigation } from '../lib/navigation';
-import { reviewInInbox, reviewLabel, selectReviews } from '../lib/reviews';
+import { reviewInInbox, reviewLabel, reviewPromptTarget, selectReviews } from '../lib/reviews';
 import { cn } from '../lib/utils';
 import { Markdown } from './issue-detail';
+import { PromptAgentButton } from './agent-prompt';
 import { ErrorNotice, Loading } from './issue-parts';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -65,6 +66,7 @@ function ReviewStatus({ review }: { review: ReviewSummary }) {
   );
 }
 function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
+  const promptTarget = reviewPromptTarget(detail);
   const nav = useDashboardNavigation();
   const agents = useAgents();
   return (
@@ -82,6 +84,11 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
         <h2 className="break-words text-xl font-semibold tracking-tight">
           {detail.mr.title ?? detail.title}
         </h2>
+        {promptTarget && (
+          <div className="mt-3">
+            <PromptAgentButton target={promptTarget} />
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>{detail.repo ?? 'Repository unavailable'}</span>
           {detail.mr.iid !== null && <span>· MR !{detail.mr.iid}</span>}

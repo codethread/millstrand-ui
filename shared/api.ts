@@ -83,6 +83,7 @@ export interface AgentOption {
 }
 
 export interface AgentPrompt {
+  targetKind?: 'review';
   targetId: string;
   alias: string;
   prompt: string;
@@ -100,7 +101,12 @@ export interface AgentReply {
   substatus: string | null;
   result: string | null;
   error: string | null;
-  prompt: { cardId: string; text: string } | null;
+  prompt:
+    | (
+        | { kind: 'card'; cardId: string; text: string }
+        | { kind: 'review'; cardId: string; text: string; context: string }
+      )
+    | null;
 }
 
 export interface WorkspaceOption {
