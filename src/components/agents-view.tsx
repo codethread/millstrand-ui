@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import type { AgentIdentity, AgentRun } from '../../shared/api';
 import { useAgents, useAgentReply, useBoard } from '../lib/api';
 import { useAgentPromptStore } from '../agent-prompt-store';
+import { useReviewCommentStore } from '../review-comment-store';
 import { runIsFinished } from '../lib/agent-notifications';
 import { Markdown } from './issue-detail';
 import {
@@ -367,15 +368,21 @@ function AgentRunReply({ id }: { id: string }) {
   const card = board.data?.cards.find((card) => card.id === cardId);
   return (
     <section className="mb-5 space-y-3" aria-label="Prompt and agent reply">
-      {reply?.prompt?.kind === 'review' ? (
+      {reply?.prompt && reply.prompt.kind !== 'card' ? (
         <Button
           variant="outline"
           size="sm"
           onClick={() => {
+            if (reply.prompt?.kind === 'review-comment')
+              useReviewCommentStore.getState().focusComment({
+                reviewId: reply.prompt.cardId,
+                commentId: reply.prompt.comment.id,
+              });
             if (cardId) nav.openReview(cardId);
           }}
         >
-          View review · {reply.prompt.cardId}
+          {reply.prompt.kind === 'review-comment' ? 'View comment' : 'View review'} ·{' '}
+          {reply.prompt.kind === 'review-comment' ? reply.prompt.comment.id : reply.prompt.cardId}
         </Button>
       ) : (
         card && (
@@ -395,7 +402,7 @@ function AgentRunReply({ id }: { id: string }) {
         <div className="rounded-lg bg-accent p-3">
           <h4 className="mb-2 text-xs font-semibold">Your prompt</h4>
           <p className="whitespace-pre-wrap break-words text-sm">{reply.prompt.text}</p>
-          {reply.prompt.kind === 'review' && (
+          {reply.prompt.kind !== 'card' && (
             <details className="mt-3 text-xs">
               <summary className="cursor-pointer">Review context sent to agent</summary>
               <pre className="mt-2 whitespace-pre-wrap break-words">{reply.prompt.context}</pre>

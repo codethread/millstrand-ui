@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { parseReviewDetail, parseReviewList } from './reviews';
 import { review } from './reviews.fixture';
 describe('review CLI boundary', () => {
+  it('normalizes authoritative headSha at the boundary', () => {
+    expect(parseReviewList({ reviews: [review] })[0]?.mr.sha).toBe('abc');
+    expect(
+      parseReviewList({ reviews: [{ ...review, mr: { ...review.mr, headSha: 'new-head' } }] })[0]
+        ?.mr.sha,
+    ).toBe('new-head');
+  });
   it('preserves full evidence and explicitly absent optional metadata', () => {
     const report = '# Findings\n' + 'Evidence '.repeat(1000);
     const parsed = parseReviewDetail({

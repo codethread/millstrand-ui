@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { CommentPromptReference } from '../shared/api';
 import {
   agentPreferenceKey,
   agentPreferencePrefix,
@@ -10,7 +11,11 @@ export type PromptTarget = {
   cardId: string;
   id: string;
   title: string;
-} & ({ kind: 'card' } | { kind: 'review' });
+} & (
+  | { kind: 'card' }
+  | { kind: 'review' }
+  | { kind: 'review-comment'; comment: CommentPromptReference }
+);
 type Composer =
   | { kind: 'closed' }
   | {

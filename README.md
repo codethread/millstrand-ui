@@ -207,3 +207,45 @@ as card launches; reviews without one cannot start an agent run.
 The server reads `strand review list --all` and
 `strand review show ID`; weavers without those operations show a configuration
 message. Temporary refresh failures keep the last successful data visible.
+
+Structured reviews show canonical comment candidates with **Include** and **Dismiss**
+choices. **Prompt agent** on a comment retains its Strand identity, frozen review
+revision, and candidate version. Agent replies are proposals: inspect/edit one and
+choose **Adopt revised text** to change the canonical candidate. Merely receiving
+a reply never adopts it. Original reviewer text and earlier run proposals remain
+available. Curation is locked for outdated reviews or when the upstream snapshot
+is no longer mutable.
+
+Unsaved edits are saved in this browser, scoped to the weaver, review revision,
+and comment. Refreshes and failed/conflicting saves retain the draft; a changed
+canonical candidate requires comparison, then an explicit **Keep draft against
+candidate N** action before adopting against its new version.
+Only explicit cancel or acknowledgment of the matching successful adoption clears
+the draft. Include/dismiss choices and adopted text are persisted upstream through
+`strand review curate ID --request JSON`, using expected review/candidate versions.
+`strand review comments ID` is authoritative; comments and positions are never
+inferred from the Markdown report. Older reviews without structured snapshots show
+an unavailable-comments message while their report stays readable.
+
+Comment contracts and parsing live in `shared/review-comments.ts` and
+`server/review-comments.ts`; the controlled UI and integration are in
+`src/components/review-comment-card.tsx`, `review-comment-proposal.tsx`, and
+`review-comments.tsx`. Local draft transitions and browser persistence are in
+`src/lib/review-comment-draft.ts` and `src/review-comment-store.ts`.
+
+**Send review** publishes only the included, saved candidates for the displayed
+review revision and curation version. Adopt or cancel unsaved drafts first;
+included comments with unsupported positions must be dismissed before sending.
+Sending locks curation for that snapshot. The server invokes
+`strand review publish ID --request JSON` with only the revision/version pointer;
+the coordinator validates the live merge request and diff anchors and owns all
+GitLab publication and deduplication.
+
+Per-comment receipts show published discussions and comments needing reconciliation.
+If a request fails or times out, some effects may already have occurred: refreshed
+receipts remain authoritative, and **Retry Send review** retries the same saved
+snapshot through the coordinator. It never silently clears drafts or republishes
+a completed review as new work. An interrupted overall summary can still be
+reconciled even if every comment already has a receipt. Sending does not complete
+the local review decision or remove its worktree. Publication UI/readiness rules
+are in `src/components/review-publication.tsx` and `src/lib/review-publication.ts`.

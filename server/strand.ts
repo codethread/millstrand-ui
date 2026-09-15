@@ -1,4 +1,12 @@
 import type { ReviewDetail, ReviewDirectory } from '../shared/reviews.ts';
+import {
+  reviewPublicationBlock,
+  type CurateReview,
+  type ReviewComments,
+  type PublishReview,
+  type ReviewPublicationReceipt,
+} from '../shared/review-comments.ts';
+import { parseReviewComments, parseReviewPublicationReceipt } from './review-comments.ts';
 import { parseReviewList, parseReviewDetail } from './reviews.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -118,6 +126,88 @@ export class StrandData {
     return parseReviewDetail(await this.run(['review', 'show', id]));
   }
 
+  async reviewComments(id: string): Promise<ReviewComments> {
+    const snapshot = parseReviewComments(await this.run(['review', 'comments', id]));
+    if (snapshot.review.id !== id)
+      throw new HttpError(502, 'Review comments returned a different review.');
+    return snapshot;
+  }
+
+  async publishReview(id: string, input: PublishReview): Promise<ReviewPublicationReceipt> {
+    const snapshot = await this.reviewComments(id);
+    if (
+      snapshot.review.revision !== input.revision ||
+      snapshot.review.curation.version !== input.curationVersion
+    )
+      throw new HttpError(409, 'The saved review snapshot changed. Refresh before sending.');
+    const blocked = reviewPublicationBlock(snapshot);
+    if (blocked) throw new HttpError(409, blocked);
+    try {
+      const receipt = parseReviewPublicationReceipt(
+        await this.run(['review', 'publish', id, '--request', JSON.stringify(input)]),
+      );
+      if (
+        receipt.reviewId !== id ||
+        receipt.revision !== input.revision ||
+        receipt.curationVersion !== input.curationVersion
+      )
+        throw new HttpError(
+          502,
+          'Publication returned a different snapshot receipt. Refresh to inspect the outcome before retrying.',
+        );
+      const included = new Set(
+        snapshot.comments
+          .filter((comment) => comment.inclusion === 'included')
+          .map((comment) => comment.id),
+      );
+      if (
+        receipt.comments.length !== included.size ||
+        receipt.comments.some((comment) => !included.has(comment.id))
+      )
+        throw new HttpError(
+          502,
+          'Publication returned incomplete or unrelated comment receipts. Refresh to inspect the outcome.',
+        );
+      return receipt;
+    } finally {
+      // A timeout may follow a remote effect. Never clear local curation or infer rollback.
+      this.reviewDetails.clear();
+      this.reviewDirectories.clear();
+    }
+  }
+
+  async curateReview(id: string, input: CurateReview): Promise<ReviewComments> {
+    const current = await this.reviewComments(id);
+    if (
+      !current.review.current ||
+      !current.review.curation.mutable ||
+      current.review.revision !== input.revision ||
+      current.review.curation.version !== input.expectedVersion
+    )
+      throw new HttpError(
+        409,
+        'Review curation changed or is locked. Refresh and inspect the current comment before retrying.',
+      );
+    for (const change of input.changes) {
+      const comment = current.comments.find((comment) => comment.id === change.id);
+      if (!comment) throw new HttpError(404, 'Comment is not in this review.');
+      if (change.candidate && change.candidate.expectedVersion !== comment.candidate.version)
+        throw new HttpError(409, 'The candidate changed. Your draft has been retained.');
+    }
+    const result = parseReviewComments(
+      await this.run([
+        'review',
+        'curate',
+        id,
+        '--request',
+        JSON.stringify({ ...input, by: 'millstrand-ui' }),
+      ]),
+    );
+    if (result.review.id !== id) throw new HttpError(502, 'Curation returned a different review.');
+    this.reviewDetails.clear();
+    return result;
+  }
+
   private async run(args: string[]): Promise<unknown> {
     try {
       const { stdout } = await exec('strand', ['--workspace', this.workspace, ...args], {
@@ -192,10 +282,16 @@ export class StrandData {
   }
 
   async promptAgent(cardId: string, input: AgentPrompt): Promise<AgentReply> {
-    if (input.targetKind === 'review' && input.targetId !== cardId)
+    if (
+      (input.targetKind === 'review' || input.targetKind === 'review-comment') &&
+      input.targetId !== cardId
+    )
       throw new HttpError(404, 'The review target must match the selected review.');
     // Dispatch must validate current authoritative state, not the polling cache.
-    const review = input.targetKind === 'review' ? await this.readReview(cardId) : null;
+    const review =
+      input.targetKind === 'review' || input.targetKind === 'review-comment'
+        ? await this.readReview(cardId)
+        : null;
     if (review !== null && review.id !== cardId)
       throw new HttpError(404, 'The selected review was not found.');
     if (review !== null && (review.state !== 'active' || review.decision !== 'pending'))
@@ -220,7 +316,23 @@ export class StrandData {
         'That agent is not available headlessly in this weaver. Choose an available alias.',
       );
     const cwd = await this.agentDirectory(card);
-    const context = review === null ? null : reviewPromptContext(review, this.workspace);
+    let context = review === null ? null : reviewPromptContext(review, this.workspace);
+    if (input.targetKind === 'review-comment') {
+      const snapshot = await this.reviewComments(cardId);
+      const comment = snapshot.comments.find((comment) => comment.id === input.comment.id);
+      if (!comment) throw new HttpError(404, 'Comment is not in this review.');
+      if (
+        !snapshot.review.current ||
+        !snapshot.review.curation.mutable ||
+        snapshot.review.revision !== input.comment.revision ||
+        comment.candidate.version !== input.comment.candidateVersion
+      )
+        throw new HttpError(
+          409,
+          'The comment changed or curation is locked. Refresh before prompting.',
+        );
+      context += `\nComment Strand: ${comment.id}; candidate version: ${comment.candidate.version}; frozen revision: ${snapshot.review.revision}. Inspect strand show ${comment.id} and strand review comments ${cardId} for its canonical text and position. Return only proposed revised comment text for the user to inspect and edit. Do not adopt, curate, publish, or change canonical comment text; adoption is a separate explicit user action.`;
+    }
     const reply = parseAgentReply(
       await this.run(agentLaunchArgs(this.workspace, cwd, cardId, input, context)),
     );
@@ -230,7 +342,11 @@ export class StrandData {
       prompt: {
         cardId,
         text: input.prompt,
-        ...(context === null ? { kind: 'card' as const } : { kind: 'review' as const, context }),
+        ...(context === null
+          ? { kind: 'card' as const }
+          : input.targetKind === 'review-comment'
+            ? { kind: 'review-comment' as const, context, comment: input.comment }
+            : { kind: 'review' as const, context }),
       },
     };
   }
