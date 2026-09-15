@@ -204,6 +204,11 @@ export class StrandData {
         'This review is no longer active and pending. Refresh the review before prompting.',
       );
     const card = review ?? (await this.card(cardId));
+    if (review !== null && review.worktree === null)
+      throw new HttpError(
+        409,
+        'This review has no recorded worktree. Record its review worktree before prompting.',
+      );
     if (
       input.targetId !== cardId &&
       !(await this.graph(cardId)).nodes.some((node) => node.id === input.targetId)

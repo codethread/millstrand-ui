@@ -173,7 +173,8 @@ describe('scoped launch process', () => {
     expect(last?.[2]).not.toHaveProperty('shell');
   });
   it('dispatches a standalone review through the existing launch and retains inspectable context', async () => {
-    mockWorkspace();
+    const currentReview = { ...reviewDetail, worktree: process.cwd() };
+    mockWorkspace(null, [process.cwd()], () => currentReview);
     const data = new StrandData('/repo/.millstrand');
     const input = parseAgentPrompt({
       ...prompt,
@@ -182,7 +183,7 @@ describe('scoped launch process', () => {
       prompt: '  dig into this further\nKeep my question intact  ',
     });
     const result = await data.promptAgent(reviewDetail.id, input);
-    const context = reviewPromptContext(reviewDetail, '/repo/.millstrand');
+    const context = reviewPromptContext(currentReview, '/repo/.millstrand');
     expect(result.prompt).toEqual({
       kind: 'review',
       cardId: reviewDetail.id,
@@ -193,9 +194,15 @@ describe('scoped launch process', () => {
     expect(args).toEqual([
       '--workspace',
       '/repo/.millstrand',
-      ...agentLaunchArgs('/repo/.millstrand', '/repo', reviewDetail.id, input, context),
+      ...agentLaunchArgs('/repo/.millstrand', process.cwd(), reviewDetail.id, input, context),
     ]);
-    const launch = agentLaunchArgs('/repo/.millstrand', '/repo', reviewDetail.id, input, context);
+    const launch = agentLaunchArgs(
+      '/repo/.millstrand',
+      process.cwd(),
+      reviewDetail.id,
+      input,
+      context,
+    );
     expect(launch[launch.indexOf('--prompt') + 1]).toContain(`User prompt:\n${input.prompt}`);
     expect(parsePromptContext(JSON.parse(launch[launch.indexOf('--context') + 1] ?? ''))).toEqual(
       result.prompt,
@@ -216,6 +223,28 @@ describe('scoped launch process', () => {
       'The selected work item’s recorded worktree is unavailable',
     );
     expect(exec.mock.calls.some((call) => JSON.stringify(call[1]).includes('"run"'))).toBe(false);
+  });
+  it('rejects a review without a recorded worktree instead of launching in the canonical root', async () => {
+    mockWorkspace();
+    const data = new StrandData('/repo/.millstrand');
+    await expect(
+      data.promptAgent(reviewDetail.id, {
+        ...prompt,
+        targetKind: 'review',
+        targetId: reviewDetail.id,
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('no recorded worktree'),
+    });
+    expect(exec.mock.calls).toHaveLength(1);
+    expect(exec.mock.calls[0]?.[1]).toEqual([
+      '--workspace',
+      '/repo/.millstrand',
+      'review',
+      'show',
+      reviewDetail.id,
+    ]);
   });
   it('rejects unknown cards and aliases before any agent run', async () => {
     mockWorkspace();

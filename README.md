@@ -202,7 +202,8 @@ composer and default agent as cards. The run targets the review Strand itself;
 the server adds concise repository, MR, revision, state, and artifact-location
 context without copying the report or diff. Agents shows this context separately
 from your prompt and offers **View review** to return to the review. The recorded
-review worktree must pass the same registered-worktree validation as card launches.
+review worktree is required and must pass the same registered-worktree validation
+as card launches; reviews without one cannot start an agent run.
 The server reads `strand review list --all` and
 `strand review show ID`; weavers without those operations show a configuration
 message. Temporary refresh failures keep the last successful data visible.
