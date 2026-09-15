@@ -111,9 +111,11 @@ export class StrandData {
   }
 
   review(id: string): Promise<ReviewDetail> {
-    return this.reviewDetails.get(id, async () =>
-      parseReviewDetail(await this.run(['review', 'show', id])),
-    );
+    return this.reviewDetails.get(id, () => this.readReview(id));
+  }
+
+  private async readReview(id: string): Promise<ReviewDetail> {
+    return parseReviewDetail(await this.run(['review', 'show', id]));
   }
 
   private async run(args: string[]): Promise<unknown> {
@@ -192,9 +194,15 @@ export class StrandData {
   async promptAgent(cardId: string, input: AgentPrompt): Promise<AgentReply> {
     if (input.targetKind === 'review' && input.targetId !== cardId)
       throw new HttpError(404, 'The review target must match the selected review.');
-    const review = input.targetKind === 'review' ? await this.review(cardId) : null;
+    // Dispatch must validate current authoritative state, not the polling cache.
+    const review = input.targetKind === 'review' ? await this.readReview(cardId) : null;
     if (review !== null && review.id !== cardId)
       throw new HttpError(404, 'The selected review was not found.');
+    if (review !== null && (review.state !== 'active' || review.decision !== 'pending'))
+      throw new HttpError(
+        409,
+        'This review is no longer active and pending. Refresh the review before prompting.',
+      );
     const card = review ?? (await this.card(cardId));
     if (
       input.targetId !== cardId &&

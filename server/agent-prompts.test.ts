@@ -106,7 +106,11 @@ describe('prompt boundaries', () => {
 });
 
 describe('scoped launch process', () => {
-  function mockWorkspace(worktree: string | null = null, registered = [process.cwd()]) {
+  function mockWorkspace(
+    worktree: string | null = null,
+    registered = [process.cwd()],
+    readReview = () => reviewDetail,
+  ) {
     exec.mockImplementation(async (_file, argv) => {
       if (_file === 'git')
         return {
@@ -129,6 +133,7 @@ describe('scoped launch process', () => {
             },
           ],
         };
+      else if (operation === `review show ${reviewDetail.id}`) value = { review: readReview() };
       else if (operation === 'agent list') value = options;
       else if (operation === 'kanban-export card1')
         value = {
@@ -170,7 +175,6 @@ describe('scoped launch process', () => {
   it('dispatches a standalone review through the existing launch and retains inspectable context', async () => {
     mockWorkspace();
     const data = new StrandData('/repo/.millstrand');
-    vi.spyOn(data, 'review').mockResolvedValue(reviewDetail);
     const input = parseAgentPrompt({
       ...prompt,
       targetKind: 'review',
@@ -200,16 +204,14 @@ describe('scoped launch process', () => {
     await expect(data.promptAgent('other', input)).rejects.toThrow('must match');
   });
   it('uses a registered review worktree and rejects a foreign one before dispatch', async () => {
-    mockWorkspace();
+    let currentReview = { ...reviewDetail, worktree: process.cwd() };
+    mockWorkspace(null, [process.cwd()], () => currentReview);
     const data = new StrandData('/repo/.millstrand');
-    const read = vi
-      .spyOn(data, 'review')
-      .mockResolvedValue({ ...reviewDetail, worktree: process.cwd() });
     const input = { ...prompt, targetKind: 'review' as const, targetId: reviewDetail.id };
     await data.promptAgent(reviewDetail.id, input);
     expect(exec.mock.calls.at(-1)?.[1]).toContain(process.cwd());
     exec.mockClear();
-    read.mockResolvedValue({ ...reviewDetail, worktree: '/foreign' });
+    currentReview = { ...reviewDetail, worktree: '/foreign' };
     await expect(data.promptAgent(reviewDetail.id, input)).rejects.toThrow(
       'The selected work item’s recorded worktree is unavailable',
     );
@@ -224,6 +226,73 @@ describe('scoped launch process', () => {
     );
     expect(exec.mock.calls.some((call) => JSON.stringify(call[1]).includes('"run"'))).toBe(false);
   });
+  it('bypasses a populated review cache and dispatches with current metadata and worktree', async () => {
+    let currentReview = reviewDetail;
+    mockWorkspace(null, [process.cwd()], () => currentReview);
+    const data = new StrandData('/repo/.millstrand');
+    expect(await data.review(reviewDetail.id)).toEqual(reviewDetail);
+    currentReview = {
+      ...reviewDetail,
+      current: false,
+      stage: 'failed',
+      worktree: process.cwd(),
+      mr: { ...reviewDetail.mr, sha: 'new-head' },
+    };
+    // The read surface is still cached while dispatch must get fresh evidence.
+    expect(await data.review(reviewDetail.id)).toEqual(reviewDetail);
+    const input = { ...prompt, targetKind: 'review' as const, targetId: reviewDetail.id };
+    const result = await data.promptAgent(reviewDetail.id, input);
+    expect(result.prompt).toMatchObject({
+      context: reviewPromptContext(currentReview, '/repo/.millstrand'),
+    });
+    expect(exec.mock.calls.at(-1)?.[1]).toEqual([
+      '--workspace',
+      '/repo/.millstrand',
+      ...agentLaunchArgs(
+        '/repo/.millstrand',
+        process.cwd(),
+        reviewDetail.id,
+        input,
+        reviewPromptContext(currentReview, '/repo/.millstrand'),
+      ),
+    ]);
+    expect(
+      exec.mock.calls.filter((call) => JSON.stringify(call[1]).includes('"review","show"')),
+    ).toHaveLength(2);
+  });
+  it.each([
+    { state: 'closed', decision: 'pending' as const },
+    { state: 'active', decision: 'done' as const },
+    { state: 'active', decision: 'dismissed' as const },
+  ])(
+    'rejects a no-longer-pending review at dispatch despite cached pending data: %j',
+    async (change) => {
+      let currentReview = reviewDetail;
+      mockWorkspace(null, [process.cwd()], () => currentReview);
+      const data = new StrandData('/repo/.millstrand');
+      await data.review(reviewDetail.id);
+      currentReview = { ...reviewDetail, ...change };
+      exec.mockClear();
+      await expect(
+        data.promptAgent(reviewDetail.id, {
+          ...prompt,
+          targetKind: 'review',
+          targetId: reviewDetail.id,
+        }),
+      ).rejects.toMatchObject({
+        status: 409,
+        message: expect.stringContaining('no longer active and pending'),
+      });
+      expect(exec.mock.calls).toHaveLength(1);
+      expect(exec.mock.calls[0]?.[1]).toEqual([
+        '--workspace',
+        '/repo/.millstrand',
+        'review',
+        'show',
+        reviewDetail.id,
+      ]);
+    },
+  );
   it('launches in the selected card’s recorded worktree while retaining its canonical weaver', async () => {
     mockWorkspace(process.cwd());
     const data = new StrandData('/repo/.millstrand');
