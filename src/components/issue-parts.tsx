@@ -24,7 +24,7 @@ export function StatusIcon({
       ? CircleCheck
       : status === 'claimed' || status === 'doing'
         ? CircleDot
-        : status === 'in_review'
+        : status === 'in_review' || status === 'in_production'
           ? CircleDot
           : status === 'refinement'
             ? CircleDashed

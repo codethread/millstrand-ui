@@ -5,6 +5,7 @@ import {
   parseLabelChange,
   parseRelation,
   parseTask,
+  parseViews,
   parseWork,
   strandErrorMessage,
 } from './parse.ts';
@@ -17,6 +18,32 @@ const entity = {
 };
 
 describe('strand projection boundaries', () => {
+  it.each([{ lane: 'in_production' }, { attributes: { 'kanban/lane': 'in_production' } }])(
+    'preserves production cards in compact and raw projections: %j',
+    (projection) => {
+      const card = { ...entity, ...projection, created_at: '2026-09-12 10:00:00' };
+      expect(parseCard(card).lane).toBe('in_production');
+      expect(parseCard({ ...card, state: 'closed' }).lane).toBe('closed');
+    },
+  );
+
+  it('preserves production filters when loading saved views', () => {
+    const view = {
+      id: 'production',
+      name: 'Production observation',
+      filter: {
+        query: '',
+        mode: 'and',
+        terms: {},
+        lanes: ['in_production'],
+        types: [],
+        priorities: [],
+        includeClosed: false,
+      },
+    };
+    expect(parseViews([view])).toEqual([view]);
+  });
+
   it('uses the documented type and priority defaults in legacy raw card details', () => {
     expect(parseCard({ ...entity, created_at: '2026-09-12 10:00:00' })).toMatchObject({
       type: 'feature',

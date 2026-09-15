@@ -4,6 +4,7 @@ import { overviewCards } from './overview';
 import {
   emptyFilter,
   matchesWorkspaceView,
+  selectBoardLanes,
   selectCards,
   selectOutline,
   workspaceFilter,
@@ -152,16 +153,56 @@ describe('workspace navigation filters', () => {
 });
 
 describe('all-weaver overview cards', () => {
-  it('shows only open in-progress/review cards in priority order', () => {
+  it('shows only open in-progress/review/production cards in priority order', () => {
     const cards: Card[] = [
       card('ready'),
       { ...card('idea'), lane: 'refinement' },
       { ...card('progress'), lane: 'claimed', priority: 'p3' },
       { ...card('review'), lane: 'in_review', priority: 'p1' },
+      { ...card('production'), lane: 'in_production' },
+      { ...card('production-closed'), lane: 'in_production', state: 'closed' },
       { ...card('closed'), lane: 'claimed', state: 'closed' },
       { ...card('unknown'), lane: 'unknown' },
     ];
-    expect(overviewCards(cards).map((item) => item.id)).toEqual(['review', 'progress']);
+    expect(overviewCards(cards).map((item) => item.id)).toEqual([
+      'review',
+      'production',
+      'progress',
+    ]);
+  });
+});
+
+describe('optional board lanes', () => {
+  const cards: Card[] = [
+    card('ready'),
+    { ...card('production'), lane: 'in_production' },
+    { ...card('other'), lane: 'unknown' },
+  ];
+
+  it('places populated production after review and keeps completed opt-in', () => {
+    expect(selectBoardLanes(cards, false).map((lane) => lane.id)).toEqual([
+      'refinement',
+      'pending',
+      'claimed',
+      'in_review',
+      'in_production',
+      'unknown',
+    ]);
+    expect(selectBoardLanes(cards, true).map((lane) => lane.id)).toContain('closed');
+  });
+
+  it('hides optional lanes without matching cards, including on older spools', () => {
+    const visible = selectCards(cards, { ...emptyFilter(), lanes: ['pending'] });
+    expect(selectBoardLanes(visible, false).map((lane) => lane.id)).toEqual([
+      'refinement',
+      'pending',
+      'claimed',
+      'in_review',
+    ]);
+    expect(selectBoardLanes([], false)).toEqual(selectBoardLanes(visible, false));
+    expect(
+      selectCards(cards, { ...emptyFilter(), lanes: ['in_production'] }).map((card) => card.id),
+    ).toEqual(['production']);
   });
 });
 
