@@ -1,18 +1,8 @@
 # Millstrand UI
 
 This is an MVP for exploring real Millstrand work over a LAN. Keep it small,
-readable, and easy to redesign. The issue model is read-only except for labels;
-saved views are dashboard preferences. Do not add workflow mutation controls.
-
-## Working here
-
-Never stop the mill; only the user may stop it.
-
-- Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
-- Never edit `main` or push directly to `main`; feature-branch pushes are expected.
-- Inspect `strand workflow show land` and `strand prime merge-queue`, then drive
-  shared `land` for quality, one basic review, FIFO merge, card completion, and
-  branch/worktree cleanup.
+readable, and easy to redesign. Most of the design is read-only but some
+areas allow targeted edits.
 
 ## Types and boundaries
 
@@ -52,3 +42,21 @@ Never stop the mill; only the user may stop it.
 - Verify the running UI in a browser, including narrow layouts, selection,
   navigation, filters, labels, and graph interactions. A build alone is not proof
   that the dashboard works.
+
+## Millstrand / strand
+
+This repo uses Millstrand strands to track work. Start with `strand --help`. Run `mill prime millstrand` when building on this repo's `.millstrand/` config, or working with millstrand spools, weaver or REPL.
+
+Target other repos with direct `--workspace` flag:
+
+```bash
+strand --workspace ~/dev/projects/harnesses.spool/.millstrand help
+```
+
+## Working here
+
+- Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
+- Never edit `main` or push directly to `main`; feature-branch pushes are expected.
+- Inspect `strand workflow show land` and `strand prime merge-queue`, then drive
+  shared `land` for quality, one basic review, FIFO merge, card completion, and
+  branch/worktree cleanup.
