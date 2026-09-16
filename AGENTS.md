@@ -53,6 +53,20 @@ Target other repos with direct `--workspace` flag:
 strand --workspace ~/dev/projects/harnesses.spool/.millstrand help
 ```
 
+### Upstream model references
+
+When a machine does not have the local Strand or spool sources available, use
+these GitHub entry points to understand the upstream data and operations:
+
+- [Millstrand core](https://github.com/codethread/millstrand/blob/main/README.md)
+- [Millhouse Kanban spool](https://github.com/codethread/millhouse.spool/blob/main/spools/kanban/README.md)
+- [Millhouse Workflow spool](https://github.com/codethread/millhouse.spool/blob/main/spools/workflow/README.md)
+- [Harnesses spool](https://github.com/codethread/harnesses.spool/blob/main/README.md)
+
+These links track each repository's `main` branch and are discovery entry
+points. A specific workspace's behavior is defined by the direct pins in
+`.millstrand/deps.edn` and any transitive configuration dependencies.
+
 ## Working here
 
 - Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
