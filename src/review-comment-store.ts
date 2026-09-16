@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { z } from 'zod';
 import {
   commentDraftReducer,
   type CommentDraft,
@@ -9,6 +10,24 @@ interface SavedDraft {
   state: CommentDraftState;
   candidateVersion: number;
 }
+const savedCommentDraftSchema = z.compile(
+  z.object({
+    candidateVersion: z.number().int().safe().min(1),
+    state: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('closed') }),
+      z.object({
+        kind: z.literal('editing'),
+        draft: z.object({
+          id: z.string(),
+          text: z.string(),
+          edit: z.number().int().safe().min(0),
+        }),
+      }),
+    ]),
+  }),
+  { strict: true },
+);
+
 interface DraftStore {
   drafts: Record<string, SavedDraft>;
   errors: Record<string, { kind: 'read' | 'write'; message: string }>;
@@ -33,49 +52,9 @@ export function reviewDraftKey(
 }
 
 export function parseSavedCommentDraft(value: unknown): SavedDraft {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('candidateVersion' in value) ||
-    !('state' in value)
-  )
-    throw new Error('Invalid saved draft');
-  if (
-    typeof value.candidateVersion !== 'number' ||
-    !Number.isSafeInteger(value.candidateVersion) ||
-    value.candidateVersion < 1
-  )
-    throw new Error('Invalid draft version');
-  const state = value.state;
-  if (typeof state !== 'object' || state === null || !('kind' in state))
-    throw new Error('Invalid draft state');
-  if (state.kind === 'closed')
-    return {
-      state: { kind: 'closed' },
-      candidateVersion: value.candidateVersion,
-    };
-  if (state.kind !== 'editing' || !('draft' in state)) throw new Error('Invalid draft state');
-  const draft = state.draft;
-  if (
-    typeof draft !== 'object' ||
-    draft === null ||
-    !('id' in draft) ||
-    !('text' in draft) ||
-    !('edit' in draft) ||
-    typeof draft.id !== 'string' ||
-    typeof draft.text !== 'string' ||
-    typeof draft.edit !== 'number' ||
-    !Number.isSafeInteger(draft.edit) ||
-    draft.edit < 0
-  )
-    throw new Error('Invalid draft');
-  return {
-    state: {
-      kind: 'editing',
-      draft: { id: draft.id, text: draft.text, edit: draft.edit },
-    },
-    candidateVersion: value.candidateVersion,
-  };
+  const parsed = savedCommentDraftSchema.safeParse(value);
+  if (!parsed.success) throw new Error('Invalid saved draft');
+  return parsed.data;
 }
 
 function newDraft(text: string): CommentDraftState {

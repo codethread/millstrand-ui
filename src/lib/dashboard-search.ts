@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { reviewStages, type ReviewScope, type ReviewStage } from '../../shared/reviews';
 import type {
   CardType,
@@ -29,26 +30,47 @@ export interface DashboardSearch {
   activeAgentsOnly: boolean;
 }
 
-function text(value: unknown): string | null {
-  return typeof value === 'string' && value ? value : null;
+const recordSchema = z.compile(z.record(z.string(), z.unknown()), { strict: true });
+const textSchema = z.compile(z.string().min(1), { strict: true });
+const arraySchema = z.compile(z.array(z.unknown()), { strict: true });
+const labelTermSchema = z.compile(z.enum(['include', 'exclude']), { strict: true });
+const modeSchema = z.compile(
+  z.enum(['overview', 'board', 'outline', 'graph', 'agents', 'reviews']),
+  { strict: true },
+);
+const reviewScopeSchema = z.compile(z.enum(['inbox', 'all']), { strict: true });
+const reviewStageSchema = z.compile(z.enum(reviewStages), { strict: true });
+const detailTabSchema = z.compile(z.enum(['overview', 'activity', 'attributes']), {
+  strict: true,
+});
+const trueSchema = z.compile(z.literal(true), { strict: true });
+
+function parseOptional<T>(schema: z.ZodType<T>, value: unknown): T | null {
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 function record(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : {};
+  return parseOptional(recordSchema, value) ?? {};
+}
+function text(value: unknown): string | null {
+  return parseOptional(textSchema, value);
 }
 function choices<T extends string>(value: unknown, allowed: readonly T[]): T[] {
-  if (!Array.isArray(value)) return [];
-  return allowed.filter((item) => value.includes(item));
+  const parsed = parseOptional(arraySchema, value);
+  return parsed === null ? [] : allowed.filter((item) => parsed.includes(item));
+}
+function labelTerm(value: unknown): LabelTerm | null {
+  return parseOptional(labelTermSchema, value);
 }
 
 /** Invalid URL fields return to their documented defaults independently. */
 export function parseDashboardSearch(search: Record<string, unknown>): DashboardSearch {
   const value = record(search.filter);
   const terms: Record<string, LabelTerm> = Object.fromEntries(
-    Object.entries(record(value.terms)).filter(
-      (entry): entry is [string, LabelTerm] => entry[1] === 'include' || entry[1] === 'exclude',
-    ),
+    Object.entries(record(value.terms)).flatMap(([key, item]) => {
+      const term = labelTerm(item);
+      return term === null ? [] : [[key, term]];
+    }),
   );
   const filter: ViewFilter = {
     query: text(value.query) ?? '',
@@ -70,36 +92,23 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
   const workspace = text(search.workspace);
   const agent = text(search.agent);
   const issue = agent ? null : text(search.issue);
-  const mode = search.mode;
+  const mode = parseOptional(modeSchema, search.mode);
   return {
-    mode:
-      mode === 'overview' ||
-      mode === 'board' ||
-      mode === 'outline' ||
-      mode === 'graph' ||
-      mode === 'agents' ||
-      mode === 'reviews'
-        ? mode
-        : workspace || issue || agent
-          ? 'board'
-          : 'overview',
+    mode: mode ?? (workspace || issue || agent ? 'board' : 'overview'),
     workspace,
     review: text(search.review),
     reviewQuery: text(search.reviewQuery) ?? '',
-    reviewScope: search.reviewScope === 'all' ? 'all' : 'inbox',
-    reviewStage: reviewStages.find((stage) => stage === search.reviewStage) ?? null,
+    reviewScope: parseOptional(reviewScopeSchema, search.reviewScope) ?? 'inbox',
+    reviewStage: parseOptional(reviewStageSchema, search.reviewStage),
     issue,
     agent,
     agentRun: agent ? text(search.agentRun) : null,
     filter,
     activeViewId: text(search.activeViewId),
     graphRoot: text(search.graphRoot),
-    detailTab:
-      search.detailTab === 'activity' || search.detailTab === 'attributes'
-        ? search.detailTab
-        : 'overview',
+    detailTab: parseOptional(detailTabSchema, search.detailTab) ?? 'overview',
     agentQuery: text(search.agentQuery) ?? '',
-    activeAgentsOnly: search.activeAgentsOnly === true,
+    activeAgentsOnly: parseOptional(trueSchema, search.activeAgentsOnly) ?? false,
   };
 }
 

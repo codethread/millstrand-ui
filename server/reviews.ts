@@ -1,4 +1,4 @@
-import { array, object, string, maybeString } from './parse.ts';
+import { z } from 'zod';
 import {
   reviewStages,
   type ReviewDetail,
@@ -6,96 +6,166 @@ import {
   type ReviewSummary,
 } from '../shared/reviews.ts';
 
-function boolean(value: unknown, where: string): boolean {
-  if (typeof value !== 'boolean') throw new Error(`${where} must be a boolean`);
-  return value;
+const reviewStageSchema = z.enum(reviewStages);
+const reviewDecisionSchema = z.enum(['pending', 'done', 'dismissed']);
+const nullableStringSchema = z.string().nullable().optional();
+const reviewMrSchema = z
+  .object({
+    iid: z.number().int().min(1).nullable().optional(),
+    url: nullableStringSchema,
+    title: nullableStringSchema,
+    headSha: nullableStringSchema,
+    baseSha: nullableStringSchema,
+    sourceBranch: nullableStringSchema,
+    targetBranch: nullableStringSchema,
+  })
+  .loose();
+const reviewSeatSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    runId: nullableStringSchema,
+    status: nullableStringSchema,
+    substatus: nullableStringSchema,
+  })
+  .loose();
+const reviewSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    state: z.string(),
+    stage: reviewStageSchema,
+    decision: reviewDecisionSchema,
+    current: z.boolean(),
+    createdAt: nullableStringSchema,
+    completedAt: nullableStringSchema,
+    repo: nullableStringSchema,
+    mr: reviewMrSchema,
+    reviewers: z.array(reviewSeatSchema),
+    reportAvailable: z.boolean(),
+  })
+  .loose();
+const reviewListSchema = z.compile(z.object({ reviews: z.array(reviewSchema) }).loose(), {
+  strict: true,
+});
+const compiledReviewSchema = z.compile(reviewSchema, { strict: true });
+const reviewDetailSchema = reviewSchema.extend({
+  report: nullableStringSchema,
+  worktree: nullableStringSchema,
+  reviewers: z.array(
+    reviewSeatSchema.extend({
+      result: nullableStringSchema,
+      error: nullableStringSchema,
+    }),
+  ),
+  notes: z.array(
+    z
+      .object({
+        id: z.string(),
+        text: z.string(),
+        at: nullableStringSchema,
+        by: nullableStringSchema,
+        kind: nullableStringSchema,
+      })
+      .loose(),
+  ),
+  links: z.array(
+    z
+      .object({
+        id: z.string(),
+        title: z.string(),
+        type: z.string(),
+      })
+      .loose(),
+  ),
+  history: z.array(reviewSchema),
+});
+const reviewDetailEnvelopeSchema = z.compile(z.object({ review: reviewDetailSchema }).loose(), {
+  strict: true,
+});
+
+type ReviewRow = z.infer<typeof reviewSchema>;
+type ReviewDetailRow = z.infer<typeof reviewDetailSchema>;
+
+function invalid(where: string): never {
+  throw new Error(`${where} is invalid`);
 }
-function choice<T extends string>(value: unknown, allowed: readonly T[], where: string): T {
-  const found = allowed.find((item) => item === value);
-  if (!found) throw new Error(`${where} is unsupported`);
-  return found;
-}
-function seat(value: unknown): ReviewSeat {
-  const row = object(value, 'reviewer');
-  return {
-    id: string(row['id'], 'reviewer.id'),
-    name: string(row['name'], 'reviewer.name'),
-    runId: maybeString(row['runId'], 'reviewer.runId'),
-    status: maybeString(row['status'], 'reviewer.status'),
-    substatus: maybeString(row['substatus'], 'reviewer.substatus'),
-  };
-}
-export function parseReview(value: unknown): ReviewSummary {
-  const row = object(value, 'review');
-  const mr = object(row['mr'], 'review.mr');
-  const iid = mr['iid'];
-  if (
-    iid !== null &&
-    iid !== undefined &&
-    (typeof iid !== 'number' || !Number.isInteger(iid) || iid < 1)
-  )
-    throw new Error('review.mr.iid must be a positive integer or null');
-  const url = maybeString(mr['url'], 'review.mr.url');
+
+function normalizeReview(row: ReviewRow): ReviewSummary {
+  const url = row.mr.url ?? null;
   if (url !== null && !/^https?:\/\//i.test(url))
     throw new Error('review.mr.url must be an HTTP URL');
   return {
-    id: string(row['id'], 'review.id'),
-    title: string(row['title'], 'review.title'),
-    state: string(row['state'], 'review.state'),
-    stage: choice(row['stage'], reviewStages, 'review.stage'),
-    decision: choice(row['decision'], ['pending', 'done', 'dismissed'], 'review.decision'),
-    current: boolean(row['current'], 'review.current'),
-    createdAt: maybeString(row['createdAt'], 'review.createdAt'),
-    completedAt: maybeString(row['completedAt'], 'review.completedAt'),
-    repo: maybeString(row['repo'], 'review.repo'),
+    id: row.id,
+    title: row.title,
+    state: row.state,
+    stage: row.stage,
+    decision: row.decision,
+    current: row.current,
+    createdAt: row.createdAt ?? null,
+    completedAt: row.completedAt ?? null,
+    repo: row.repo ?? null,
     mr: {
-      iid: iid ?? null,
+      iid: row.mr.iid ?? null,
       url,
-      title: maybeString(mr['title'], 'review.mr.title'),
-      sha: maybeString(mr['headSha'], 'review.mr.headSha'),
-      baseSha: maybeString(mr['baseSha'], 'review.mr.baseSha'),
-      sourceBranch: maybeString(mr['sourceBranch'], 'review.mr.sourceBranch'),
-      targetBranch: maybeString(mr['targetBranch'], 'review.mr.targetBranch'),
+      title: row.mr.title ?? null,
+      sha: row.mr.headSha ?? null,
+      baseSha: row.mr.baseSha ?? null,
+      sourceBranch: row.mr.sourceBranch ?? null,
+      targetBranch: row.mr.targetBranch ?? null,
     },
-    reviewers: array(row['reviewers'], 'review.reviewers').map(seat),
-    reportAvailable: boolean(row['reportAvailable'], 'review.reportAvailable'),
+    reviewers: row.reviewers.map((seat): ReviewSeat => ({
+      id: seat.id,
+      name: seat.name,
+      runId: seat.runId ?? null,
+      status: seat.status ?? null,
+      substatus: seat.substatus ?? null,
+    })),
+    reportAvailable: row.reportAvailable,
   };
 }
-export function parseReviewList(value: unknown): ReviewSummary[] {
-  return array(object(value, 'reviews')['reviews'], 'reviews.reviews').map(parseReview);
+
+function parseReviewRow(value: unknown): ReviewRow {
+  const parsed = compiledReviewSchema.safeParse(value);
+  if (!parsed.success) invalid('review');
+  return parsed.data;
 }
+
+export function parseReview(value: unknown): ReviewSummary {
+  return normalizeReview(parseReviewRow(value));
+}
+
+export function parseReviewList(value: unknown): ReviewSummary[] {
+  const parsed = reviewListSchema.safeParse(value);
+  if (!parsed.success) invalid('reviews');
+  return parsed.data.reviews.map(normalizeReview);
+}
+
 export function parseReviewDetail(value: unknown): ReviewDetail {
-  const row = object(object(value, 'review detail')['review'], 'review');
+  const parsed = reviewDetailEnvelopeSchema.safeParse(value);
+  if (!parsed.success) invalid('review detail');
+  const row: ReviewDetailRow = parsed.data.review;
   return {
-    ...parseReview(row),
-    report: maybeString(row['report'], 'review.report'),
-    worktree: maybeString(row['worktree'], 'review.worktree'),
-    reviewers: array(row['reviewers'], 'review.reviewers').map((entry) => {
-      const item = object(entry, 'reviewer');
-      return {
-        ...seat(item),
-        result: maybeString(item['result'], 'reviewer.result'),
-        error: maybeString(item['error'], 'reviewer.error'),
-      };
-    }),
-    notes: array(row['notes'], 'review.notes').map((entry) => {
-      const item = object(entry, 'review note');
-      return {
-        id: string(item['id'], 'note.id'),
-        text: string(item['text'], 'note.text'),
-        at: maybeString(item['at'], 'note.at'),
-        by: maybeString(item['by'], 'note.by'),
-        kind: maybeString(item['kind'], 'note.kind'),
-      };
-    }),
-    links: array(row['links'], 'review.links').map((entry) => {
-      const item = object(entry, 'review link');
-      return {
-        id: string(item['id'], 'link.id'),
-        title: string(item['title'], 'link.title'),
-        type: string(item['type'], 'link.type'),
-      };
-    }),
-    history: array(row['history'], 'review.history').map(parseReview),
+    ...normalizeReview(row),
+    report: row.report ?? null,
+    worktree: row.worktree ?? null,
+    reviewers: row.reviewers.map((seat) => ({
+      id: seat.id,
+      name: seat.name,
+      runId: seat.runId ?? null,
+      status: seat.status ?? null,
+      substatus: seat.substatus ?? null,
+      result: seat.result ?? null,
+      error: seat.error ?? null,
+    })),
+    notes: row.notes.map((note) => ({
+      id: note.id,
+      text: note.text,
+      at: note.at ?? null,
+      by: note.by ?? null,
+      kind: note.kind ?? null,
+    })),
+    links: row.links.map((link) => ({ id: link.id, title: link.title, type: link.type })),
+    history: row.history.map(normalizeReview),
   };
 }

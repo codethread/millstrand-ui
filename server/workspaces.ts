@@ -4,9 +4,18 @@ import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { WorkspaceOption } from '../shared/api.ts';
 import { sorted } from '../shared/array.ts';
-import { array, HttpError, object, string } from './parse.ts';
+import { z } from 'zod';
+import { HttpError } from './parse.ts';
 import { StrandData } from './strand.ts';
 import { ViewStore } from './views.ts';
+
+const workspaceEntrySchema = z
+  .object({
+    config_dir: z.string(),
+    state: z.string(),
+  })
+  .loose();
+const workspaceListSchema = z.compile(z.array(workspaceEntrySchema), { strict: true });
 
 const exec = promisify(execFile);
 
@@ -25,12 +34,13 @@ function option(path: string, status: WorkspaceOption['status']): WorkspaceOptio
 
 /** The registry's config_dir is the canonical workspace selection, not its mutable weaver ID. */
 export function parseWorkspaces(value: unknown, defaultPath: string): WorkspaceOption[] {
+  const parsed = workspaceListSchema.safeParse(value);
+  if (!parsed.success) throw new Error('weavers must be an array');
   const byPath = new Map<string, WorkspaceOption>();
-  for (const entry of array(value, 'weavers')) {
-    const row = object(entry, 'weaver');
-    const path = string(row['config_dir'], 'weaver.config_dir');
+  for (const row of parsed.data) {
+    const path = row.config_dir;
     if (!isAbsolute(path)) throw new Error('weaver.config_dir must be an absolute path');
-    const state = string(row['state'], 'weaver.state');
+    const state = row.state;
     const canonicalPath = resolve(path);
     byPath.set(canonicalPath, option(canonicalPath, state === 'running' ? 'running' : 'offline'));
   }
