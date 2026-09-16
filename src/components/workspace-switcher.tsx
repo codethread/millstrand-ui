@@ -4,7 +4,7 @@ import { Check, ChevronDown, RefreshCw, Search } from 'lucide-react';
 import type { Board, WorkspaceOption } from '../../shared/api';
 import { workspaceReaderOptions } from '../lib/api/workspaces';
 import { matchingWorkspaces, selectedWorkspace } from '../lib/workspaces';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
@@ -82,10 +82,10 @@ function WorkspaceOptions({
 }
 
 export function WorkspaceSwitcher({ workspace }: { workspace: Board['workspace'] | null }) {
-  const nav = useDashboardNavigation();
+  const { selectWorkspace } = useDashboardActions();
+  const workspaceId = useWorkspaceId();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const workspaceId = nav.workspace;
   const fallbackPath = workspace?.path ?? null;
   const select = useCallback(
     (options: WorkspaceOption[]) => selectedWorkspace(options, workspaceId, fallbackPath),
@@ -122,7 +122,7 @@ export function WorkspaceSwitcher({ workspace }: { workspace: Board['workspace']
           onSelect={(id) => {
             setOpen(false);
             setSearch('');
-            nav.selectWorkspace(id);
+            selectWorkspace(id);
           }}
         />
         <p className="workspace-menu-hint">Local weavers · selection stays in this browser</p>

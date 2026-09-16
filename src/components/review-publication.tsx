@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PublishReview, ReviewComments } from '../../shared/review-comments';
 import { sendReviewBlock } from '../lib/review-publication';
 import { usePublishReview, useReviewMutationPending } from '../hooks/use-review-comments';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useWorkspaceId } from '../lib/navigation';
 import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
 import { Button } from './ui/button';
 
@@ -15,7 +15,7 @@ export function ReviewPublication({
   refreshing: boolean;
   readError: boolean;
 }) {
-  const { workspace } = useDashboardNavigation();
+  const workspace = useWorkspaceId();
   const store = useReviewCommentStore();
   const loadDraft = store.load;
   const mutation = usePublishReview(snapshot.review.id);

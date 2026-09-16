@@ -3,7 +3,13 @@ import { reviewStages, type ReviewDetail, type ReviewSummary } from '../../share
 import { useAgents } from '../hooks/use-agents';
 import { useReview, useReviews } from '../hooks/use-reviews';
 import { formatDate } from '../lib/board';
-import { useDashboardNavigation } from '../lib/navigation';
+import {
+  useDashboardActions,
+  useReviewQuery,
+  useReviewScope,
+  useReviewStage,
+  useSelectedReview,
+} from '../lib/navigation';
 import { reviewInInbox, reviewLabel, reviewPromptTarget, selectReviews } from '../lib/reviews';
 import { cn } from '../lib/utils';
 import { Markdown } from './markdown';
@@ -14,7 +20,9 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 
 export function ReviewSearchControls() {
-  const nav = useDashboardNavigation();
+  const reviewQuery = useReviewQuery();
+  const reviewStage = useReviewStage();
+  const { setReviewQuery, setReviewStage } = useDashboardActions();
   return (
     <div className="toolbar-actions">
       <div className="search-field">
@@ -23,11 +31,11 @@ export function ReviewSearchControls() {
           id="review-search"
           aria-label="Search reviews"
           placeholder="MR, repository, reviewer…"
-          value={nav.reviewQuery}
-          onChange={(event) => nav.setReviewQuery(event.target.value)}
+          value={reviewQuery}
+          onChange={(event) => setReviewQuery(event.target.value)}
         />
-        {nav.reviewQuery && (
-          <button aria-label="Clear review search" onClick={() => nav.setReviewQuery('')}>
+        {reviewQuery && (
+          <button aria-label="Clear review search" onClick={() => setReviewQuery('')}>
             <X className="size-3" />
           </button>
         )}
@@ -35,9 +43,9 @@ export function ReviewSearchControls() {
       <select
         aria-label="Review stage"
         className="h-8 rounded-md border border-border bg-background px-2 text-xs"
-        value={nav.reviewStage ?? ''}
+        value={reviewStage ?? ''}
         onChange={(event) =>
-          nav.setReviewStage(reviewStages.find((stage) => stage === event.target.value) ?? null)
+          setReviewStage(reviewStages.find((stage) => stage === event.target.value) ?? null)
         }
       >
         <option value="">Every stage</option>
@@ -69,7 +77,7 @@ function ReviewStatus({ review }: { review: ReviewSummary }) {
 }
 function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
   const promptTarget = reviewPromptTarget(detail);
-  const nav = useDashboardNavigation();
+  const { openAgentRun, openReview } = useDashboardActions();
   const agents = useAgents();
   return (
     <>
@@ -172,7 +180,7 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            if (seat.runId) nav.openAgentRun(identity.id, seat.runId);
+                            if (seat.runId) openAgentRun(identity.id, seat.runId);
                           }}
                         >
                           <Bot />
@@ -223,7 +231,7 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
               <button
                 key={review.id}
                 className="flex w-full flex-wrap items-center gap-2 rounded-md border border-border p-3 text-left text-xs hover:bg-muted"
-                onClick={() => nav.openReview(review.id)}
+                onClick={() => openReview(review.id)}
               >
                 <code>{review.mr.sha?.slice(0, 12) ?? review.id}</code>
                 <span>{formatDate(review.createdAt)}</span>
@@ -259,11 +267,11 @@ function ReviewEvidence({ detail }: { detail: ReviewDetail }) {
 }
 function SelectedReview({ id }: { id: string }) {
   const query = useReview(id);
-  const nav = useDashboardNavigation();
+  const { closeReview } = useDashboardActions();
   return (
     <article className="min-w-0 flex-1 overflow-y-auto bg-background" aria-label="Selected review">
       <div className="sticky top-0 z-10 flex items-center border-b border-border bg-background/95 px-4 py-2">
-        <Button variant="ghost" size="sm" onClick={nav.closeReview}>
+        <Button variant="ghost" size="sm" onClick={closeReview}>
           <ArrowLeft />
           Back to reviews
         </Button>
@@ -291,7 +299,11 @@ function SelectedReview({ id }: { id: string }) {
 }
 export function ReviewsView() {
   const query = useReviews();
-  const nav = useDashboardNavigation();
+  const selectedReview = useSelectedReview();
+  const reviewQuery = useReviewQuery();
+  const reviewScope = useReviewScope();
+  const reviewStage = useReviewStage();
+  const { openReview, setReviewScope } = useDashboardActions();
   const data = query.data;
   if (!data && query.error)
     return (
@@ -302,7 +314,7 @@ export function ReviewsView() {
             Retry
           </Button>
         </div>
-        {nav.review && <SelectedReview key={nav.review} id={nav.review} />}
+        {selectedReview && <SelectedReview key={selectedReview} id={selectedReview} />}
       </div>
     );
   if (data?.kind === 'unsupported')
@@ -314,7 +326,7 @@ export function ReviewsView() {
       </div>
     );
   const all = data?.kind === 'available' ? data.reviews : [];
-  const reviews = selectReviews(all, nav.reviewScope, nav.reviewStage, nav.reviewQuery);
+  const reviews = selectReviews(all, reviewScope, reviewStage, reviewQuery);
   return (
     <div className="flex h-full min-h-0 flex-col">
       {query.error && (
@@ -335,7 +347,7 @@ export function ReviewsView() {
           <div
             className={cn(
               'flex min-h-0 w-full shrink-0 flex-col border-r border-border md:w-80 lg:w-96',
-              nav.review && 'hidden md:flex',
+              selectedReview && 'hidden md:flex',
             )}
           >
             <div className="flex items-center gap-2 border-b border-border p-3">
@@ -344,12 +356,12 @@ export function ReviewsView() {
                   key={scope}
                   className={cn(
                     'rounded-md px-3 py-1.5 text-xs font-medium',
-                    nav.reviewScope === scope
+                    reviewScope === scope
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:bg-muted',
                   )}
-                  aria-pressed={nav.reviewScope === scope}
-                  onClick={() => nav.setReviewScope(scope)}
+                  aria-pressed={reviewScope === scope}
+                  onClick={() => setReviewScope(scope)}
                 >
                   {scope === 'inbox' ? 'Inbox' : 'All reviews'}{' '}
                   <span className="ml-1 opacity-70">
@@ -362,11 +374,11 @@ export function ReviewsView() {
               {reviews.map((review) => (
                 <button
                   key={review.id}
-                  onClick={() => nav.openReview(review.id)}
-                  aria-pressed={nav.review === review.id}
+                  onClick={() => openReview(review.id)}
+                  aria-pressed={selectedReview === review.id}
                   className={cn(
                     'block w-full border-b border-border p-4 text-left hover:bg-muted/50',
-                    nav.review === review.id && 'bg-muted',
+                    selectedReview === review.id && 'bg-muted',
                   )}
                 >
                   <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -397,16 +409,16 @@ export function ReviewsView() {
                 <div className="p-7 text-center">
                   <GitPullRequest className="mx-auto mb-3 size-7 text-muted-foreground" />
                   <h3 className="text-sm font-medium">
-                    {nav.reviewQuery || nav.reviewStage
+                    {reviewQuery || reviewStage
                       ? 'No matching reviews'
-                      : nav.reviewScope === 'inbox'
+                      : reviewScope === 'inbox'
                         ? 'Your review inbox is clear'
                         : 'No reviews yet'}
                   </h3>
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    {nav.reviewQuery || nav.reviewStage
+                    {reviewQuery || reviewStage
                       ? 'Try another search or stage.'
-                      : nav.reviewScope === 'inbox'
+                      : reviewScope === 'inbox'
                         ? 'Reviews awaiting a local decision appear here, including outdated revisions. Browse all reviews for completed and older revisions.'
                         : 'Reviews created through strand will appear here.'}
                   </p>
@@ -414,8 +426,8 @@ export function ReviewsView() {
               )}
             </div>
           </div>
-          {nav.review ? (
-            <SelectedReview key={nav.review} id={nav.review} />
+          {selectedReview ? (
+            <SelectedReview key={selectedReview} id={selectedReview} />
           ) : (
             <div className="hidden min-w-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center md:flex">
               <GitPullRequest className="size-9 text-muted-foreground/60" />

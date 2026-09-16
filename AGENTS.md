@@ -28,17 +28,20 @@ areas allow targeted edits.
   functions under `src/lib`. Components render data and delegate actions.
 - Keep styles in Tailwind and the shared theme; use the shadcn/Radix primitives
   under `src/components/ui` for accessible controls and overlays.
-- Import concrete domain options from `src/lib/api/` and Router composition from
-  `src/hooks/use-*`; no catch-all API barrel. The checked [module map and data
+- Import concrete domain options from `src/lib/api/`, workspace query composition
+  from `src/hooks/use-*`, and Router selectors/actions from `src/lib/navigation.ts`;
+  no catch-all API barrel. The checked [module map and data
   contract](docs/architecture.md) lists every key, endpoint and mutation settlement.
-- Declare a poll owner before adding cache readers. The working pilot is
-  `src/components/workspace-discovery.tsx` plus `workspace-switcher.tsx`: readers
-  share keys with `enabled: false` and `refetchInterval: false`, using stable
-  `select` projections; health/error consumers remain explicit. Do not remove
-  existing surface poll owners until their readers still have an active owner.
+- Declare a poll owner before adding cache readers. Discovery is owned by
+  `workspace-discovery.tsx`; selected-workspace board/agent/review/view freshness is
+  owned by `workspace-resource-polls.tsx` across every workspace mode. Readers share
+  those keys with `enabled: false` and `refetchInterval: false`; health/error consumers
+  remain explicit. Do not call the exported `use*Poll` hooks anywhere else.
 - Select nested Query content and relevant Zustand values/actions, not whole
-  snapshots/stores. Pure projections live in existing domain files under `src/lib`.
-  Keep shared leaves such as `src/components/markdown.tsx` independent of pages.
+  snapshots/stores. Shell readers use the concrete projection hooks in `src/hooks`;
+  status readers separately select `fetchedAt` and Query health. Pure projections
+  live in existing domain files under `src/lib`. Keep shared leaves such as
+  `src/components/markdown.tsx` independent of pages.
 - Mutation options own workspace-scoped cache effects; hooks own Router reactions.
   Preserve awaited settlement versus background invalidation (see
   `src/lib/api/cards.ts` and `src/hooks/use-cards.ts`). Keep the single QueryClient

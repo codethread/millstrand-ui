@@ -1,4 +1,9 @@
-import type { ReviewScope, ReviewStage, ReviewSummary } from '../../shared/reviews';
+import type {
+  ReviewDirectory,
+  ReviewScope,
+  ReviewStage,
+  ReviewSummary,
+} from '../../shared/reviews';
 import { sorted } from '../../shared/array';
 import type { PromptTarget } from '../agent-prompt-store';
 
@@ -11,6 +16,11 @@ export function reviewPromptTarget(review: ReviewSummary): PromptTarget | null {
 export function reviewInInbox(review: ReviewSummary): boolean {
   return review.state === 'active' && review.decision === 'pending';
 }
+
+export function reviewInboxCount(directory: ReviewDirectory): number | null {
+  return directory.kind === 'available' ? directory.reviews.filter(reviewInInbox).length : null;
+}
+
 export function reviewLabel(review: ReviewSummary): string {
   if (review.decision === 'done') return 'Done';
   if (review.decision === 'dismissed') return 'Dismissed';

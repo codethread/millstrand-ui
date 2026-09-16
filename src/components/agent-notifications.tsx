@@ -1,20 +1,21 @@
 import { useState } from 'react';
 import { Bot } from 'lucide-react';
 import { useAgentPromptStore } from '../agent-prompt-store';
-import { useAgents } from '../hooks/use-agents';
+import { useAgentIdentities } from '../hooks/use-agents';
 import { promptedRuns } from '../lib/agent-notifications';
 import { runLabel } from '../lib/agents';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 export function AgentNotifications() {
-  const query = useAgents();
-  const nav = useDashboardNavigation();
+  const query = useAgentIdentities();
+  const workspace = useWorkspaceId();
+  const { openAgentRun, setMode } = useDashboardActions();
   const receipts = useAgentPromptStore((s) => s.receipts);
   const persistenceError = useAgentPromptStore((s) => s.persistenceError);
   const [open, setOpen] = useState(false);
-  const runs = promptedRuns(query.data?.identities ?? [], receipts[nav.workspace ?? ''] ?? {});
+  const runs = promptedRuns(query.data ?? [], receipts[workspace ?? ''] ?? {});
   const active = runs.filter(({ run }) => run.status === 'ready' || run.status === 'running');
   const unread = runs.filter((item) => item.unread);
   const items = [...unread, ...runs.filter((item) => !item.unread)].slice(0, 20);
@@ -67,7 +68,7 @@ export function AgentNotifications() {
               className="w-full rounded-md p-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
               onClick={() => {
                 setOpen(false);
-                nav.openAgentRun(identity, run.id);
+                openAgentRun(identity, run.id);
               }}
             >
               <span className="flex items-center gap-2 text-xs font-medium">
@@ -86,7 +87,7 @@ export function AgentNotifications() {
           variant="outline"
           onClick={() => {
             setOpen(false);
-            nav.setMode('agents');
+            setMode('agents');
           }}
         >
           All agents

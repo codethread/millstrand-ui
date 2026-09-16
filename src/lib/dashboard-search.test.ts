@@ -4,8 +4,10 @@ import {
   manualFilterSearch,
   parseDashboardSearch,
   pinnableWorkspaceId,
+  savedViewSearch,
   workspaceActivityDestination,
   workspaceDestination,
+  workspaceViewSearch,
 } from './dashboard-search';
 
 describe('shareable dashboard navigation', () => {
@@ -119,6 +121,28 @@ describe('shareable dashboard navigation', () => {
       activeViewId: null,
       graphRoot: null,
       mode: 'graph',
+    });
+  });
+
+  it('installs saved and built-in view snapshots without retaining surface-only state', () => {
+    const search = parseDashboardSearch({
+      mode: 'reviews',
+      activeViewId: 'old-view',
+      graphRoot: 'old-root',
+    });
+    const filter = { ...search.filter, query: 'platform' };
+
+    expect(savedViewSearch(search, { id: 'platform', name: 'Platform', filter })).toEqual({
+      filter,
+      activeViewId: 'platform',
+      graphRoot: null,
+      mode: 'board',
+    });
+    expect(workspaceViewSearch({ ...search, mode: 'agents' }, 'review')).toMatchObject({
+      activeViewId: null,
+      graphRoot: null,
+      mode: 'board',
+      filter: { lanes: ['in_review'] },
     });
   });
 

@@ -3,7 +3,7 @@ import { MessageSquare, Send } from 'lucide-react';
 import type { WorkspaceOption } from '../../shared/api';
 import { useAgentPromptStore, type PromptTarget } from '../agent-prompt-store';
 import { useAgentOptions, usePromptAgent } from '../hooks/use-agents';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
@@ -90,7 +90,7 @@ function AgentChoice({
 
 export function PromptAgentButton({ target }: { target: PromptTarget }) {
   const open = useAgentPromptStore((s) => s.open);
-  const { workspace } = useDashboardNavigation();
+  const workspace = useWorkspaceId();
   return (
     <Button
       variant="outline"
@@ -109,15 +109,15 @@ export function PromptAgentButton({ target }: { target: PromptTarget }) {
 
 export function AgentPromptDialog() {
   const composer = useAgentPromptStore((s) => s.composer);
-  const nav = useDashboardNavigation();
-  if (composer.kind === 'closed' || nav.workspace === null) return null;
-  return <ComposePrompt key={`${nav.workspace}:${composer.target.id}`} workspace={nav.workspace} />;
+  const workspace = useWorkspaceId();
+  if (composer.kind === 'closed' || workspace === null) return null;
+  return <ComposePrompt key={`${workspace}:${composer.target.id}`} workspace={workspace} />;
 }
 
 function ComposePrompt({ workspace }: { workspace: string }) {
   const s = useAgentPromptStore();
   const composer = s.composer;
-  const nav = useDashboardNavigation();
+  const { openAgentRun } = useDashboardActions();
   const options = useAgentOptions(workspace);
   const alias = s.aliases[workspace] ?? 'tui';
   const mutation = usePromptAgent(composer.kind === 'composing' ? composer.target.cardId : '');
@@ -170,7 +170,7 @@ function ComposePrompt({ workspace }: { workspace: string }) {
               {
                 onSuccess: (reply) => {
                   s.close();
-                  nav.openAgentRun(reply.identity, reply.id);
+                  openAgentRun(reply.identity, reply.id);
                 },
               },
             );

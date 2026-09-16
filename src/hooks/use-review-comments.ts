@@ -5,12 +5,13 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { agentQueryOptions, agentReplyQueryOptions } from '../lib/api/agents';
+import { agentReplyQueryOptions } from '../lib/api/agents';
 import {
   curateReviewMutationOptions,
   reviewCommentsQueryOptions,
   reviewPublishMutationOptions,
 } from '../lib/api/review-comments';
+import { useAgents } from './use-agents';
 import { useWorkspace } from './use-workspace';
 
 export function useReviewComments(id: string) {
@@ -19,7 +20,7 @@ export function useReviewComments(id: string) {
 
 export function useReviewProposals(reviewId: string) {
   const workspace = useWorkspace();
-  const agents = useQuery(agentQueryOptions(workspace));
+  const agents = useAgents();
   const ids = [
     ...new Set(
       agents.data?.identities.flatMap((agent) =>

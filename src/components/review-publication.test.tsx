@@ -10,7 +10,7 @@ const mutation = vi.hoisted(() => ({
   data: undefined,
   error: null as Error | null,
 }));
-vi.mock('../lib/navigation', () => ({ useDashboardNavigation: () => ({ workspace: 'weaver' }) }));
+vi.mock('../lib/navigation', () => ({ useWorkspaceId: () => 'weaver' }));
 vi.mock('../hooks/use-review-comments', () => ({
   usePublishReview: () => mutation,
   useReviewMutationPending: () => false,

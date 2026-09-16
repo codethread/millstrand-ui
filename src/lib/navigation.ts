@@ -6,42 +6,107 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { useDashboardStore } from '../store';
 import { useAgentPromptStore } from '../agent-prompt-store';
 import type { CardType, Lane, Priority, SavedView, ViewFilter } from '../../shared/api';
-import { emptyFilter, workspaceFilter, type WorkspaceView } from './board';
+import { emptyFilter, type WorkspaceView } from './board';
 import {
   manualFilterSearch,
+  parseDashboardSearch,
+  savedViewSearch,
   workspaceDestination,
+  workspaceViewSearch,
   type DashboardSearch,
   type DetailTab,
   type Presentation,
 } from './dashboard-search';
 
+const selectMode = (search: DashboardSearch) => search.mode;
+const selectWorkspace = (search: DashboardSearch) => search.workspace;
+const selectIssue = (search: DashboardSearch) => search.issue;
+const selectAgent = (search: DashboardSearch) => search.agent;
+const selectAgentRun = (search: DashboardSearch) => search.agentRun;
+const selectReview = (search: DashboardSearch) => search.review;
+const selectReviewQuery = (search: DashboardSearch) => search.reviewQuery;
+const selectReviewScope = (search: DashboardSearch) => search.reviewScope;
+const selectReviewStage = (search: DashboardSearch) => search.reviewStage;
+const selectFilter = (search: DashboardSearch) => search.filter;
+const selectActiveViewId = (search: DashboardSearch) => search.activeViewId;
+const selectGraphRoot = (search: DashboardSearch) => search.graphRoot;
+const selectDetailTab = (search: DashboardSearch) => search.detailTab;
+const selectAgentQuery = (search: DashboardSearch) => search.agentQuery;
+const selectActiveAgentsOnly = (search: DashboardSearch) => search.activeAgentsOnly;
+
+export function useDashboardMode() {
+  return useSearch({ from: '/', select: selectMode });
+}
+export function useWorkspaceId() {
+  return useSearch({ from: '/', select: selectWorkspace });
+}
+export function useSelectedIssue() {
+  return useSearch({ from: '/', select: selectIssue });
+}
+export function useSelectedAgent() {
+  return useSearch({ from: '/', select: selectAgent });
+}
+export function useSelectedAgentRun() {
+  return useSearch({ from: '/', select: selectAgentRun });
+}
+export function useSelectedReview() {
+  return useSearch({ from: '/', select: selectReview });
+}
+export function useReviewQuery() {
+  return useSearch({ from: '/', select: selectReviewQuery });
+}
+export function useReviewScope() {
+  return useSearch({ from: '/', select: selectReviewScope });
+}
+export function useReviewStage() {
+  return useSearch({ from: '/', select: selectReviewStage });
+}
+export function useIssueFilter() {
+  return useSearch({ from: '/', select: selectFilter });
+}
+export function useActiveViewId() {
+  return useSearch({ from: '/', select: selectActiveViewId });
+}
+export function useGraphRoot() {
+  return useSearch({ from: '/', select: selectGraphRoot });
+}
+export function useDetailTab() {
+  return useSearch({ from: '/', select: selectDetailTab });
+}
+export function useAgentQuery() {
+  return useSearch({ from: '/', select: selectAgentQuery });
+}
+export function useActiveAgentsOnly() {
+  return useSearch({ from: '/', select: selectActiveAgentsOnly });
+}
+
 function toggle<T>(values: T[], value: T): T[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
 }
 
-export function useDashboardNavigation() {
-  const search = useSearch({ from: '/' });
+/** Navigation commands never subscribe to URL state. Every state-dependent command
+ * derives its next value from the Router callback's current search snapshot. */
+export function useDashboardActions() {
   const navigate = useNavigate({ from: '/' });
   function update(change: Partial<DashboardSearch>, replace = false) {
-    void navigate({ search: (old) => ({ ...old, ...change }), replace });
+    void navigate({ search: (current) => ({ ...current, ...change }), replace });
   }
-  function filter(change: (current: ViewFilter) => ViewFilter, replace = false) {
-    update(manualFilterSearch(search, change(search.filter)), replace);
-  }
-  function selectView(view: SavedView | null) {
-    useDashboardStore.getState().setSidebarOpen(false);
-    update({
-      filter: view?.filter ?? emptyFilter(),
-      activeViewId: view?.id ?? null,
-      graphRoot: null,
-      mode:
-        search.mode === 'agents' || search.mode === 'reviews' || search.mode === 'overview'
-          ? 'board'
-          : search.mode,
+  function updateCurrent(
+    change: (current: DashboardSearch) => Partial<DashboardSearch>,
+    replace = false,
+  ) {
+    void navigate({
+      search: (current) => {
+        const search = parseDashboardSearch(current);
+        return { ...search, ...change(search) };
+      },
+      replace,
     });
   }
+  function filter(change: (current: ViewFilter) => ViewFilter, replace = false) {
+    updateCurrent((current) => manualFilterSearch(current, change(current.filter)), replace);
+  }
   return {
-    ...search,
     openReview: (review: string) => update({ mode: 'reviews', review, issue: null, agent: null }),
     closeReview: () => update({ review: null }),
     setReviewQuery: (reviewQuery: string) => update({ reviewQuery }, true),
@@ -82,38 +147,39 @@ export function useDashboardNavigation() {
     setDetailTab: (detailTab: DetailTab) => update({ detailTab }),
     setAgentQuery: (agentQuery: string) => update({ agentQuery }, true),
     resetAgentFilters: () => update({ agentQuery: '', activeAgentsOnly: false }),
-    toggleActiveAgents: () => update({ activeAgentsOnly: !search.activeAgentsOnly }),
-    setQuery: (query: string) => filter((f) => ({ ...f, query }), true),
-    toggleClosed: () => filter((f) => ({ ...f, includeClosed: !f.includeClosed })),
+    toggleActiveAgents: () =>
+      updateCurrent((current) => ({ activeAgentsOnly: !current.activeAgentsOnly })),
+    setQuery: (query: string) => filter((current) => ({ ...current, query }), true),
+    toggleClosed: () =>
+      filter((current) => ({ ...current, includeClosed: !current.includeClosed })),
     toggleLane: (lane: Lane) =>
-      filter((f) => ({
-        ...f,
-        lanes: toggle(f.lanes, lane),
-        includeClosed: lane === 'closed' ? true : f.includeClosed,
+      filter((current) => ({
+        ...current,
+        lanes: toggle(current.lanes, lane),
+        includeClosed: lane === 'closed' ? true : current.includeClosed,
       })),
-    toggleType: (type: CardType) => filter((f) => ({ ...f, types: toggle(f.types, type) })),
+    toggleType: (type: CardType) =>
+      filter((current) => ({ ...current, types: toggle(current.types, type) })),
     togglePriority: (priority: Priority) =>
-      filter((f) => ({ ...f, priorities: toggle(f.priorities, priority) })),
+      filter((current) => ({ ...current, priorities: toggle(current.priorities, priority) })),
     toggleLabel: (label: string) =>
-      filter((f) => {
-        const terms = { ...f.terms };
+      filter((current) => {
+        const terms = { ...current.terms };
         if (terms[label]) delete terms[label];
         else terms[label] = 'include';
-        return { ...f, terms };
+        return { ...current, terms };
       }),
     resetFilters: () => update({ filter: emptyFilter(), activeViewId: null, graphRoot: null }),
     selectWorkspaceView: (view: WorkspaceView) => {
       useDashboardStore.getState().setSidebarOpen(false);
-      update({
-        filter: workspaceFilter(view),
-        activeViewId: null,
-        graphRoot: null,
-        mode: search.mode === 'agents' || search.mode === 'reviews' ? 'board' : search.mode,
-      });
+      updateCurrent((current) => workspaceViewSearch(current, view));
     },
-    selectView,
-    editView: (view: SavedView | null) =>
-      useDashboardStore.getState().editView(view, search.filter),
+    selectView: (view: SavedView | null) => {
+      useDashboardStore.getState().setSidebarOpen(false);
+      updateCurrent((current) => savedViewSearch(current, view));
+    },
+    editView: (view: SavedView | null, snapshot: ViewFilter) =>
+      useDashboardStore.getState().editView(view, snapshot),
   };
 }
 
@@ -124,11 +190,14 @@ function hotkeys(key: string): string[] {
 }
 
 export function useDashboardKeys() {
-  const { setMode, issue, agent, mode } = useDashboardNavigation();
+  const { setMode } = useDashboardActions();
+  const issue = useSelectedIssue();
+  const agent = useSelectedAgent();
+  const mode = useDashboardMode();
   const client = useQueryClient();
-  const keys = useDashboardStore((s) => s.shortcuts);
-  const overlay = useDashboardStore((s) => s.overlay.kind);
-  const composer = useAgentPromptStore((s) => s.composer.kind);
+  const keys = useDashboardStore((state) => state.shortcuts);
+  const overlay = useDashboardStore((state) => state.overlay.kind);
+  const composer = useAgentPromptStore((state) => state.composer.kind);
   const enabled = overlay === 'closed' && composer === 'closed' && issue === null && agent === null;
   const workspaceEnabled = enabled && mode !== 'overview';
   useHotkeys(

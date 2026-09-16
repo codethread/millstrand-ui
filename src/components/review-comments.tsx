@@ -7,7 +7,7 @@ import {
   useReviewProposals,
   useReviewMutationPending,
 } from '../hooks/use-review-comments';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useWorkspaceId } from '../lib/navigation';
 import { useAgentPromptStore } from '../agent-prompt-store';
 import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
 import {
@@ -29,7 +29,7 @@ function Comment({
   comment: ReviewComment;
   replies: AgentReply[];
 }) {
-  const nav = useDashboardNavigation();
+  const workspace = useWorkspaceId();
   const mutation = useCurateReview(snapshot.review.id);
   const publishing = useReviewMutationPending(snapshot.review.id, 'publish');
   const store = useReviewCommentStore();
@@ -44,7 +44,7 @@ function Comment({
     }
   }, [focus, focusComment, snapshot.review.id, comment.id]);
   const key = reviewDraftKey(
-    nav.workspace ?? '',
+    workspace ?? '',
     snapshot.review.id,
     snapshot.review.revision,
     comment.id,
@@ -91,11 +91,11 @@ function Comment({
         }
         errorText={mutation.error?.message ?? comment.publication.error}
         busy={mutation.isPending}
-        disabled={!mutable || nav.workspace === null}
+        disabled={!mutable || workspace === null}
         onInclude={() => choose('included')}
         onDismiss={() => choose('dismissed')}
         onPromptAgent={() => {
-          if (nav.workspace)
+          if (workspace)
             openPrompt(
               {
                 kind: 'review-comment',
@@ -109,7 +109,7 @@ function Comment({
                 },
               },
               null,
-              nav.workspace,
+              workspace,
             );
         }}
         proposalEditor={

@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import {
   useIsMutating,
   useMutation,
@@ -5,6 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import type { Board, ViewFilter } from '../../shared/api';
 import { useNavigate } from '@tanstack/react-router';
 import {
   boardQueryOptions,
@@ -14,10 +16,97 @@ import {
   labelsMutationOptions,
   taskNotesQueryOptions,
 } from '../lib/api/cards';
+import {
+  boardSidebarContent,
+  filteredCardCount,
+  issueBoardContent,
+  savedViewBoardContent,
+} from '../lib/board';
 import { useWorkspace } from './use-workspace';
 
-export function useBoard() {
+const selectBoardWorkspace = (board: Board) => board.workspace;
+const selectBoardFetchedAt = (board: Board) => board.fetchedAt;
+const selectBoardSnapshot = () => true;
+const selectBoardSidebarContent = (board: Board) => boardSidebarContent(board);
+
+export function useBoardPoll() {
   return useQuery(boardQueryOptions(useWorkspace()));
+}
+
+/** Cache reader for board internals that consume the full response.
+ * Shell consumers use the concrete projections below. */
+export function useBoard() {
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+  });
+}
+
+export function useBoardWorkspace() {
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select: selectBoardWorkspace,
+  });
+}
+
+export function useBoardSnapshot() {
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select: selectBoardSnapshot,
+  });
+}
+
+export function useBoardStatus() {
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select: selectBoardFetchedAt,
+  });
+}
+
+export function useBoardSidebar() {
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select: selectBoardSidebarContent,
+  });
+}
+
+export function useIssueBoard(filter: ViewFilter) {
+  const select = useCallback((board: Board) => issueBoardContent(board, filter), [filter]);
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select,
+  });
+}
+
+export function useFilteredCardCount(filter: ViewFilter) {
+  const select = useCallback((board: Board) => filteredCardCount(board, filter), [filter]);
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select,
+  });
+}
+
+export function useSavedViewBoard(filter: ViewFilter) {
+  const select = useCallback((board: Board) => savedViewBoardContent(board, filter), [filter]);
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select,
+  });
 }
 
 export function useCard(id: string) {
