@@ -1,10 +1,11 @@
 import { Check, Keyboard, Minus, RotateCcw, Trash2 } from 'lucide-react';
+import { sorted } from '../../shared/array';
 import type { Board, SavedView } from '../../shared/api';
 import { useDashboardNavigation } from '../lib/navigation';
 import { useSaveViews } from '../lib/api';
 import { selectCards } from '../lib/board';
 import { cn } from '../lib/utils';
-import { shortcutLabels, useDashboardStore, type ShortcutAction } from '../store';
+import { shortcutActions, shortcutLabels, useDashboardStore } from '../store';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import {
@@ -84,10 +85,10 @@ export function DashboardOverlays({
                 Save these filters to this workspace. Open the same view from any device.
               </DialogDescription>
             </DialogHeader>
-            <label className="form-label">
+            <label className="form-label" htmlFor="view-name">
               View name
               <Input
-                autoFocus
+                id="view-name"
                 placeholder="e.g. Platform work"
                 value={overlay.name}
                 onChange={(event) => s.renameDraft(event.target.value)}
@@ -124,48 +125,46 @@ export function DashboardOverlays({
               </div>
             </div>
             <div className="view-label-rules">
-              {[
+              {sorted([
                 ...new Set([
                   ...board.labels.map(({ label }) => label),
                   ...Object.keys(overlay.filter.terms),
                 ]),
-              ]
-                .sort()
-                .map((label) => (
-                  <div className="label-rule" key={label}>
-                    <LabelPill label={label} />
-                    <div>
-                      <button
-                        aria-label={`Include ${label}`}
-                        aria-pressed={overlay.filter.terms[label] === 'include'}
-                        className={cn(overlay.filter.terms[label] === 'include' && 'include')}
-                        onClick={() =>
-                          s.setDraftTerm(
-                            label,
-                            overlay.filter.terms[label] === 'include' ? null : 'include',
-                          )
-                        }
-                      >
-                        <Check className="size-3" />
-                        Include
-                      </button>
-                      <button
-                        aria-label={`Exclude ${label}`}
-                        aria-pressed={overlay.filter.terms[label] === 'exclude'}
-                        className={cn(overlay.filter.terms[label] === 'exclude' && 'exclude')}
-                        onClick={() =>
-                          s.setDraftTerm(
-                            label,
-                            overlay.filter.terms[label] === 'exclude' ? null : 'exclude',
-                          )
-                        }
-                      >
-                        <Minus className="size-3" />
-                        Exclude
-                      </button>
-                    </div>
+              ]).map((label) => (
+                <div className="label-rule" key={label}>
+                  <LabelPill label={label} />
+                  <div>
+                    <button
+                      aria-label={`Include ${label}`}
+                      aria-pressed={overlay.filter.terms[label] === 'include'}
+                      className={cn(overlay.filter.terms[label] === 'include' && 'include')}
+                      onClick={() =>
+                        s.setDraftTerm(
+                          label,
+                          overlay.filter.terms[label] === 'include' ? null : 'include',
+                        )
+                      }
+                    >
+                      <Check className="size-3" />
+                      Include
+                    </button>
+                    <button
+                      aria-label={`Exclude ${label}`}
+                      aria-pressed={overlay.filter.terms[label] === 'exclude'}
+                      className={cn(overlay.filter.terms[label] === 'exclude' && 'exclude')}
+                      onClick={() =>
+                        s.setDraftTerm(
+                          label,
+                          overlay.filter.terms[label] === 'exclude' ? null : 'exclude',
+                        )
+                      }
+                    >
+                      <Minus className="size-3" />
+                      Exclude
+                    </button>
                   </div>
-                ))}
+                </div>
+              ))}
             </div>
             <p className="input-hint">
               Excluded labels always stay out, even when matching any label.
@@ -207,7 +206,7 @@ export function DashboardOverlays({
               </DialogDescription>
             </DialogHeader>
             <div className="shortcut-list">
-              {(Object.keys(shortcutLabels) as ShortcutAction[]).map((action) => (
+              {shortcutActions.map((action) => (
                 <label className="shortcut-row" key={action}>
                   <span>{shortcutLabels[action]}</span>
                   <Input

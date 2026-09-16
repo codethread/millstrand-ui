@@ -61,7 +61,7 @@ export function AgentNotifications() {
           </p>
         )}
         <div className="mt-3 space-y-1">
-          {items.map(({ identity, run, unread }) => (
+          {items.map(({ identity, run, unread: isUnread }) => (
             <button
               key={run.id}
               className="w-full rounded-md p-2 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
@@ -72,7 +72,7 @@ export function AgentNotifications() {
             >
               <span className="flex items-center gap-2 text-xs font-medium">
                 {run.alias} · {runLabel(run)}
-                {unread && <span className="ml-auto text-primary">New</span>}
+                {isUnread && <span className="ml-auto text-primary">New</span>}
               </span>
               <span className="mt-1 block break-words text-xs text-muted-foreground">
                 {run.title}

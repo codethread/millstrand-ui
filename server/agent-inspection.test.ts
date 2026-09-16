@@ -26,6 +26,7 @@ const identity = {
   title: 'Identity',
   state: 'active',
   created_at: '2026-09-15 08:00:00',
+  updated_at: '2026-09-15 08:00:00',
   attributes: {
     'identity/session': 'true',
     'identity/id': 'test-agent',
@@ -109,5 +110,5 @@ it('rejects malformed envelopes and malformed domain data rather than claiming n
   exec.mockImplementationOnce(() =>
     result([{ ...identity, attributes: { 'identity/session': 'true' } }]),
   );
-  await expect(new StrandData('/repo/.millstrand').agents()).rejects.toThrow('identity.id');
+  await expect(new StrandData('/repo/.millstrand').agents()).rejects.toThrow('identity/id');
 });

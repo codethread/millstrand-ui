@@ -10,6 +10,7 @@ function agents(status: string, request: string | null = requestId) {
       title: 'Tiger',
       state: 'active',
       created_at: '2026-09-14',
+      updated_at: '2026-09-14',
       attributes: { 'identity/session': 'true', 'identity/id': 'tiger', 'identity/harness': 'pi' },
     },
     ...['prompt-run', 'workflow-run'].map((id) => ({
@@ -17,6 +18,7 @@ function agents(status: string, request: string | null = requestId) {
       title: id,
       state: 'active',
       created_at: '2026-09-14',
+      updated_at: '2026-09-14',
       attributes: {
         'harness/run': 'true',
         'harness/published': 'true',
@@ -40,8 +42,11 @@ describe('UI prompt notifications', () => {
     expect(promptedRuns(agents('running', 'terminal-request'), receipts)).toEqual([]);
     expect(promptedRuns(agents('running'), {})).toEqual([]);
   });
-  it.each(['ready', 'running', 'unknown'])('does not notify for %s runs', (status) => {
+  it.each(['ready', 'running'])('does not notify for %s runs', (status) => {
     expect(promptedRuns(agents(status), receipts)[0]?.unread).toBe(false);
+  });
+  it('rejects a changed upstream run-status contract', () => {
+    expect(() => agents('unknown')).toThrow('harness/status');
   });
   it.each(['stopped', 'failed'])(
     'notifies once for finished %s runs and preserves the exact identity/run destination',

@@ -8,52 +8,16 @@ import type {
   LabelTerm,
   Lane,
   Note,
-  Priority,
   Relation,
   SavedView,
   Task,
   ViewFilter,
   WorkItem,
 } from '../shared/api.ts';
+import { sorted } from '../shared/array.ts';
+import { z } from 'zod';
 
 type ObjectValue = Record<string, JsonValue>;
-
-export class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-export function object(value: unknown, where: string): ObjectValue {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error(`${where} must be an object`);
-  }
-  // This seam only accepts values decoded from JSON, whose leaves are JsonValue.
-  return value as ObjectValue;
-}
-
-export function array(value: unknown, where: string): JsonValue[] {
-  if (!Array.isArray(value)) throw new Error(`${where} must be an array`);
-  return value as JsonValue[];
-}
-
-export function string(value: unknown, where: string): string {
-  if (typeof value !== 'string') throw new Error(`${where} must be a string`);
-  return value;
-}
-
-export function maybeString(value: unknown, where: string): string | null {
-  return value === undefined || value === null ? null : string(value, where);
-}
-
-function oneOf<T extends string>(value: unknown, allowed: readonly T[], where: string): T {
-  const found = allowed.find((item) => item === value);
-  if (found === undefined) throw new Error(`${where} must be one of: ${allowed.join(', ')}`);
-  return found;
-}
 
 const lanes = [
   'refinement',
@@ -66,168 +30,375 @@ const lanes = [
 ] as const;
 const priorities = ['p1', 'p2', 'p3', 'p4'] as const;
 const cardTypes = ['epic', 'feature'] as const;
+const strandStates = ['active', 'closed', 'replaced'] as const;
+const taskStatuses = ['ready', 'doing', 'blocked', 'closed'] as const;
+const relationKinds = ['depends-on', 'depended-on-by'] as const;
+const labelActions = ['add', 'remove'] as const;
+const labelTerms = ['include', 'exclude'] as const;
+
+const laneSchema = z.enum(lanes);
+const prioritySchema = z.enum(priorities);
+const cardTypeSchema = z.enum(cardTypes);
+const strandStateSchema = z.enum(strandStates);
+const taskStatusSchema = z.enum(taskStatuses);
+const relationKindSchema = z.enum(relationKinds);
+const labelActionSchema = z.enum(labelActions);
+const labelTermSchema = z.enum(labelTerms);
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
+    return true;
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return isObject(value) && Object.entries(value).every(([, item]) => isJsonValue(item));
+}
+
+// Zod records intentionally omit an own "__proto__" key while building their
+// output object. Keep generic JSON objects as custom schemas so parsed data
+// retains every JSON key; in particular, attributes must not lose that key.
+const jsonValueSchema = z.custom<JsonValue>(isJsonValue);
+export const jsonObjectSchema = z.custom<Record<string, JsonValue>>(
+  (value): value is Record<string, JsonValue> => isObject(value) && isJsonValue(value),
+);
+const jsonArraySchema = z.compile(z.array(jsonValueSchema), { strict: true });
+const stringSchema = z.compile(z.string(), { strict: true });
+const nullableStringSchema = z.compile(z.string().nullable().optional(), { strict: true });
+
+const noteSchema = z
+  .object({
+    id: z.string(),
+    note: z.string(),
+    at: z.string(),
+    by: z.string().nullable().optional(),
+    kind: z.string().nullable().optional(),
+    truncated: z.boolean().optional(),
+  })
+  .loose();
+const compiledNoteSchema = z.compile(noteSchema, { strict: true });
+
+const cardSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    state: strandStateSchema,
+    attributes: jsonObjectSchema.optional(),
+    lane: z.string().nullable().optional(),
+    labels: z.array(z.string()).optional(),
+    epic: z.string().optional(),
+    type: cardTypeSchema.optional(),
+    priority: prioritySchema.optional(),
+    owner: z.string().optional(),
+    branch: z.string().optional(),
+    worktree: z.string().optional(),
+    source: z.string().optional(),
+    outcome: z.string().optional(),
+    created_at: z.string(),
+    updated_at: z.string().optional(),
+  })
+  .loose();
+const compiledCardSchema = z.compile(cardSchema, { strict: true });
+type CardRow = z.infer<typeof cardSchema>;
+const taskSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    state: strandStateSchema,
+    status: taskStatusSchema,
+    owner: z.string().nullable().optional(),
+    body: z.string().nullable().optional(),
+    'latest-note': noteSchema.optional(),
+  })
+  .loose();
+const compiledTaskSchema = z.compile(taskSchema, { strict: true });
+const workSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    state: strandStateSchema,
+    attributes: jsonObjectSchema,
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
+  })
+  .loose();
+const compiledWorkSchema = z.compile(workSchema, { strict: true });
+const relationSchema = z
+  .object({
+    relation: relationKindSchema,
+    strand: workSchema,
+  })
+  .loose();
+const compiledRelationSchema = z.compile(relationSchema, { strict: true });
+const edgeSchema = z
+  .object({
+    from_strand_id: z.string(),
+    to_strand_id: z.string(),
+  })
+  .loose();
+type EdgeRow = z.infer<typeof edgeSchema>;
+const graphSchema = z
+  .object({
+    'root-id': z.string(),
+    strands: z.array(workSchema),
+    'parent-of-edges': z.array(edgeSchema),
+    'depends-on-edges': z.array(edgeSchema),
+  })
+  .loose();
+const compiledGraphSchema = z.compile(graphSchema, { strict: true });
+const labelSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9][a-z0-9-]*$/);
+const compiledLabelSchema = z.compile(labelSchema, { strict: true });
+
+const labelChangeSchema = z
+  .object({
+    action: labelActionSchema,
+    labels: z.array(z.string()),
+  })
+  .loose();
+const compiledLabelChangeSchema = z.compile(labelChangeSchema, { strict: true });
+const viewFilterSchema = z
+  .object({
+    query: z.string(),
+    mode: z.enum(['and', 'or']),
+    terms: z.record(z.string(), labelTermSchema),
+    lanes: z.array(laneSchema),
+    types: z.array(cardTypeSchema),
+    priorities: z.array(prioritySchema),
+    includeClosed: z.boolean(),
+  })
+  .loose();
+const compiledViewFilterSchema = z.compile(viewFilterSchema, { strict: true });
+const viewSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    filter: viewFilterSchema,
+  })
+  .loose();
+const savedViewsSchema = z.array(viewSchema);
+const compiledSavedViewsSchema = z.compile(savedViewsSchema, { strict: true });
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+function parseSchema<T>(
+  schema: z.ZodType<T>,
+  value: unknown,
+  where: string,
+  message = `${where} is invalid`,
+): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new Error(`${message}: ${z.prettifyError(parsed.error)}`);
+  return parsed.data;
+}
+
+export function object(value: unknown, where: string): ObjectValue {
+  return parseSchema(jsonObjectSchema, value, where, `${where} must be a JSON object`);
+}
+
+export function array(value: unknown, where: string): JsonValue[] {
+  return parseSchema(jsonArraySchema, value, where, `${where} must be a JSON array`);
+}
+
+function jsonObject(value: unknown, where: string): Record<string, JsonValue> {
+  return parseSchema(jsonObjectSchema, value, where, `${where} must be an object`);
+}
+
+export function string(value: unknown, where: string): string {
+  return parseSchema(stringSchema, value, where, `${where} must be a string`);
+}
+
+export function maybeString(value: unknown, where: string): string | null {
+  return parseSchema(nullableStringSchema, value, where, `${where} must be a string`) ?? null;
+}
+
+function enumValue<T extends string>(
+  schema: z.ZodType<T>,
+  value: unknown,
+  allowed: readonly T[],
+  where: string,
+): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new Error(`${where} must be one of: ${allowed.join(', ')}`);
+  return parsed.data;
+}
 
 export function parseCard(value: unknown): Card {
-  const row = object(value, 'card');
-  const attrs = row['attributes'] === undefined ? {} : object(row['attributes'], 'card.attributes');
-  const read = (key: string, attr = key): JsonValue | undefined => row[key] ?? attrs[attr];
-  const state = string(row['state'], 'card.state');
-  const sourceLane = read('lane', 'kanban/lane');
+  const row = parseSchema(compiledCardSchema, value, 'card');
+  const attrs = row.attributes === undefined ? {} : jsonObject(row.attributes, 'card.attributes');
+  const read = (key: keyof CardRow, attr = key): unknown => row[key] ?? attrs[attr];
+  const sourceLane = maybeString(read('lane', 'kanban/lane'), 'card.lane');
   const lane: Lane =
-    state === 'closed' ? 'closed' : (lanes.find((item) => item === sourceLane) ?? 'unknown');
+    row.state === 'closed' ? 'closed' : (lanes.find((item) => item === sourceLane) ?? 'unknown');
   const labels =
-    row['labels'] === undefined
+    row.labels === undefined
       ? Object.entries(attrs)
           .filter(([key, flag]) => key.startsWith('kanban.label/') && flag === 'true')
           .map(([key]) => key.slice('kanban.label/'.length))
-      : array(row['labels'], 'card.labels').map((item) => string(item, 'card.labels item'));
+      : row.labels;
   return {
-    id: string(row['id'], 'card.id'),
-    title: maybeString(row['title'], 'card.title') ?? '(untitled)',
+    id: row.id,
+    title: row.title ?? '(untitled)',
     // These are the spool's documented defaults for cards predating these attributes.
-    type: oneOf(read('type', 'kanban/type') ?? 'feature', cardTypes, 'card.type'),
-    state,
+    type: enumValue(
+      cardTypeSchema,
+      read('type', 'kanban/type') ?? 'feature',
+      cardTypes,
+      'card.type',
+    ),
+    state: row.state,
     lane,
-    priority: oneOf(read('priority', 'kanban/priority') ?? 'p3', priorities, 'card.priority'),
-    epicId: maybeString(row['epic'], 'card.epic'),
+    priority: enumValue(
+      prioritySchema,
+      read('priority', 'kanban/priority') ?? 'p3',
+      priorities,
+      'card.priority',
+    ),
+    epicId: row.epic ?? null,
     owner: maybeString(read('owner'), 'card.owner'),
     branch: maybeString(read('branch'), 'card.branch'),
     worktree: maybeString(read('worktree'), 'card.worktree'),
     source: maybeString(read('source', 'kanban/source'), 'card.source'),
     outcome: maybeString(read('outcome', 'kanban/outcome'), 'card.outcome'),
-    labels: [...new Set(labels)].sort(),
-    createdAt: string(row['created_at'], 'card.created_at'),
-    updatedAt: maybeString(row['updated_at'], 'card.updated_at'),
+    labels: sorted([...new Set(labels)]),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
   };
 }
 
 export function parseNote(value: unknown): Note {
-  const row = object(value, 'note');
+  const row = parseSchema(compiledNoteSchema, value, 'note');
   return {
-    id: string(row['id'], 'note.id'),
-    text: string(row['note'], 'note.note'),
-    at: string(row['at'], 'note.at'),
-    by: maybeString(row['by'], 'note.by'),
-    kind: maybeString(row['kind'], 'note.kind'),
-    truncated: row['truncated'] === true,
+    id: row.id,
+    text: row.note,
+    at: row.at,
+    by: row.by ?? null,
+    kind: row.kind ?? null,
+    truncated: row.truncated === true,
   };
 }
 
 export function parseTask(value: unknown): Task {
-  const row = object(value, 'task');
+  const row = parseSchema(compiledTaskSchema, value, 'task');
   return {
-    id: string(row['id'], 'task.id'),
-    title: maybeString(row['title'], 'task.title') ?? '(untitled)',
-    state: string(row['state'], 'task.state'),
-    status: oneOf(row['status'], ['ready', 'doing', 'blocked', 'closed'], 'task.status'),
-    owner: maybeString(row['owner'], 'task.owner'),
-    body: maybeString(row['body'], 'task.body') ?? '',
+    id: row.id,
+    title: row.title ?? '(untitled)',
+    state: row.state,
+    status: row.status,
+    owner: row.owner ?? null,
+    body: row.body ?? '',
     latestNote: row['latest-note'] === undefined ? null : parseNote(row['latest-note']),
   };
 }
 
 export function parseWork(value: unknown): WorkItem {
-  const row = object(value, 'work');
+  const row = parseSchema(compiledWorkSchema, value, 'work');
   return {
-    id: string(row['id'], 'work.id'),
-    title: maybeString(row['title'], 'work.title') ?? '(untitled)',
-    state: string(row['state'], 'work.state'),
-    attributes: object(row['attributes'], 'work.attributes'),
+    id: row.id,
+    title: row.title ?? '(untitled)',
+    state: row.state,
+    attributes: jsonObject(row.attributes, 'work.attributes'),
     // Compact entity projections (active work and related strands) omit timestamps.
-    createdAt: maybeString(row['created_at'], 'work.created_at'),
-    updatedAt: maybeString(row['updated_at'], 'work.updated_at'),
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null,
   };
 }
 
 export function parseRelation(value: unknown): Relation {
-  const row = object(value, 'relation');
-  const kind = oneOf(row['relation'], ['depends-on', 'depended-on-by'], 'relation.relation');
-  return { kind, item: parseWork(row['strand']) };
+  const row = parseSchema(compiledRelationSchema, value, 'relation');
+  return { kind: row.relation, item: parseWork(row.strand) };
+}
+
+function graphEdges(items: EdgeRow[], kind: GraphEdge['kind']): GraphEdge[] {
+  return items.map((edge) => ({ kind, from: edge.from_strand_id, to: edge.to_strand_id }));
 }
 
 export function parseGraph(value: unknown): CardGraph {
-  const row = object(value, 'graph');
-  const nodes = array(row['strands'], 'graph.strands').map((value): GraphNode => {
-    const work = parseWork(value);
-    const cardType =
-      work.attributes['kanban/type'] ??
-      (work.attributes['kanban/card'] === 'true' ? 'feature' : null);
+  const row = parseSchema(compiledGraphSchema, value, 'graph');
+  const nodes = row.strands.map((item): GraphNode => {
+    const work = parseWork(item);
+    const explicitCardType = maybeString(
+      work.attributes['kanban/type'],
+      'graph strand kanban/type',
+    );
+    const cardMarker = maybeString(work.attributes['kanban/card'], 'graph strand kanban/card');
+    const taskMarker = maybeString(work.attributes['kanban/task'], 'graph strand kanban/task');
+    const cardType = explicitCardType ?? (cardMarker === 'true' ? 'feature' : null);
     const kind =
       cardType === 'epic' || cardType === 'feature'
         ? cardType
-        : work.attributes['kanban/task'] === 'true'
+        : taskMarker === 'true'
           ? 'task'
           : 'work';
     return { ...work, kind };
   });
-  const edges = (key: string, kind: GraphEdge['kind']): GraphEdge[] =>
-    array(row[key], `graph.${key}`).map((value) => {
-      const edge = object(value, 'edge');
-      return {
-        kind,
-        from: string(edge['from_strand_id'], 'edge.from_strand_id'),
-        to: string(edge['to_strand_id'], 'edge.to_strand_id'),
-      };
-    });
   return {
-    rootId: string(row['root-id'], 'graph.root-id'),
+    rootId: row['root-id'],
     nodes,
-    edges: [...edges('parent-of-edges', 'parent-of'), ...edges('depends-on-edges', 'depends-on')],
+    edges: [
+      ...graphEdges(row['parent-of-edges'], 'parent-of'),
+      ...graphEdges(row['depends-on-edges'], 'depends-on'),
+    ],
   };
 }
 
-function label(value: unknown): string {
-  const normalized = string(value, 'label').trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(normalized)) {
-    throw new Error(
-      'Labels must contain lowercase letters, numbers and hyphens, starting with a letter or number.',
-    );
-  }
-  return normalized;
+const labelError =
+  'Labels must contain lowercase letters, numbers and hyphens, starting with a letter or number.';
+
+function label(value: string): string {
+  const parsed = compiledLabelSchema.safeParse(value);
+  if (!parsed.success) throw new Error(labelError);
+  return parsed.data;
 }
 
 export function parseLabelChange(value: unknown): LabelChange {
-  const row = object(value, 'label change');
-  const action = oneOf(row['action'], ['add', 'remove'], 'label change.action');
-  const labels = [...new Set(array(row['labels'], 'label change.labels').map(label))];
+  const row = parseSchema(compiledLabelChangeSchema, value, 'label change');
+  const labels = [...new Set(row.labels.map(label))];
   if (labels.length === 0 || labels.length > 100)
     throw new Error('Supply between 1 and 100 labels.');
-  return { action, labels };
+  return { action: row.action, labels };
 }
 
 function parseFilter(value: unknown): ViewFilter {
-  const row = object(value, 'view.filter');
+  const row = parseSchema(compiledViewFilterSchema, value, 'view.filter');
   const terms: Record<string, LabelTerm> = {};
-  for (const [key, term] of Object.entries(object(row['terms'], 'view.filter.terms'))) {
-    terms[label(key)] = oneOf(term, ['include', 'exclude'], 'label term');
-  }
-  if (typeof row['includeClosed'] !== 'boolean')
-    throw new Error('view.filter.includeClosed must be boolean');
+  for (const [key, term] of Object.entries(row.terms)) terms[label(key)] = term;
   return {
-    query: string(row['query'], 'view.filter.query'),
-    mode: oneOf(row['mode'], ['and', 'or'], 'view.filter.mode'),
+    query: row.query,
+    mode: row.mode,
     terms,
-    lanes: array(row['lanes'], 'view.filter.lanes').map((value): Lane =>
-      oneOf(value, lanes, 'lane'),
-    ),
-    types: array(row['types'], 'view.filter.types').map((value) => oneOf(value, cardTypes, 'type')),
-    priorities: array(row['priorities'], 'view.filter.priorities').map((value): Priority =>
-      oneOf(value, priorities, 'priority'),
-    ),
-    includeClosed: row['includeClosed'],
+    lanes: row.lanes,
+    types: row.types,
+    priorities: row.priorities,
+    includeClosed: row.includeClosed,
   };
 }
 
 export function parseViews(value: unknown): SavedView[] {
-  const views = array(value, 'views').map((value): SavedView => {
-    const row = object(value, 'view');
-    const id = string(row['id'], 'view.id');
-    const name = string(row['name'], 'view.name').trim();
+  const rows = parseSchema(compiledSavedViewsSchema, value, 'views');
+  const views = rows.map((row): SavedView => {
+    const id = row.id;
+    const name = row.name.trim();
     if (id.length === 0 || id.length > 100)
       throw new Error('View IDs must contain 1 to 100 characters.');
     if (name.length === 0 || name.length > 80)
       throw new Error('View names must contain 1 to 80 characters.');
-    return { id, name, filter: parseFilter(row['filter']) };
+    return { id, name, filter: parseFilter(row.filter) };
   });
   if (views.length > 100) throw new Error('Save at most 100 views.');
   if (new Set(views.map((view) => view.id)).size !== views.length)

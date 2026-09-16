@@ -365,7 +365,7 @@ function AgentRunReply({ id }: { id: string }) {
     if (nav.workspace && reply && runIsFinished(reply) && !query.error) markRead(nav.workspace, id);
   }, [nav.workspace, id, reply, query.error, markRead]);
   const cardId = reply?.prompt?.cardId ?? reply?.target ?? null;
-  const card = board.data?.cards.find((card) => card.id === cardId);
+  const card = board.data?.cards.find((candidate) => candidate.id === cardId);
   return (
     <section className="mb-5 space-y-3" aria-label="Prompt and agent reply">
       {reply?.prompt && reply.prompt.kind !== 'card' ? (
@@ -438,7 +438,7 @@ function AgentRunReply({ id }: { id: string }) {
               <Markdown text={reply.result} />
             </div>
           ) : (
-            <p role="status" className="text-xs text-muted-foreground">
+            <output className="block text-xs text-muted-foreground">
               {reply.status === 'ready'
                 ? 'Queued · waiting for the agent to start.'
                 : reply.status === 'running'
@@ -446,7 +446,7 @@ function AgentRunReply({ id }: { id: string }) {
                   : reply.status === 'unknown'
                     ? 'Run state is unavailable. Waiting for an update.'
                     : 'This run ended without a reply.'}
-            </p>
+            </output>
           )}
         </>
       )}

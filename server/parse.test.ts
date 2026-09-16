@@ -53,6 +53,20 @@ describe('strand projection boundaries', () => {
     });
   });
 
+  it('allows additive card fields but fails loudly when a known field changes type', () => {
+    expect(
+      parseCard({
+        ...entity,
+        lane: 'future-lane',
+        created_at: '2026-09-12 10:00:00',
+        futureProjection: { version: 2 },
+      }).lane,
+    ).toBe('unknown');
+    expect(() => parseCard({ ...entity, lane: 42, created_at: '2026-09-12 10:00:00' })).toThrow(
+      'lane',
+    );
+  });
+
   it('accepts timestamp-free entity projections in active work and related dependencies', () => {
     expect(parseWork(entity)).toMatchObject({ createdAt: null, updatedAt: null });
     expect(parseRelation({ relation: 'depended-on-by', strand: entity })).toEqual({

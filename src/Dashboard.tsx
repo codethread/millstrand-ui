@@ -2,14 +2,13 @@ import { ReviewsView, ReviewSearchControls } from './components/reviews-view';
 import { reviewInInbox } from './lib/reviews';
 import { lazy, Suspense, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import {
   ArrowUpRight,
   Bookmark,
   Bot,
   Check,
-  ChevronDown,
   CircleDot,
-  Filter,
   GitBranch,
   GitPullRequest,
   Keyboard,
@@ -30,7 +29,6 @@ import { useAgents, useReviews, useBoard, useViews, useWorkspaces } from './lib/
 import {
   boardSummary,
   emptyFilter,
-  lanes,
   matchesWorkspaceView,
   selectCards,
   viewDescription,
@@ -43,10 +41,9 @@ import { cn } from './lib/utils';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from './components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/tooltip';
 import { BoardView, EmptyBoard, OutlineView } from './components/board-view';
-import { ErrorNotice, LabelPill, Loading, StatusIcon } from './components/issue-parts';
+import { ErrorNotice, LabelPill, Loading } from './components/issue-parts';
 import { IssueDetail } from './components/issue-detail';
 import { WorkspaceSwitcher } from './components/workspace-switcher';
 import { Overview } from './components/overview';
@@ -57,7 +54,8 @@ import { CardActionFeedback } from './components/card-actions';
 import { DashboardOverlays } from './components/overlays';
 import { AgentDetail, AgentSearchControls, AgentsView } from './components/agents-view';
 import { agentIsActive } from './lib/agents';
-import type { Board, CardType, Priority, SavedView } from '../shared/api';
+import type { Board, SavedView } from '../shared/api';
+import { DashboardFilters } from './components/dashboard-filters';
 
 const GraphView = lazy(() => import('./components/graph-view'));
 const modes = [
@@ -296,75 +294,6 @@ function Sidebar(props: SidebarProps) {
   );
 }
 
-function Filters() {
-  const nav = useDashboardNavigation();
-  const count = nav.filter.lanes.length + nav.filter.types.length + nav.filter.priorities.length;
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Filter />
-          Filters{count > 0 && <span className="filter-count">{count}</span>}
-          <ChevronDown className="size-3!" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-72">
-        <div className="filter-popover">
-          <strong>Refine this view</strong>
-          <span className="filter-heading">STATUS</span>
-          <div className="flex flex-wrap gap-1.5">
-            {lanes
-              .filter((lane) => lane.id !== 'unknown')
-              .map((lane) => (
-                <button
-                  key={lane.id}
-                  className={cn('filter-chip', nav.filter.lanes.includes(lane.id) && 'selected')}
-                  onClick={() => nav.toggleLane(lane.id)}
-                >
-                  <StatusIcon status={lane.id} />
-                  {lane.title}
-                </button>
-              ))}
-          </div>
-          <span className="filter-heading">TYPE</span>
-          <div className="flex gap-1.5">
-            {(['epic', 'feature'] satisfies CardType[]).map((type) => (
-              <button
-                key={type}
-                className={cn(
-                  'filter-chip capitalize',
-                  nav.filter.types.includes(type) && 'selected',
-                )}
-                onClick={() => nav.toggleType(type)}
-              >
-                {type}
-              </button>
-            ))}
-          </div>
-          <span className="filter-heading">PRIORITY</span>
-          <div className="flex gap-1.5">
-            {(['p1', 'p2', 'p3', 'p4'] satisfies Priority[]).map((priority) => (
-              <button
-                key={priority}
-                className={cn(
-                  'filter-chip uppercase',
-                  nav.filter.priorities.includes(priority) && 'selected',
-                )}
-                onClick={() => nav.togglePriority(priority)}
-              >
-                {priority}
-              </button>
-            ))}
-          </div>
-          <Button variant="ghost" size="sm" onClick={nav.resetFilters}>
-            Reset filters
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 export function Dashboard() {
   const nav = useDashboardNavigation();
   useDashboardKeys();
@@ -378,6 +307,11 @@ export function Dashboard() {
   );
 }
 
+function resetWorkspaceState(_workspace: string | null): void {
+  useDashboardStore.getState().resetWorkspace();
+  useAgentPromptStore.getState().close();
+}
+
 function WorkspaceDashboard() {
   const board = useBoard();
   const agents = useAgents();
@@ -386,15 +320,20 @@ function WorkspaceDashboard() {
   const workspaces = useWorkspaces();
   const s = useDashboardStore();
   const nav = useDashboardNavigation();
+  const navigate = useNavigate({ from: '/' });
   const workspacePath = board.data?.workspace.path ?? agents.data?.workspace.path ?? null;
   const defaultWorkspace = pinnableWorkspaceId(workspaces.data ?? [], workspacePath);
+  const workspace = nav.workspace;
   useEffect(() => {
-    if (nav.workspace === null && defaultWorkspace) nav.pinWorkspace(defaultWorkspace);
-  }, [nav, defaultWorkspace]);
+    if (workspace === null && defaultWorkspace)
+      void navigate({
+        search: (current) => ({ ...current, workspace: defaultWorkspace }),
+        replace: true,
+      });
+  }, [workspace, defaultWorkspace, navigate]);
   useEffect(() => {
-    useDashboardStore.getState().resetWorkspace();
-    useAgentPromptStore.getState().close();
-  }, [nav.workspace]);
+    resetWorkspaceState(workspace);
+  }, [workspace]);
   if (!board.data && nav.mode !== 'agents' && nav.mode !== 'reviews')
     return (
       <div className="startup">
@@ -520,7 +459,7 @@ function WorkspaceDashboard() {
                     <kbd>{s.shortcuts.search}</kbd>
                   )}
                 </div>
-                <Filters />
+                <DashboardFilters />
                 <button
                   className={cn('closed-toggle', nav.filter.includeClosed && 'selected')}
                   onClick={nav.toggleClosed}
@@ -587,7 +526,10 @@ function WorkspaceDashboard() {
             role="alert"
             className="mx-4 my-2 flex flex-wrap items-center gap-2 text-xs text-destructive"
           >
-            Agent activity unavailable{agents.data ? ' · showing last known sessions' : ''}.
+            <span className="break-words">
+              Agent activity unavailable{agents.data ? ' · showing last known sessions' : ''}:{' '}
+              {agents.error.message}
+            </span>
             <button
               className="underline"
               onClick={() => {

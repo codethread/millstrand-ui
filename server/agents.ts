@@ -1,10 +1,99 @@
-import type { AgentIdentity, AgentRun, AgentRunStatus, AgentWork } from '../shared/api.ts';
-import { array, maybeString, parseWork, string } from './parse.ts';
+import type { AgentIdentity, AgentRun, AgentWork, JsonValue } from '../shared/api.ts';
+import { sorted } from '../shared/array.ts';
+import { z } from 'zod';
+import { jsonObjectSchema } from './parse.ts';
+
+const strandStateSchema = z.enum(['active', 'closed', 'replaced']);
+const runStatusSchema = z.enum(['ready', 'running', 'stopped', 'failed']);
+const runSubstatusSchema = z
+  .enum([
+    'pending',
+    'completed',
+    'requested',
+    'abandoned',
+    'bootstrap',
+    'launch',
+    'execution',
+    'reconciliation',
+  ])
+  .nullable()
+  .optional();
+const agentStrandSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    state: strandStateSchema,
+    attributes: jsonObjectSchema,
+    created_at: z.string(),
+    updated_at: z.string().optional(),
+  })
+  .loose();
+const agentStrandsSchema = z.compile(z.array(agentStrandSchema), { strict: true });
+const publishedRunAttributesSchema = z
+  .object({
+    'harness/run': z.literal('true'),
+    'harness/published': z.literal('true'),
+    'identity/id': z.string(),
+    'harness/request-id': z.string().optional(),
+    'harness/alias': z.string(),
+    'harness/harness': z.string(),
+    'harness/status': runStatusSchema,
+    'harness/substatus': runSubstatusSchema,
+    'harness/mode': z.enum(['headless', 'interactive']),
+    'harness/model': z.string().optional(),
+    'harness/effort': z.string().optional(),
+    'harness/cwd': z.string().optional(),
+    'harness/target': z.string().optional(),
+    'harness/root-targets': z.array(z.string()).optional(),
+    'harness/started-at': z.string().optional(),
+    'harness/finished-at': z.string().optional(),
+  })
+  .loose();
+const identityAttributesSchema = z
+  .object({
+    'identity/session': z.literal('true'),
+    'identity/id': z.string(),
+    'identity/harness': z.string(),
+    'identity/model': z.string().optional(),
+    'identity/thinking-level': z.string().optional(),
+  })
+  .loose();
+const ownedWorkAttributesSchema = z
+  .object({
+    owner: z.string(),
+    'kanban/card': z.literal('true').optional(),
+    'kanban/task': z.literal('true').optional(),
+  })
+  .loose();
+
+type AgentStrand = z.infer<typeof agentStrandSchema>;
+
+function parseSchema<T>(schema: z.ZodType<T>, value: unknown, where: string): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new Error(`${where} is invalid: ${z.prettifyError(parsed.error)}`);
+  return parsed.data;
+}
+
+function parseAgentStrand(value: AgentStrand): {
+  id: string;
+  title: string;
+  state: string;
+  attributes: Record<string, JsonValue>;
+  createdAt: string;
+} {
+  return {
+    id: value.id,
+    title: value.title,
+    state: value.state,
+    attributes: value.attributes,
+    createdAt: value.created_at,
+  };
+}
 
 /** List projections omit large prompt/result values. Only expose inspection fields,
  * never provider environment, injected prompts, or credentials through this API. */
 export function parseAgents(value: unknown): AgentIdentity[] {
-  const rows = array(value, 'agent strands').map(parseWork);
+  const rows = parseSchema(agentStrandsSchema, value, 'agent strands').map(parseAgentStrand);
   const runs = new Map<string, AgentRun[]>();
   const work = new Map<string, AgentWork[]>();
   for (const row of rows) {
@@ -15,35 +104,31 @@ export function parseAgents(value: unknown): AgentIdentity[] {
       attrs['harness/published'] === 'true' &&
       attrs['identity/id'] != null
     ) {
-      const identity = string(attrs['identity/id'], 'run.identity/id');
-      const statuses: AgentRunStatus[] = ['ready', 'running', 'stopped', 'failed'];
+      const runAttrs = parseSchema(publishedRunAttributesSchema, attrs, `run ${row.id}`);
+      const identity = runAttrs['identity/id'];
       const run: AgentRun = {
         id: row.id,
-        requestId: maybeString(attrs['harness/request-id'], 'run.requestId'),
+        requestId: runAttrs['harness/request-id'] ?? null,
         title: row.title,
-        alias: string(attrs['harness/alias'], 'run.alias'),
-        harness: string(attrs['harness/harness'], 'run.harness'),
-        status: statuses.find((status) => status === attrs['harness/status']) ?? 'unknown',
-        substatus: maybeString(attrs['harness/substatus'], 'run.substatus'),
-        mode: string(attrs['harness/mode'], 'run.mode'),
-        model: maybeString(attrs['harness/model'], 'run.model'),
-        effort: maybeString(attrs['harness/effort'], 'run.effort'),
-        cwd: maybeString(attrs['harness/cwd'], 'run.cwd'),
-        target: maybeString(attrs['harness/target'], 'run.target'),
-        rootTargets:
-          attrs['harness/root-targets'] == null
-            ? []
-            : array(attrs['harness/root-targets'], 'run.rootTargets').map((id) =>
-                string(id, 'run.rootTarget'),
-              ),
-        createdAt: string(row.createdAt, 'run.createdAt'),
-        startedAt: maybeString(attrs['harness/started-at'], 'run.startedAt'),
-        finishedAt: maybeString(attrs['harness/finished-at'], 'run.finishedAt'),
+        alias: runAttrs['harness/alias'],
+        harness: runAttrs['harness/harness'],
+        status: runAttrs['harness/status'],
+        substatus: runAttrs['harness/substatus'] ?? null,
+        mode: runAttrs['harness/mode'],
+        model: runAttrs['harness/model'] ?? null,
+        effort: runAttrs['harness/effort'] ?? null,
+        cwd: runAttrs['harness/cwd'] ?? null,
+        target: runAttrs['harness/target'] ?? null,
+        rootTargets: runAttrs['harness/root-targets'] ?? [],
+        createdAt: row.createdAt,
+        startedAt: runAttrs['harness/started-at'] ?? null,
+        finishedAt: runAttrs['harness/finished-at'] ?? null,
       };
       runs.set(identity, [...(runs.get(identity) ?? []), run]);
     }
-    if (typeof attrs['owner'] === 'string') {
-      const owner = attrs['owner'];
+    if (attrs['owner'] !== undefined) {
+      const workAttrs = parseSchema(ownedWorkAttributesSchema, attrs, `owned work ${row.id}`);
+      const owner = workAttrs.owner;
       work.set(owner, [
         ...(work.get(owner) ?? []),
         {
@@ -51,9 +136,9 @@ export function parseAgents(value: unknown): AgentIdentity[] {
           title: row.title,
           state: row.state,
           kind:
-            attrs['kanban/card'] === 'true'
+            workAttrs['kanban/card'] === 'true'
               ? 'card'
-              : attrs['kanban/task'] === 'true'
+              : workAttrs['kanban/task'] === 'true'
                 ? 'task'
                 : 'work',
         },
@@ -63,16 +148,17 @@ export function parseAgents(value: unknown): AgentIdentity[] {
   return rows
     .filter((row) => row.attributes['identity/session'] === 'true')
     .map((row) => {
-      const attrs = row.attributes;
-      const id = string(attrs['identity/id'], 'identity.id');
+      const attrs = parseSchema(identityAttributesSchema, row.attributes, `identity ${row.id}`);
+      const id = attrs['identity/id'];
       return {
         id,
         strandId: row.id,
-        harness: string(attrs['identity/harness'], 'identity.harness'),
-        model: maybeString(attrs['identity/model'], 'identity.model'),
-        effort: maybeString(attrs['identity/thinking-level'], 'identity.effort'),
-        createdAt: string(row.createdAt, 'identity.createdAt'),
-        runs: (runs.get(id) ?? []).sort(
+        harness: attrs['identity/harness'],
+        model: attrs['identity/model'] ?? null,
+        effort: attrs['identity/thinking-level'] ?? null,
+        createdAt: row.createdAt,
+        runs: sorted(
+          runs.get(id) ?? [],
           (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
         ),
         work: work.get(id) ?? [],

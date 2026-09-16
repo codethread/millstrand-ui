@@ -1,22 +1,111 @@
-import type { AgentOption, AgentPrompt, AgentReply, AgentRunStatus } from '../shared/api.ts';
+import type { AgentOption, AgentPrompt, AgentReply } from '../shared/api.ts';
 import type { ReviewDetail } from '../shared/reviews.ts';
 import { candidateVersion } from './review-comments.ts';
-import { array, maybeString, object, string } from './parse.ts';
+import { string } from './parse.ts';
+import { z } from 'zod';
+
+const runStatusSchema = z.enum(['ready', 'running', 'stopped', 'failed']);
+const runSubstatusSchema = z
+  .enum([
+    'pending',
+    'completed',
+    'requested',
+    'abandoned',
+    'bootstrap',
+    'launch',
+    'execution',
+    'reconciliation',
+  ])
+  .nullable();
+const promptCommentSchema = z
+  .object({
+    id: z.string(),
+    revision: z.string(),
+    candidateVersion: z.number().int().safe().min(1),
+  })
+  .strict();
+
+const agentOptionSchema = z
+  .object({
+    kind: z.enum(['harness', 'alias']),
+    name: z.string(),
+    resolution: z.string(),
+    provider: z.string(),
+    modes: z.array(z.enum(['headless', 'interactive'])).optional(),
+    description: z.string().optional(),
+    model: z.string().optional(),
+    thinking: z.string().optional(),
+  })
+  .loose();
+const compiledAgentOptionsSchema = z.compile(z.array(agentOptionSchema), { strict: true });
+
+const agentPromptSchema = z
+  .object({
+    targetId: z.string(),
+    targetKind: z.enum(['review', 'review-comment']).optional(),
+    comment: promptCommentSchema.optional(),
+    alias: z.string(),
+    prompt: z.string(),
+    requestId: z.string(),
+  })
+  .strict();
+const compiledAgentPromptSchema = z.compile(agentPromptSchema, { strict: true });
+
+const agentReplySchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    state: z.enum(['active', 'closed', 'replaced']),
+    alias: z.string(),
+    harness: z.string(),
+    mode: z.enum(['headless', 'interactive']),
+    status: runStatusSchema,
+    substatus: runSubstatusSchema,
+    'session-id': z.string(),
+    settled: z.boolean(),
+    identity: z.string().optional(),
+    target: z.string().optional(),
+    'request-id': z.string().optional(),
+    result: z.string().optional(),
+    error: z.string().optional(),
+    'updated-at': z.string().optional(),
+    'exit-code': z.number().int().optional(),
+    resumable: z.boolean().optional(),
+    'resume-reason': z.string().optional(),
+  })
+  .loose();
+const compiledAgentReplySchema = z.compile(agentReplySchema, { strict: true });
+
+const promptContextSchema = z
+  .object({
+    source: z.string().optional(),
+    targetKind: z.enum(['review', 'review-comment']).optional(),
+    comment: promptCommentSchema.optional(),
+    card: z.string().optional(),
+    target: z.string().optional(),
+    prompt: z.string().optional(),
+    reviewContext: z.string().optional(),
+  })
+  .loose();
+const compiledPromptContextSchema = z.compile(promptContextSchema, { strict: true });
 
 export function parseAgentOptions(value: unknown): AgentOption[] {
-  const rows = array(value, 'available agents').map((entry) => object(entry, 'agent'));
+  const parsed = compiledAgentOptionsSchema.safeParse(value);
+  if (!parsed.success)
+    throw new Error(`available agents are invalid: ${z.prettifyError(parsed.error)}`);
+  const rows = parsed.data;
   const headless = new Set(
     rows
-      .filter((row) => row['kind'] === 'harness')
-      .filter((row) => array(row['modes'], 'agent.modes').includes('headless'))
-      .map((row) => string(row['name'], 'agent.name')),
+      .filter((row) => row.kind === 'harness')
+      .filter((row) => row.modes?.includes('headless') === true)
+      .map((row) => row.name),
   );
   return rows
-    .filter((row) => headless.has(string(row['provider'], 'agent.provider')))
+    .filter((row) => headless.has(row.provider))
     .map((row) => ({
-      name: string(row['name'], 'agent.name'),
-      description: maybeString(row['description'], 'agent.description'),
-      model: maybeString(row['model'], 'agent.model'),
+      name: row.name,
+      description: row.description ?? null,
+      model: row.model ?? null,
     }));
 }
 
@@ -28,36 +117,23 @@ function boundedString(value: unknown, where: string, max: number): string {
 }
 
 export function parseAgentPrompt(value: unknown): AgentPrompt {
-  const row = object(value, 'agent prompt');
-  if (
-    Object.keys(row).some(
-      (key) => !['targetId', 'targetKind', 'comment', 'alias', 'prompt', 'requestId'].includes(key),
-    )
-  )
-    throw new Error('Unsupported agent prompt field.');
-  if (
-    row['targetKind'] !== undefined &&
-    row['targetKind'] !== 'review' &&
-    row['targetKind'] !== 'review-comment'
-  )
-    throw new Error('Unsupported prompt target kind.');
-  if (row['targetKind'] !== 'review-comment' && row['comment'] !== undefined)
+  const parsed = compiledAgentPromptSchema.safeParse(value);
+  if (!parsed.success) throw new Error('Unsupported agent prompt field.');
+  const row = parsed.data;
+  if (row.targetKind !== 'review-comment' && row.comment !== undefined)
     throw new Error('Unexpected comment reference');
-  const targetId = boundedString(row['targetId'], 'Target', 100);
-  const alias = boundedString(row['alias'], 'Agent alias', 100);
-  const requestId = boundedString(row['requestId'], 'Request ID', 100);
+  const targetId = boundedString(row.targetId, 'Target', 100);
+  const alias = boundedString(row.alias, 'Agent alias', 100);
+  const requestId = boundedString(row.requestId, 'Request ID', 100);
   if (!/^[a-zA-Z0-9_-]+$/.test(targetId)) throw new Error('Invalid target ID.');
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(alias)) throw new Error('Invalid agent alias.');
   if (!/^ui-[a-zA-Z0-9_-]{16,80}$/.test(requestId)) throw new Error('Invalid request ID.');
-  const prompt = boundedString(row['prompt'], 'Prompt', 12000);
-  if (row['targetKind'] === 'review-comment') {
-    const comment = object(row['comment'], 'Comment reference');
-    const id = boundedString(comment['id'], 'Comment ID', 100);
-    if (
-      !/^[a-zA-Z0-9_-]+$/.test(id) ||
-      Object.keys(comment).some((key) => !['id', 'revision', 'candidateVersion'].includes(key))
-    )
-      throw new Error('Invalid comment reference');
+  const prompt = boundedString(row.prompt, 'Prompt', 12000);
+  if (row.targetKind === 'review-comment') {
+    const comment = row.comment;
+    if (comment === undefined) throw new Error('Invalid comment reference');
+    const id = boundedString(comment.id, 'Comment ID', 100);
+    if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error('Invalid comment reference');
     return {
       targetId,
       alias,
@@ -66,8 +142,8 @@ export function parseAgentPrompt(value: unknown): AgentPrompt {
       targetKind: 'review-comment',
       comment: {
         id,
-        revision: boundedString(comment['revision'], 'Review revision', 500),
-        candidateVersion: candidateVersion(comment['candidateVersion']),
+        revision: boundedString(comment.revision, 'Review revision', 500),
+        candidateVersion: candidateVersion(comment.candidateVersion),
       },
     };
   }
@@ -76,23 +152,24 @@ export function parseAgentPrompt(value: unknown): AgentPrompt {
     alias,
     requestId,
     prompt,
-    ...(row['targetKind'] === 'review' ? { targetKind: 'review' as const } : {}),
+    ...(row.targetKind === 'review' ? { targetKind: 'review' as const } : {}),
   };
 }
 
 export function parseAgentReply(value: unknown): AgentReply {
-  const row = object(value, 'agent run');
-  const statuses: AgentRunStatus[] = ['ready', 'running', 'stopped', 'failed'];
-  const error = maybeString(row['error'], 'run.error');
+  const parsed = compiledAgentReplySchema.safeParse(value);
+  if (!parsed.success) throw new Error(`agent run is invalid: ${z.prettifyError(parsed.error)}`);
+  const row = parsed.data;
+  const error = row.error ?? null;
   return {
-    id: string(row['id'], 'run.id'),
-    title: string(row['title'], 'run.title'),
-    alias: string(row['alias'], 'run.alias'),
-    identity: maybeString(row['identity'], 'run.identity'),
-    target: maybeString(row['target'], 'run.target'),
-    status: statuses.find((status) => status === row['status']) ?? 'unknown',
-    substatus: maybeString(row['substatus'], 'run.substatus'),
-    result: maybeString(row['result'], 'run.result'),
+    id: row.id,
+    title: row.title,
+    alias: row.alias,
+    identity: row.identity ?? null,
+    target: row.target ?? null,
+    status: row.status,
+    substatus: row.substatus,
+    result: row.result ?? null,
     prompt: null,
     // Harness errors can embed entire JSONL transcripts, prompts, and tool output.
     // Return the diagnosis only, never arbitrary provider log content.
@@ -107,29 +184,32 @@ export function parseAgentReply(value: unknown): AgentReply {
 
 export function parsePromptContext(value: unknown): AgentReply['prompt'] {
   if (value === undefined || value === null) return null;
-  const context = object(value, 'run context');
+  const parsed = compiledPromptContextSchema.safeParse(value);
+  if (!parsed.success) throw new Error(`run context is invalid: ${z.prettifyError(parsed.error)}`);
+  const context = parsed.data;
   if (context['source'] !== 'millstrand-ui') return null;
-  if (context['targetKind'] === 'review-comment') {
-    const reference = object(context['comment'], 'Prompt comment');
+  if (context.targetKind === 'review-comment') {
+    const reference = context.comment;
+    if (reference === undefined) throw new Error('Prompt comment must be an object');
     return {
       kind: 'review-comment',
-      cardId: string(context['card'], 'prompt.card'),
-      text: string(context['prompt'], 'prompt.text'),
-      context: string(context['reviewContext'], 'prompt.reviewContext'),
+      cardId: string(context.card, 'prompt.card'),
+      text: string(context.prompt, 'prompt.text'),
+      context: string(context.reviewContext, 'prompt.reviewContext'),
       comment: {
-        id: string(reference['id'], 'Comment ID'),
-        revision: string(reference['revision'], 'Revision'),
-        candidateVersion: candidateVersion(reference['candidateVersion']),
+        id: string(reference.id, 'Comment ID'),
+        revision: string(reference.revision, 'Revision'),
+        candidateVersion: candidateVersion(reference.candidateVersion),
       },
     };
   }
   return {
-    cardId: string(context['card'], 'prompt.card'),
-    text: string(context['prompt'], 'prompt.text'),
-    ...(context['targetKind'] === 'review'
+    cardId: string(context.card, 'prompt.card'),
+    text: string(context.prompt, 'prompt.text'),
+    ...(context.targetKind === 'review'
       ? {
           kind: 'review' as const,
-          context: string(context['reviewContext'], 'prompt.reviewContext'),
+          context: string(context.reviewContext, 'prompt.reviewContext'),
         }
       : { kind: 'card' as const }),
   };

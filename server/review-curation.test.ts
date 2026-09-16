@@ -45,12 +45,29 @@ function mock(snapshot = commentsFixture) {
     if (op[0] === 'agent' && op[1] === 'list')
       return {
         stdout: JSON.stringify([
-          { name: 'tui', provider: 'tui', kind: 'harness', modes: ['headless'] },
+          {
+            name: 'tui',
+            provider: 'tui',
+            kind: 'harness',
+            resolution: 'tui',
+            modes: ['headless'],
+          },
         ]),
       };
     if (op[0] === 'agent' && op[1] === 'run')
       return {
-        stdout: JSON.stringify({ id: 'run1', title: 'Proposal', alias: 'tui', status: 'ready' }),
+        stdout: JSON.stringify({
+          id: 'run1',
+          title: 'Proposal',
+          state: 'active',
+          alias: 'tui',
+          harness: 'tui',
+          mode: 'headless',
+          status: 'ready',
+          substatus: 'pending',
+          'session-id': 'session1',
+          settled: false,
+        }),
       };
     throw new Error(`Unexpected command ${JSON.stringify(op)}`);
   });

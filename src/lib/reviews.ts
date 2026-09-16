@@ -1,4 +1,5 @@
 import type { ReviewScope, ReviewStage, ReviewSummary } from '../../shared/reviews';
+import { sorted } from '../../shared/array';
 import type { PromptTarget } from '../agent-prompt-store';
 
 export function reviewPromptTarget(review: ReviewSummary): PromptTarget | null {
@@ -24,8 +25,8 @@ export function selectReviews(
   query: string,
 ): ReviewSummary[] {
   const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  return reviews
-    .filter((review) => {
+  return sorted(
+    reviews.filter((review) => {
       if (scope === 'inbox' && !reviewInInbox(review)) return false;
       if (stage !== null && review.stage !== stage) return false;
       const text = [
@@ -43,8 +44,7 @@ export function selectReviews(
         .join(' ')
         .toLowerCase();
       return terms.every((term) => text.includes(term));
-    })
-    .sort(
-      (a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || a.id.localeCompare(b.id),
-    );
+    }),
+    (a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || a.id.localeCompare(b.id),
+  );
 }

@@ -33,15 +33,16 @@ function Comment({
   const mutation = useCurateReview(snapshot.review.id);
   const publishing = useReviewMutationPending(snapshot.review.id, 'publish');
   const store = useReviewCommentStore();
+  const { focus, focusComment, load } = store;
   const openPrompt = useAgentPromptStore((s) => s.open);
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (store.focus?.reviewId === snapshot.review.id && store.focus.commentId === comment.id) {
+    if (focus?.reviewId === snapshot.review.id && focus.commentId === comment.id) {
       element.current?.scrollIntoView({ block: 'center' });
       element.current?.focus({ preventScroll: true });
-      store.focusComment(null);
+      focusComment(null);
     }
-  }, [store.focus, store.focusComment, snapshot.review.id, comment.id]);
+  }, [focus, focusComment, snapshot.review.id, comment.id]);
   const key = reviewDraftKey(
     nav.workspace ?? '',
     snapshot.review.id,
@@ -49,8 +50,8 @@ function Comment({
     comment.id,
   );
   useEffect(() => {
-    store.load(key);
-  }, [key, store.load]);
+    load(key);
+  }, [key, load]);
   const saved = store.drafts[key];
   const draft = saved?.state.kind === 'editing' ? saved.state.draft : null;
   const mutable = !publishing && snapshot.review.current && snapshot.review.curation.mutable;

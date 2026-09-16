@@ -1,19 +1,19 @@
 import type { CardLane } from '../shared/api.ts';
-import { object } from './parse.ts';
+import { z } from 'zod';
+
+const cardLaneSchema = z.compile(
+  z
+    .object({
+      lane: z.enum(['refinement', 'pending', 'claimed', 'in_review', 'in_production', 'closed']),
+    })
+    .strict(),
+  { strict: true },
+);
 
 export function parseCardLane(value: unknown): CardLane {
-  const lane = object(value, 'lane change')['lane'];
-  switch (lane) {
-    case 'refinement':
-    case 'pending':
-    case 'claimed':
-    case 'in_review':
-    case 'in_production':
-    case 'closed':
-      return lane;
-    default:
-      throw new Error('Choose a known destination lane.');
-  }
+  const parsed = cardLaneSchema.safeParse(value);
+  if (!parsed.success) throw new Error('Choose a known destination lane.');
+  return parsed.data.lane;
 }
 
 /** A board edit, not a workflow transition: never cascade to children or assign an owner. */

@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 import { MessageSquare, Send } from 'lucide-react';
 import type { WorkspaceOption } from '../../shared/api';
 import { useAgentPromptStore, type PromptTarget } from '../agent-prompt-store';
@@ -122,6 +122,7 @@ function ComposePrompt({ workspace }: { workspace: string }) {
   const alias = s.aliases[workspace] ?? 'tui';
   const mutation = usePromptAgent(composer.kind === 'composing' ? composer.target.cardId : '');
   const promptId = useId();
+  const prompt = useRef<HTMLTextAreaElement>(null);
   if (composer.kind === 'closed') return null;
   const ready = options.data?.some((agent) => agent.name === alias) && !options.error;
   return (
@@ -132,6 +133,10 @@ function ComposePrompt({ workspace }: { workspace: string }) {
       }}
     >
       <DialogContent
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          prompt.current?.focus();
+        }}
         onCloseAutoFocus={(event) => {
           if (composer.trigger?.isConnected) {
             event.preventDefault();
@@ -177,8 +182,8 @@ function ComposePrompt({ workspace }: { workspace: string }) {
               What would you like help with?
             </label>
             <Textarea
+              ref={prompt}
               id={promptId}
-              autoFocus
               className="min-h-36"
               value={composer.prompt}
               disabled={mutation.isPending}
