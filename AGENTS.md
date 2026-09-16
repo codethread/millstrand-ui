@@ -28,6 +28,21 @@ areas allow targeted edits.
   functions under `src/lib`. Components render data and delegate actions.
 - Keep styles in Tailwind and the shared theme; use the shadcn/Radix primitives
   under `src/components/ui` for accessible controls and overlays.
+- Import concrete domain options from `src/lib/api/` and Router composition from
+  `src/hooks/use-*`; no catch-all API barrel. The checked [module map and data
+  contract](docs/architecture.md) lists every key, endpoint and mutation settlement.
+- Declare a poll owner before adding cache readers. The working pilot is
+  `src/components/workspace-discovery.tsx` plus `workspace-switcher.tsx`: readers
+  share keys with `enabled: false` and `refetchInterval: false`, using stable
+  `select` projections; health/error consumers remain explicit. Do not remove
+  existing surface poll owners until their readers still have an active owner.
+- Select nested Query content and relevant Zustand values/actions, not whole
+  snapshots/stores. Pure projections live in existing domain files under `src/lib`.
+  Keep shared leaves such as `src/components/markdown.tsx` independent of pages.
+- Mutation options own workspace-scoped cache effects; hooks own Router reactions.
+  Preserve awaited settlement versus background invalidation (see
+  `src/lib/api/cards.ts` and `src/hooks/use-cards.ts`). Keep the single QueryClient
+  setup in `src/lib/api/query-client.ts`; do not mirror its cache in another store.
 
 ## Product and verification
 
@@ -37,7 +52,8 @@ areas allow targeted edits.
 - Serve SPA and API from the same LAN address. Do not make browser-side calls to
   localhost or expose arbitrary command execution through the API.
 - Keep keyboard shortcuts configurable and inactive while typing in inputs.
-- Run `pnpm quality` while iterating and before landing. Add focused Vitest
+- Run `pnpm quality` while iterating and before landing, including its zero-warning
+  type-aware Oxlint gate. Add focused Vitest
   tests where filtering or graph semantics merit them.
 - Verify the running UI in a browser, including narrow layouts, selection,
   navigation, filters, labels, and graph interactions. A build alone is not proof

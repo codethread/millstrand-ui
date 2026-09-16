@@ -1,7 +1,7 @@
 import { Check, MoreHorizontal, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Card } from '../../shared/api';
-import { useCardAction, useCardActionFeedback, useCardActionPending } from '../lib/api';
+import { useCardAction, useCardActionFeedback, useCardActionPending } from '../hooks/use-cards';
 import { lanes } from '../lib/board';
 import { useDashboardStore } from '../store';
 import { ErrorNotice } from './issue-parts';

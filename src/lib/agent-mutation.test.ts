@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
-import { agentPromptMutationOptions } from './api';
+import { agentPromptMutationOptions } from './api/agents';
 
 const track = vi.hoisted(() => vi.fn());
 

@@ -1,11 +1,12 @@
 import { ArrowLeft, ArrowUpRight, Bot, CheckCheck, GitPullRequest, Search, X } from 'lucide-react';
 import { reviewStages, type ReviewDetail, type ReviewSummary } from '../../shared/reviews';
-import { useAgents, useReview, useReviews } from '../lib/api';
+import { useAgents } from '../hooks/use-agents';
+import { useReview, useReviews } from '../hooks/use-reviews';
 import { formatDate } from '../lib/board';
 import { useDashboardNavigation } from '../lib/navigation';
 import { reviewInInbox, reviewLabel, reviewPromptTarget, selectReviews } from '../lib/reviews';
 import { cn } from '../lib/utils';
-import { Markdown } from './issue-detail';
+import { Markdown } from './markdown';
 import { PromptAgentButton } from './agent-prompt';
 import { ReviewComments } from './review-comments';
 import { ErrorNotice, Loading } from './issue-parts';

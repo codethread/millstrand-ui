@@ -6,8 +6,7 @@ import { ReviewComments } from './review-comments';
 
 const mutate = vi.hoisted(() => vi.fn());
 vi.mock('../lib/navigation', () => ({ useDashboardNavigation: () => ({ workspace: 'weaver' }) }));
-vi.mock('../lib/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../lib/api')>()),
+vi.mock('../hooks/use-review-comments', () => ({
   useReviewComments: () => ({ data: parseReviewComments(commentsFixture), error: null }),
   useReviewProposals: () => ({
     error: null,

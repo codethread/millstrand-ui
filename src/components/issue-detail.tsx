@@ -13,11 +13,10 @@ import {
   Tag,
   X,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { Markdown } from './markdown';
 import type { CardDetail, Note, Task } from '../../shared/api';
 import { PromptAgentButton } from './agent-prompt';
-import { useCard, useLabels, useTaskNotes } from '../lib/api';
+import { useCard, useLabels, useTaskNotes } from '../hooks/use-cards';
 import { formatDate, relativeTime } from '../lib/board';
 import { useDashboardNavigation } from '../lib/navigation';
 import type { DetailTab } from '../lib/dashboard-search';
@@ -28,14 +27,6 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
 import { ErrorNotice, LabelPill, Loading, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { cn } from '../lib/utils';
 import { IssueAgents } from './agents-view';
-
-export function Markdown({ text }: { text: string }) {
-  return (
-    <div className="markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
-    </div>
-  );
-}
 
 function Notes({ notes }: { notes: Note[] }) {
   return notes.length ? (

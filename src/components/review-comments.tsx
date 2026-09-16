@@ -6,7 +6,7 @@ import {
   useCurateReview,
   useReviewProposals,
   useReviewMutationPending,
-} from '../lib/api';
+} from '../hooks/use-review-comments';
 import { useDashboardNavigation } from '../lib/navigation';
 import { useAgentPromptStore } from '../agent-prompt-store';
 import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
@@ -17,7 +17,7 @@ import {
 import { ReviewCommentCard } from './review-comment-card';
 import { ReviewCommentProposal } from './review-comment-proposal';
 import { ReviewPublication } from './review-publication';
-import { Markdown } from './issue-detail';
+import { Markdown } from './markdown';
 import { Button } from './ui/button';
 
 function Comment({

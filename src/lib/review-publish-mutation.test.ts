@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
-import { reviewPublishMutationOptions } from './api';
+import { reviewPublishMutationOptions } from './api/review-comments';
 import { useReviewCommentStore } from '../review-comment-store';
 
 afterEach(() => {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Bot } from 'lucide-react';
 import { useAgentPromptStore } from '../agent-prompt-store';
-import { useAgents } from '../lib/api';
+import { useAgents } from '../hooks/use-agents';
 import { promptedRuns } from '../lib/agent-notifications';
 import { runLabel } from '../lib/agents';
 import { useDashboardNavigation } from '../lib/navigation';
