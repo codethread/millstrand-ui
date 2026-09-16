@@ -37,16 +37,39 @@ const prompt = {
   requestId: 'ui-0123456789abcdef0123456789abcdef',
 };
 const options = [
-  { kind: 'harness', name: 'pi', provider: 'pi', modes: ['headless', 'interactive'] },
-  { kind: 'alias', name: 'tui', provider: 'pi', model: 'sol' },
-  { kind: 'harness', name: 'terminal', provider: 'terminal', modes: ['interactive'] },
-  { kind: 'alias', name: 'interactive-only', provider: 'terminal' },
+  {
+    kind: 'harness',
+    name: 'pi',
+    resolution: 'pi',
+    provider: 'pi',
+    modes: ['headless', 'interactive'],
+  },
+  { kind: 'alias', name: 'tui', resolution: 'tui → pi', provider: 'pi', model: 'sol' },
+  {
+    kind: 'harness',
+    name: 'terminal',
+    resolution: 'terminal',
+    provider: 'terminal',
+    modes: ['interactive'],
+  },
+  {
+    kind: 'alias',
+    name: 'interactive-only',
+    resolution: 'interactive-only → terminal',
+    provider: 'terminal',
+  },
 ];
 const reply = {
   id: 'run1',
   title: 'card1 · Help',
+  state: 'active',
   alias: 'tui',
+  harness: 'pi',
+  mode: 'headless',
   status: 'ready',
+  substatus: 'pending',
+  'session-id': 'session1',
+  settled: false,
   identity: 'calm-tiger',
   target: 'card1',
 };

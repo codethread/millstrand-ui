@@ -526,7 +526,10 @@ function WorkspaceDashboard() {
             role="alert"
             className="mx-4 my-2 flex flex-wrap items-center gap-2 text-xs text-destructive"
           >
-            Agent activity unavailable{agents.data ? ' · showing last known sessions' : ''}.
+            <span className="break-words">
+              Agent activity unavailable{agents.data ? ' · showing last known sessions' : ''}:{' '}
+              {agents.error.message}
+            </span>
             <button
               className="underline"
               onClick={() => {

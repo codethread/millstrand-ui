@@ -11,68 +11,89 @@ import type {
 import { maybeString, string } from './parse.ts';
 import { z } from 'zod';
 
+const nonnegativeVersionInputSchema = z.number().int().safe().min(0);
+const positiveVersionInputSchema = z.number().int().safe().min(1);
+const positiveLineInputSchema = z.number().int().safe().min(1);
+const nullableStringSchema = z.string().nullable().optional();
+const inclusionSchema = z.enum(['included', 'dismissed']);
+const commentPublicationStateSchema = z.enum([
+  'unpublished',
+  'publishing',
+  'reconciling',
+  'published',
+  'excluded',
+  'failed',
+]);
+const reviewPublicationStateSchema = z.enum([
+  'unpublished',
+  'publishing',
+  'published',
+  'partial',
+  'failed',
+]);
+const publicationOutcomeSchema = z.enum(['published', 'partial', 'failed']);
+const sideSchema = z.enum(['old', 'new']);
+const compiledNonnegativeVersionSchema = z.compile(nonnegativeVersionInputSchema, { strict: true });
+const compiledPositiveVersionSchema = z.compile(positiveVersionInputSchema, { strict: true });
+const compiledPositiveLineSchema = z.compile(positiveLineInputSchema, { strict: true });
+const compiledBooleanSchema = z.compile(z.boolean(), { strict: true });
+
 const publishReviewInputSchema = z
-  .object({ revision: z.unknown(), curationVersion: z.unknown() })
+  .object({ revision: z.string(), curationVersion: nonnegativeVersionInputSchema })
   .strict();
 const compiledPublishReviewSchema = z.compile(publishReviewInputSchema, { strict: true });
 const curationCandidateInputSchema = z
-  .object({ expectedVersion: z.unknown(), text: z.unknown() })
+  .object({ expectedVersion: positiveVersionInputSchema, text: z.string() })
   .strict();
-const compiledCurationCandidateSchema = z.compile(curationCandidateInputSchema, { strict: true });
 const curationChangeInputSchema = z
-  .object({ id: z.unknown(), inclusion: z.unknown(), candidate: z.unknown().optional() })
+  .object({
+    id: z.string(),
+    inclusion: inclusionSchema,
+    candidate: curationCandidateInputSchema.optional(),
+  })
   .strict();
-const compiledCurationChangeSchema = z.compile(curationChangeInputSchema, { strict: true });
 const curationReviewInputSchema = z
   .object({
-    revision: z.unknown(),
-    expectedVersion: z.unknown(),
-    by: z.unknown(),
-    changes: z.array(z.unknown()),
+    revision: z.string(),
+    expectedVersion: nonnegativeVersionInputSchema,
+    by: z.string(),
+    changes: z.array(curationChangeInputSchema),
   })
   .strict();
 const compiledCurationReviewSchema = z.compile(curationReviewInputSchema, { strict: true });
-const nonnegativeVersionInputSchema = z.number().int().safe().min(0);
-const compiledNonnegativeVersionSchema = z.compile(nonnegativeVersionInputSchema, { strict: true });
-const positiveVersionInputSchema = z.number().int().safe().min(1);
-const compiledPositiveVersionSchema = z.compile(positiveVersionInputSchema, { strict: true });
-const positiveLineInputSchema = z.number().int().safe().min(1);
-const compiledPositiveLineSchema = z.compile(positiveLineInputSchema, { strict: true });
-const booleanInputSchema = z.boolean();
-const compiledBooleanSchema = z.compile(booleanInputSchema, { strict: true });
 
 const commentPositionInputSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('general'), reason: z.unknown() }).strict(),
-  z.object({ kind: z.literal('unsupported'), reason: z.unknown() }).strict(),
+  z.object({ kind: z.literal('general'), reason: z.string() }).loose(),
+  z.object({ kind: z.literal('unsupported'), reason: z.string() }).loose(),
   z
     .object({
       kind: z.literal('line'),
-      oldPath: z.unknown(),
-      newPath: z.unknown(),
-      side: z.unknown(),
-      line: z.unknown(),
-      startSide: z.unknown().nullable().optional(),
-      startLine: z.unknown().nullable().optional(),
+      oldPath: z.string(),
+      newPath: z.string(),
+      side: sideSchema,
+      line: positiveLineInputSchema,
+      startSide: sideSchema.nullable().optional(),
+      startLine: positiveLineInputSchema.nullable().optional(),
     })
-    .strict(),
+    .loose(),
 ]);
 const compiledCommentPositionSchema = z.compile(commentPositionInputSchema, { strict: true });
 
 const publicationReceiptCommentSchema = z
   .object({
-    id: z.unknown(),
-    state: z.unknown(),
-    retryable: z.unknown(),
-    discussionId: z.unknown().optional(),
-    error: z.unknown().optional(),
+    id: z.string(),
+    state: commentPublicationStateSchema,
+    retryable: z.boolean(),
+    discussionId: nullableStringSchema,
+    error: nullableStringSchema,
   })
   .loose();
 const publicationReceiptSchema = z
   .object({
-    reviewId: z.unknown(),
-    revision: z.unknown(),
-    curationVersion: z.unknown(),
-    state: z.unknown(),
+    reviewId: z.string(),
+    revision: z.string(),
+    curationVersion: nonnegativeVersionInputSchema,
+    state: publicationOutcomeSchema,
     comments: z.array(publicationReceiptCommentSchema),
   })
   .loose();
@@ -80,31 +101,35 @@ const compiledPublicationReceiptSchema = z.compile(publicationReceiptSchema, { s
 
 const reviewCommentsMrSchema = z
   .object({
-    projectId: z.unknown(),
-    iid: z.unknown(),
-    url: z.unknown(),
-    headSha: z.unknown(),
-    baseSha: z.unknown(),
-    startSha: z.unknown(),
-    sourceBranch: z.unknown().optional(),
-    targetBranch: z.unknown().optional(),
+    projectId: positiveLineInputSchema,
+    iid: positiveLineInputSchema,
+    url: z.string(),
+    headSha: z.string(),
+    baseSha: z.string(),
+    startSha: z.string(),
+    sourceBranch: nullableStringSchema,
+    targetBranch: nullableStringSchema,
   })
   .loose();
 const reviewCommentsCurationSchema = z
-  .object({ version: z.unknown(), mutable: z.unknown() })
+  .object({ version: nonnegativeVersionInputSchema, mutable: z.boolean() })
   .loose();
 const reviewCommentsPublicationSchema = z
-  .object({ state: z.unknown(), published: z.unknown(), failed: z.unknown() })
+  .object({
+    state: reviewPublicationStateSchema,
+    published: nonnegativeVersionInputSchema,
+    failed: nonnegativeVersionInputSchema,
+  })
   .loose();
 const reviewCommentsReviewSchema = z
   .object({
-    id: z.unknown(),
-    revision: z.unknown(),
-    state: z.unknown(),
-    stage: z.unknown(),
-    current: z.unknown(),
-    decision: z.unknown(),
-    repo: z.unknown().optional(),
+    id: z.string(),
+    revision: z.string(),
+    state: z.string(),
+    stage: z.enum(['preparing', 'dispatching', 'running', 'reviewed', 'failed']),
+    current: z.boolean(),
+    decision: z.enum(['pending', 'done', 'dismissed']),
+    repo: nullableStringSchema,
     mr: reviewCommentsMrSchema,
     curation: reviewCommentsCurationSchema,
     publication: reviewCommentsPublicationSchema,
@@ -114,15 +139,15 @@ const reviewCommentsReviewSchema = z
 const reviewerCandidateSourceSchema = z
   .object({
     kind: z.literal('reviewer'),
-    reviewer: z.unknown(),
-    runId: z.unknown().optional(),
+    reviewer: z.string(),
+    runId: nullableStringSchema,
   })
   .loose();
 const adoptedCandidateSourceSchema = z
   .object({
     kind: z.literal('user-adopted'),
-    by: z.unknown(),
-    at: z.unknown(),
+    by: z.string(),
+    at: z.string(),
   })
   .loose();
 const candidateSourceSchema = z.discriminatedUnion('kind', [
@@ -131,33 +156,33 @@ const candidateSourceSchema = z.discriminatedUnion('kind', [
 ]);
 const reviewCommentCandidateSchema = z
   .object({
-    text: z.unknown(),
-    version: z.unknown(),
+    text: z.string(),
+    version: positiveVersionInputSchema,
     source: candidateSourceSchema,
     original: z
       .object({
-        text: z.unknown(),
-        reviewer: z.unknown(),
-        runId: z.unknown().optional(),
+        text: z.string(),
+        reviewer: z.string(),
+        runId: nullableStringSchema,
       })
       .loose(),
   })
   .loose();
 const reviewCommentPublicationSchema = z
   .object({
-    state: z.unknown(),
-    discussionId: z.unknown().optional(),
-    retryable: z.unknown(),
-    error: z.unknown().optional(),
+    state: commentPublicationStateSchema,
+    discussionId: nullableStringSchema,
+    retryable: z.boolean(),
+    error: nullableStringSchema,
   })
   .loose();
 const reviewCommentSchema = z
   .object({
-    id: z.unknown(),
-    title: z.unknown(),
-    severity: z.unknown().optional(),
-    category: z.unknown(),
-    inclusion: z.unknown(),
+    id: z.string(),
+    title: z.string(),
+    severity: nullableStringSchema,
+    category: z.string(),
+    inclusion: inclusionSchema,
     candidate: reviewCommentCandidateSchema,
     position: commentPositionInputSchema,
     publication: reviewCommentPublicationSchema,
@@ -231,7 +256,8 @@ export function parsePublishReview(value: unknown): PublishReview {
 
 export function parseReviewPublicationReceipt(value: unknown): ReviewPublicationReceipt {
   const parsed = compiledPublicationReceiptSchema.safeParse(value);
-  if (!parsed.success) throw new Error('Publication receipt is invalid');
+  if (!parsed.success)
+    throw new Error(`Publication receipt is invalid: ${z.prettifyError(parsed.error)}`);
   const row = parsed.data;
   const state = row.state;
   if (state !== 'published' && state !== 'partial' && state !== 'failed')
@@ -271,7 +297,8 @@ function identifier(value: unknown): string {
 
 export function parseReviewComments(value: unknown): ReviewComments {
   const parsed = compiledReviewCommentsSchema.safeParse(value);
-  if (!parsed.success) throw new Error('Review comments are invalid');
+  if (!parsed.success)
+    throw new Error(`Review comments are invalid: ${z.prettifyError(parsed.error)}`);
   const row = parsed.data;
   const review = row.review;
   const mr = review.mr;
@@ -357,27 +384,18 @@ export function parseReviewComments(value: unknown): ReviewComments {
 export function parseCurateReview(value: unknown): CurateReview {
   const parsed = compiledCurationReviewSchema.safeParse(value);
   if (!parsed.success) throw new Error('Unknown curation field');
-  const changes = parsed.data.changes.map((item) => {
-    const change = compiledCurationChangeSchema.safeParse(item);
-    if (!change.success) throw new Error('Unknown comment change');
-    const candidate =
-      change.data.candidate === undefined
-        ? null
-        : compiledCurationCandidateSchema.safeParse(change.data.candidate);
-    if (candidate !== null && !candidate.success) throw new Error('Unknown candidate change');
-    return {
-      id: identifier(change.data.id),
-      inclusion: inclusion(change.data.inclusion),
-      ...(candidate === null
-        ? {}
-        : {
-            candidate: {
-              expectedVersion: candidateVersion(candidate.data.expectedVersion),
-              text: nonblank(candidate.data.text, 'Candidate text'),
-            },
-          }),
-    };
-  });
+  const changes = parsed.data.changes.map((change) => ({
+    id: identifier(change.id),
+    inclusion: change.inclusion,
+    ...(change.candidate === undefined
+      ? {}
+      : {
+          candidate: {
+            expectedVersion: change.candidate.expectedVersion,
+            text: nonblank(change.candidate.text, 'Candidate text'),
+          },
+        }),
+  }));
   if (!changes.length || new Set(changes.map((change) => change.id)).size !== changes.length)
     throw new Error('Curation changes must have unique IDs');
   return {

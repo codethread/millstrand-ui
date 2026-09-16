@@ -79,12 +79,17 @@ it('normalizes absent/null ranges and preserves explicit same-side ranges', () =
     parseReviewCommentPosition({ ...position, side: 'old', startSide: 'old', startLine: 10 }),
   ).toMatchObject({ side: 'old', start: { side: 'old', line: 10 } });
 });
+it('allows additive position fields while validating every known field', () => {
+  expect(parseReviewCommentPosition({ ...position, futureAnchor: 'context' })).toMatchObject({
+    kind: 'line',
+    line: 12,
+  });
+});
 it.each([
   null,
   [],
   { kind: 'guess' },
   { kind: 'general', reason: ' ' },
-  { kind: 'unsupported', reason: 'No anchor', line: 1 },
   { ...position, side: 'both' },
   { ...position, oldPath: '' },
   { ...position, line: 0 },

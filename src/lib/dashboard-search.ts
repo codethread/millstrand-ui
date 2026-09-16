@@ -30,9 +30,9 @@ export interface DashboardSearch {
   activeAgentsOnly: boolean;
 }
 
-const recordSchema = z.compile(z.record(z.string(), z.unknown()), { strict: true });
+const recordSchema = z.compile(z.object({}).loose(), { strict: true });
 const textSchema = z.compile(z.string().min(1), { strict: true });
-const arraySchema = z.compile(z.array(z.unknown()), { strict: true });
+const stringArraySchema = z.compile(z.array(z.string()), { strict: true });
 const labelTermSchema = z.compile(z.enum(['include', 'exclude']), { strict: true });
 const modeSchema = z.compile(
   z.enum(['overview', 'board', 'outline', 'graph', 'agents', 'reviews']),
@@ -56,7 +56,7 @@ function text(value: unknown): string | null {
   return parseOptional(textSchema, value);
 }
 function choices<T extends string>(value: unknown, allowed: readonly T[]): T[] {
-  const parsed = parseOptional(arraySchema, value);
+  const parsed = parseOptional(stringArraySchema, value);
   return parsed === null ? [] : allowed.filter((item) => parsed.includes(item));
 }
 function labelTerm(value: unknown): LabelTerm | null {

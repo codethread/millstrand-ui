@@ -11,20 +11,26 @@ interface SavedDraft {
   candidateVersion: number;
 }
 const savedCommentDraftSchema = z.compile(
-  z.object({
-    candidateVersion: z.number().int().safe().min(1),
-    state: z.discriminatedUnion('kind', [
-      z.object({ kind: z.literal('closed') }),
-      z.object({
-        kind: z.literal('editing'),
-        draft: z.object({
-          id: z.string(),
-          text: z.string(),
-          edit: z.number().int().safe().min(0),
-        }),
-      }),
-    ]),
-  }),
+  z
+    .object({
+      candidateVersion: z.number().int().safe().min(1),
+      state: z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('closed') }).loose(),
+        z
+          .object({
+            kind: z.literal('editing'),
+            draft: z
+              .object({
+                id: z.string(),
+                text: z.string(),
+                edit: z.number().int().safe().min(0),
+              })
+              .loose(),
+          })
+          .loose(),
+      ]),
+    })
+    .loose(),
   { strict: true },
 );
 

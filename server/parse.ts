@@ -30,6 +30,7 @@ const lanes = [
 ] as const;
 const priorities = ['p1', 'p2', 'p3', 'p4'] as const;
 const cardTypes = ['epic', 'feature'] as const;
+const strandStates = ['active', 'closed', 'replaced'] as const;
 const taskStatuses = ['ready', 'doing', 'blocked', 'closed'] as const;
 const relationKinds = ['depends-on', 'depended-on-by'] as const;
 const labelActions = ['add', 'remove'] as const;
@@ -38,6 +39,7 @@ const labelTerms = ['include', 'exclude'] as const;
 const laneSchema = z.enum(lanes);
 const prioritySchema = z.enum(priorities);
 const cardTypeSchema = z.enum(cardTypes);
+const strandStateSchema = z.enum(strandStates);
 const taskStatusSchema = z.enum(taskStatuses);
 const relationKindSchema = z.enum(relationKinds);
 const labelActionSchema = z.enum(labelActions);
@@ -63,12 +65,10 @@ function isJsonValue(value: unknown): value is JsonValue {
 // output object. Keep generic JSON objects as custom schemas so parsed data
 // retains every JSON key; in particular, attributes must not lose that key.
 const jsonValueSchema = z.custom<JsonValue>(isJsonValue);
-const jsonObjectSchema = z.custom<Record<string, JsonValue>>(
+export const jsonObjectSchema = z.custom<Record<string, JsonValue>>(
   (value): value is Record<string, JsonValue> => isObject(value) && isJsonValue(value),
 );
-const objectSchema = z.custom<Record<string, unknown>>(isObject);
-
-const unknownArraySchema = z.compile(z.array(z.unknown()), { strict: true });
+const jsonArraySchema = z.compile(z.array(jsonValueSchema), { strict: true });
 const stringSchema = z.compile(z.string(), { strict: true });
 const nullableStringSchema = z.compile(z.string().nullable().optional(), { strict: true });
 
@@ -87,21 +87,21 @@ const compiledNoteSchema = z.compile(noteSchema, { strict: true });
 const cardSchema = z
   .object({
     id: z.string(),
-    title: z.string().nullable().optional(),
-    state: z.string(),
-    attributes: z.unknown().optional(),
-    lane: z.unknown().optional(),
+    title: z.string(),
+    state: strandStateSchema,
+    attributes: jsonObjectSchema.optional(),
+    lane: z.string().nullable().optional(),
     labels: z.array(z.string()).optional(),
-    epic: z.string().nullable().optional(),
-    type: z.unknown().optional(),
-    priority: z.unknown().optional(),
-    owner: z.unknown().optional(),
-    branch: z.unknown().optional(),
-    worktree: z.unknown().optional(),
-    source: z.unknown().optional(),
-    outcome: z.unknown().optional(),
+    epic: z.string().optional(),
+    type: cardTypeSchema.optional(),
+    priority: prioritySchema.optional(),
+    owner: z.string().optional(),
+    branch: z.string().optional(),
+    worktree: z.string().optional(),
+    source: z.string().optional(),
+    outcome: z.string().optional(),
     created_at: z.string(),
-    updated_at: z.string().nullable().optional(),
+    updated_at: z.string().optional(),
   })
   .loose();
 const compiledCardSchema = z.compile(cardSchema, { strict: true });
@@ -109,8 +109,8 @@ type CardRow = z.infer<typeof cardSchema>;
 const taskSchema = z
   .object({
     id: z.string(),
-    title: z.string().nullable().optional(),
-    state: z.string(),
+    title: z.string(),
+    state: strandStateSchema,
     status: taskStatusSchema,
     owner: z.string().nullable().optional(),
     body: z.string().nullable().optional(),
@@ -121,11 +121,11 @@ const compiledTaskSchema = z.compile(taskSchema, { strict: true });
 const workSchema = z
   .object({
     id: z.string(),
-    title: z.string().nullable().optional(),
-    state: z.string(),
-    attributes: z.unknown(),
-    created_at: z.string().nullable().optional(),
-    updated_at: z.string().nullable().optional(),
+    title: z.string(),
+    state: strandStateSchema,
+    attributes: jsonObjectSchema,
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
   })
   .loose();
 const compiledWorkSchema = z.compile(workSchema, { strict: true });
@@ -170,7 +170,7 @@ const viewFilterSchema = z
   .object({
     query: z.string(),
     mode: z.enum(['and', 'or']),
-    terms: z.unknown(),
+    terms: z.record(z.string(), labelTermSchema),
     lanes: z.array(laneSchema),
     types: z.array(cardTypeSchema),
     priorities: z.array(prioritySchema),
@@ -203,21 +203,16 @@ function parseSchema<T>(
   message = `${where} is invalid`,
 ): T {
   const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new Error(message);
+  if (!parsed.success) throw new Error(`${message}: ${z.prettifyError(parsed.error)}`);
   return parsed.data;
 }
 
 export function object(value: unknown, where: string): ObjectValue {
-  const parsed = parseSchema(objectSchema, value, where, `${where} must be an object`);
-  return Object.fromEntries(
-    Object.entries(parsed).flatMap(([key, item]) =>
-      item === undefined ? [] : [[key, parseSchema(jsonValueSchema, item, `${where}.${key}`)]],
-    ),
-  );
+  return parseSchema(jsonObjectSchema, value, where, `${where} must be a JSON object`);
 }
 
-export function array(value: unknown, where: string): unknown[] {
-  return parseSchema(unknownArraySchema, value, where, `${where} must be an array`);
+export function array(value: unknown, where: string): JsonValue[] {
+  return parseSchema(jsonArraySchema, value, where, `${where} must be a JSON array`);
 }
 
 function jsonObject(value: unknown, where: string): Record<string, JsonValue> {
@@ -247,7 +242,7 @@ export function parseCard(value: unknown): Card {
   const row = parseSchema(compiledCardSchema, value, 'card');
   const attrs = row.attributes === undefined ? {} : jsonObject(row.attributes, 'card.attributes');
   const read = (key: keyof CardRow, attr = key): unknown => row[key] ?? attrs[attr];
-  const sourceLane = read('lane', 'kanban/lane');
+  const sourceLane = maybeString(read('lane', 'kanban/lane'), 'card.lane');
   const lane: Lane =
     row.state === 'closed' ? 'closed' : (lanes.find((item) => item === sourceLane) ?? 'unknown');
   const labels =
@@ -337,13 +332,17 @@ export function parseGraph(value: unknown): CardGraph {
   const row = parseSchema(compiledGraphSchema, value, 'graph');
   const nodes = row.strands.map((item): GraphNode => {
     const work = parseWork(item);
-    const cardType =
-      work.attributes['kanban/type'] ??
-      (work.attributes['kanban/card'] === 'true' ? 'feature' : null);
+    const explicitCardType = maybeString(
+      work.attributes['kanban/type'],
+      'graph strand kanban/type',
+    );
+    const cardMarker = maybeString(work.attributes['kanban/card'], 'graph strand kanban/card');
+    const taskMarker = maybeString(work.attributes['kanban/task'], 'graph strand kanban/task');
+    const cardType = explicitCardType ?? (cardMarker === 'true' ? 'feature' : null);
     const kind =
       cardType === 'epic' || cardType === 'feature'
         ? cardType
-        : work.attributes['kanban/task'] === 'true'
+        : taskMarker === 'true'
           ? 'task'
           : 'work';
     return { ...work, kind };
@@ -378,9 +377,7 @@ export function parseLabelChange(value: unknown): LabelChange {
 function parseFilter(value: unknown): ViewFilter {
   const row = parseSchema(compiledViewFilterSchema, value, 'view.filter');
   const terms: Record<string, LabelTerm> = {};
-  for (const [key, term] of Object.entries(object(row.terms, 'view.filter.terms'))) {
-    terms[label(key)] = enumValue(labelTermSchema, term, labelTerms, 'label term');
-  }
+  for (const [key, term] of Object.entries(row.terms)) terms[label(key)] = term;
   return {
     query: row.query,
     mode: row.mode,

@@ -6,7 +6,16 @@ function strand(
   attributes: Record<string, unknown>,
   createdAt = '2026-09-13 10:00:00',
 ) {
-  return { id, title: id, state: 'active', created_at: createdAt, attributes };
+  return {
+    id,
+    title: id,
+    state: 'active',
+    created_at: createdAt,
+    updated_at: createdAt,
+    attributes: Object.fromEntries(
+      Object.entries(attributes).filter(([, value]) => value !== undefined),
+    ),
+  };
 }
 const identity = strand('identity1', {
   'identity/session': 'true',
@@ -64,10 +73,9 @@ describe('agent directory boundary', () => {
       ['new', 'ready'],
       ['old', 'stopped'],
     ]);
-    expect(
-      parseAgents([identity, strand('unknown', { ...runAttrs, 'harness/status': null })])[0]
-        ?.runs[0]?.status,
-    ).toBe('unknown');
+    expect(() =>
+      parseAgents([identity, strand('invalid', { ...runAttrs, 'harness/status': null })]),
+    ).toThrow('harness/status');
   });
 
   it('supports identities without tracked runs and worlds without identities', () => {
@@ -98,6 +106,6 @@ describe('agent directory boundary', () => {
   it('rejects malformed identity linkage instead of silently assigning the wrong alias', () => {
     expect(() =>
       parseAgents([identity, strand('broken', { ...runAttrs, 'identity/id': 42 })]),
-    ).toThrow('run.identity/id must be a string');
+    ).toThrow('identity/id');
   });
 });
