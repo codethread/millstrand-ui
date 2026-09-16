@@ -11,12 +11,12 @@ import {
 } from '@xyflow/react';
 import { ArrowUpRight, Network, X } from 'lucide-react';
 import type { Card, GraphNode } from '../../shared/api';
-import { useGraph } from '../lib/api';
+import { useGraph } from '../hooks/use-cards';
 import { graphBody, graphFromCards, layoutGraph, type IssueGraphNode } from '../lib/graph';
 import { useDashboardNavigation } from '../lib/navigation';
 import { Button } from './ui/button';
 import { ErrorNotice, Loading } from './issue-parts';
-import { Markdown } from './issue-detail';
+import { Markdown } from './markdown';
 import { PromptAgentButton } from './agent-prompt';
 import '@xyflow/react/dist/style.css';
 

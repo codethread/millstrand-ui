@@ -25,7 +25,11 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useAgents, useReviews, useBoard, useViews, useWorkspaces } from './lib/api';
+import { useAgents } from './hooks/use-agents';
+import { useBoard } from './hooks/use-cards';
+import { useReviews } from './hooks/use-reviews';
+import { useViews } from './hooks/use-views';
+import { useWorkspaces } from './lib/api/workspaces';
 import {
   boardSummary,
   emptyFilter,

@@ -1,6 +1,6 @@
 import { Check, MessageSquare, X } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Markdown } from './issue-detail';
+import { Markdown } from './markdown';
 import { Button } from './ui/button';
 
 export interface ReviewCommentCardProps {

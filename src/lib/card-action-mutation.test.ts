@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
-import { cardActionMutationOptions } from './api';
+import { cardActionMutationOptions } from './api/cards';
 import type { CardAction } from '../../shared/api';
 
 afterEach(() => vi.unstubAllGlobals());

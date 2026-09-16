@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from './lib/api/query-client';
 import {
   createRootRoute,
   createRoute,
@@ -10,10 +11,11 @@ import {
 } from '@tanstack/react-router';
 import { TooltipProvider } from './components/ui/tooltip';
 import { Dashboard } from './Dashboard';
+import { WorkspaceDiscovery } from './components/workspace-discovery';
 import { dashboardSearchDefaults, parseDashboardSearch } from './lib/dashboard-search';
 import './index.css';
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 3000 } } });
+const queryClient = createQueryClient();
 const rootRoute = createRootRoute();
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -34,6 +36,7 @@ if (!root) throw new Error('Application root is missing');
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
+      <WorkspaceDiscovery />
       <TooltipProvider>
         <RouterProvider router={router} />
       </TooltipProvider>

@@ -2,7 +2,7 @@ import { useId, useRef } from 'react';
 import { MessageSquare, Send } from 'lucide-react';
 import type { WorkspaceOption } from '../../shared/api';
 import { useAgentPromptStore, type PromptTarget } from '../agent-prompt-store';
-import { useAgentOptions, usePromptAgent } from '../lib/api';
+import { useAgentOptions, usePromptAgent } from '../hooks/use-agents';
 import { useDashboardNavigation } from '../lib/navigation';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';

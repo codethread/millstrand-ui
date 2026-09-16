@@ -1,11 +1,12 @@
 import { Bot, Search, X } from 'lucide-react';
 import { useEffect } from 'react';
 import type { AgentIdentity, AgentRun } from '../../shared/api';
-import { useAgents, useAgentReply, useBoard } from '../lib/api';
+import { useAgents, useAgentReply } from '../hooks/use-agents';
+import { useBoard } from '../hooks/use-cards';
 import { useAgentPromptStore } from '../agent-prompt-store';
 import { useReviewCommentStore } from '../review-comment-store';
 import { runIsFinished } from '../lib/agent-notifications';
-import { Markdown } from './issue-detail';
+import { Markdown } from './markdown';
 import {
   agentIsActive,
   currentRun,

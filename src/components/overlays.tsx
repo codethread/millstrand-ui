@@ -2,7 +2,7 @@ import { Check, Keyboard, Minus, RotateCcw, Trash2 } from 'lucide-react';
 import { sorted } from '../../shared/array';
 import type { Board, SavedView } from '../../shared/api';
 import { useDashboardNavigation } from '../lib/navigation';
-import { useSaveViews } from '../lib/api';
+import { useSaveViews } from '../hooks/use-views';
 import { selectCards } from '../lib/board';
 import { cn } from '../lib/utils';
 import { shortcutActions, shortcutLabels, useDashboardStore } from '../store';
