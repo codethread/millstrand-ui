@@ -41,6 +41,10 @@ it('reads membership before bounded full hydration and retains long dispatch err
   );
   expect(source).toEqual(expect.stringContaining('(if (seq cards)'));
   expect(source).not.toEqual(expect.stringContaining('strands-by-ids'));
+  expect(source).toEqual(expect.stringContaining('(update card :attributes'));
+  expect(source).toEqual(expect.stringContaining(':auto-run/error'));
+  expect(source).toEqual(expect.stringContaining('"kanban.label" (namespace key)'));
+  expect(source).not.toEqual(expect.stringContaining(':body'));
   expect(source).not.toEqual(expect.stringContaining(workspace));
   expect(await data.board()).toBe(board);
   expect(exec).toHaveBeenCalledTimes(2);

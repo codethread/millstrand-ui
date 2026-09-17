@@ -18,9 +18,22 @@ const inspectionSource = `
         cards (millstrand.api.weaver.alpha/list-lean
                 runtime 0 [:= [:attr "kanban/card"] "true"] {} 10000)]
     (clojure.data.json/write-str
-      (if (seq cards)
-        (millstrand.api.weaver.alpha/list runtime [:in :id (mapv :id cards)] {})
-        [])
+      (mapv
+        (fn [card]
+          (update card :attributes
+            (fn [attrs]
+              (into {}
+                (filter (fn [[key _]]
+                  (or (contains? #{:kanban/type :kanban/lane :kanban/priority
+                                   :kanban/source :kanban/outcome :owner :branch :worktree
+                                   :auto-run/seat :auto-run/effort :auto-run/workflow
+                                   :auto-run/status :auto-run/run-id :auto-run/workflow-run-id
+                                   :auto-run/error :auto-run/worktree :auto-run/branch} key)
+                      (= "kanban.label" (namespace key)))))
+                attrs))))
+        (if (seq cards)
+          (millstrand.api.weaver.alpha/list runtime [:in :id (mapv :id cards)] {})
+          []))
       :key-fn (fn [key] (if (keyword? key) (subs (str key) 1) key)))))
 `;
 

@@ -53,7 +53,10 @@ membership first, then hydrates attributes through `server/card-inspection.ts`.
 This fixed read-only REPL program selects up to 10,000 card IDs with public
 `list-lean`, then uses a full `list` query restricted to those IDs (including
 errors longer than the CLI's lean-string limit). Unlike strict point hydration,
-that query tolerates IDs deleted between reads. Deleted cards are omitted; cards
+that query tolerates IDs deleted between reads. Before serialization, the program
+keeps only card metadata attributes, label flags and the known auto-run fields;
+large bodies and unrelated attributes never enter the board response buffer.
+Deleted cards are omitted; cards
 created after membership was read appear next poll. Overflow and read failures
 remain visible with normal Query refresh-error retention. No per-card requests,
 new endpoints, query keys, or poll owners are added. Raw detail attributes remain
