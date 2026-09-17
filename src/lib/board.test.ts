@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { Card, ViewFilter } from '../../shared/api';
+import type { Board, Card, ViewFilter } from '../../shared/api';
 import { overviewCards } from './overview';
 import {
+  boardSidebarContent,
   emptyFilter,
+  issueBoardContent,
   matchesWorkspaceView,
+  savedViewBoardContent,
   selectBoardLanes,
   selectCards,
   selectOutline,
@@ -30,6 +33,30 @@ function card(id: string, labels: string[] = []): Card {
     updatedAt: null,
   };
 }
+
+describe('board content projections', () => {
+  it('returns content without carrying refresh metadata into shell readers', () => {
+    const active = card('active');
+    const cards = [active, { ...card('closed'), state: 'closed', lane: 'closed' as const }];
+    const labels = [{ label: 'platform', count: 1 }];
+    const board: Board = {
+      workspace: { path: '/workspace/.millstrand', name: 'Workspace' },
+      fetchedAt: '2026-09-16T12:00:00Z',
+      cards,
+      labels,
+    };
+    const filter = { ...emptyFilter(), query: 'active' };
+
+    expect(boardSidebarContent(board)).toEqual({
+      workspace: board.workspace,
+      cards,
+      labels,
+      summary: { active: 1, inProgress: 0, ready: 1, review: 0, closed: 1 },
+    });
+    expect(issueBoardContent(board, filter)).toEqual({ allCards: cards, cards: [active] });
+    expect(savedViewBoardContent(board, filter)).toEqual({ labels, matchingCount: 1 });
+  });
+});
 
 describe('saved-view filters', () => {
   const labeledCards = [

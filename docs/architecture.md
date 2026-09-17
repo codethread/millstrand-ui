@@ -5,25 +5,30 @@ Import concrete modules below; there is no `src/lib/api.ts` facade.
 
 ## Module map
 
-| Home                                                                                                                    | Owns / public entry points                                                                                                                             |
-| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/lib/api/transport.ts`                                                                                              | `request`: same-origin `/api`, workspace query parameter, HTTP errors, the documented endpoint-contract assertion at `response.json()`                 |
-| `src/lib/api/query-client.ts`                                                                                           | `createQueryClient`: one app client, query retry 1 and stale time 3s; mounted in `src/main.tsx`                                                        |
-| `src/lib/api/workspaces.ts`                                                                                             | `workspaceQueryOptions`, `workspaceReaderOptions`, `useWorkspaces`: global discovery and cache readers                                                 |
-| `src/lib/api/cards.ts`                                                                                                  | `boardQueryOptions`, `cardQueryOptions`, `graphQueryOptions`, `taskNotesQueryOptions`, `labelsMutationOptions`, `cardActionMutationOptions`            |
-| `src/lib/api/agents.ts`                                                                                                 | `agentQueryOptions`, `agentOptionsQueryOptions`, `agentReplyQueryOptions`, `agentPromptMutationOptions`; receipts stay tied to the submitted workspace |
-| `src/lib/api/views.ts`                                                                                                  | `viewsQueryOptions`, `saveViewsMutationOptions`                                                                                                        |
-| `src/lib/api/reviews.ts`                                                                                                | `reviewsQueryOptions`, `reviewQueryOptions`                                                                                                            |
-| `src/lib/api/review-comments.ts`                                                                                        | `reviewCommentsQueryOptions`, `curateReviewMutationOptions`, `reviewPublishMutationOptions`                                                            |
-| `src/hooks/use-workspace.ts`                                                                                            | Narrow Router workspace selector                                                                                                                       |
-| `src/hooks/use-cards.ts`, `use-agents.ts`, `use-views.ts`, `use-reviews.ts`, `use-review-comments.ts`                   | React composition: resolve workspace, mount queries/mutations, dependent queries, route reactions. Existing product components import these hooks.     |
-| `src/components/workspace-discovery.tsx`                                                                                | Single app-lifetime discovery poll owner, mounted in `src/main.tsx`                                                                                    |
-| `src/components/workspace-switcher.tsx`                                                                                 | Working pilot: selected option and filtered options use `select`; separate discovery health reader; URL-owned switching                                |
-| `src/lib/workspaces.ts`                                                                                                 | Pure `selectedWorkspace` and `matchingWorkspaces` projections                                                                                          |
-| `src/components/markdown.tsx`                                                                                           | Shared page-independent Markdown leaf; no issue-detail dependency                                                                                      |
-| `src/lib/board.ts`, `agents.ts`, `reviews.ts`, `review-comments.ts`, `review-publication.ts`, `overview.ts`, `graph.ts` | Pure domain projections and rules; extend these homes for later surfaces, not API modules or another selector framework                                |
-| `src/lib/navigation.ts`, `dashboard-search.ts`                                                                          | Router composition/actions and URL schemas/destination transforms respectively                                                                         |
-| `src/store.ts`, `agent-prompt-store.ts`, `review-comment-store.ts`                                                      | Shared interaction state, preferences/receipts, and keyed persisted drafts; never mirrored server snapshots                                            |
+| Home                                                                                                                    | Owns / public entry points                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/api/transport.ts`                                                                                              | `request`: same-origin `/api`, workspace query parameter, HTTP errors, the documented endpoint-contract assertion at `response.json()`                                                        |
+| `src/lib/api/query-client.ts`                                                                                           | `createQueryClient`: one app client, query retry 1 and stale time 3s; mounted in `src/main.tsx`                                                                                               |
+| `src/lib/api/workspaces.ts`                                                                                             | `workspaceQueryOptions`, `workspaceReaderOptions`, `useWorkspaces`: global discovery and cache readers                                                                                        |
+| `src/lib/api/cards.ts`                                                                                                  | `boardQueryOptions`, `cardQueryOptions`, `graphQueryOptions`, `taskNotesQueryOptions`, `labelsMutationOptions`, `cardActionMutationOptions`                                                   |
+| `src/lib/api/agents.ts`                                                                                                 | `agentQueryOptions`, `agentOptionsQueryOptions`, `agentReplyQueryOptions`, `agentPromptMutationOptions`; receipts stay tied to the submitted workspace                                        |
+| `src/lib/api/views.ts`                                                                                                  | `viewsQueryOptions`, `saveViewsMutationOptions`                                                                                                                                               |
+| `src/lib/api/reviews.ts`                                                                                                | `reviewsQueryOptions`, `reviewQueryOptions`                                                                                                                                                   |
+| `src/lib/api/review-comments.ts`                                                                                        | `reviewCommentsQueryOptions`, `curateReviewMutationOptions`, `reviewPublishMutationOptions`                                                                                                   |
+| `src/hooks/use-workspace.ts`                                                                                            | Narrow Router workspace selector                                                                                                                                                              |
+| `src/hooks/use-cards.ts`, `use-agents.ts`, `use-views.ts`, `use-reviews.ts`, `use-review-comments.ts`                   | React composition: workspace resolution, concrete disabled content/status projections, mutations, dependent queries and route reactions. `use*Poll` exports are reserved for the owner below. |
+| `src/Dashboard.tsx`                                                                                                     | Route-level overview/workspace composition, workspace pin/reset, and startup state                                                                                                            |
+| `src/components/dashboard-shell.tsx`, `dashboard-sidebar.tsx`, `dashboard-header.tsx`                                   | Stable workspace shell, status/sidebar/header consumers, selection panels, and page slot                                                                                                      |
+| `src/components/issue-surface.tsx`                                                                                      | Board/outline/graph page entry; owns issue filtering and delegates to existing surface views                                                                                                  |
+| `src/components/overlays.tsx`, `saved-view-dialog.tsx`, `shortcut-dialog.tsx`                                           | Narrow overlay dispatch; Query-backed saved-view workflow and focused browser-preference editor                                                                                               |
+| `src/components/workspace-resource-polls.tsx`                                                                           | Single selected-workspace poll owner for board, agents, reviews, and saved views; mounted for every workspace mode                                                                            |
+| `src/components/workspace-discovery.tsx`                                                                                | Single app-lifetime discovery poll owner, mounted in `src/main.tsx`                                                                                                                           |
+| `src/components/workspace-switcher.tsx`                                                                                 | Working pilot: selected option and filtered options use `select`; separate discovery health reader; URL-owned switching                                                                       |
+| `src/lib/workspaces.ts`                                                                                                 | Pure `selectedWorkspace` and `matchingWorkspaces` projections                                                                                                                                 |
+| `src/components/markdown.tsx`                                                                                           | Shared page-independent Markdown leaf; no issue-detail dependency                                                                                                                             |
+| `src/lib/board.ts`, `agents.ts`, `reviews.ts`, `review-comments.ts`, `review-publication.ts`, `overview.ts`, `graph.ts` | Pure domain projections and rules; extend these homes for later surfaces, not API modules or another selector framework                                                                       |
+| `src/lib/navigation.ts`, `dashboard-search.ts`                                                                          | Router composition/actions and URL schemas/destination transforms respectively                                                                                                                |
+| `src/store.ts`, `agent-prompt-store.ts`, `review-comment-store.ts`                                                      | Shared interaction state, preferences/receipts, and keyed persisted drafts; never mirrored server snapshots                                                                                   |
 
 ### Validation boundaries (unchanged)
 
@@ -91,21 +96,53 @@ Infinity`, `subscribed: false`, or a new key as a substitute.
 - Discovery is fully migrated: `WorkspaceDiscovery` is mounted once above Router;
   switcher (including desktop/mobile copies), default-workspace pinning and overview
   are readers. Opening a menu does not create another polling authority.
-- Other surfaces deliberately retain their existing observer lifetimes/intervals
-  in this foundation. Shell feature 216lz will establish their single owners and
-  convert shared badges/sidebar/content to readers together. Do not turn off an
-  existing owner until all required background sidebar/notification data remains fed.
+- `WorkspaceResourcePolls` is the selected-workspace owner for board, agents,
+  reviews, and saved views. It remains mounted across issue, agent, and review modes,
+  so sidebar counts and prompt notifications stay fresh in the background. Full-root
+  `useBoard`, `useAgents`, and `useReviews` calls remain disabled readers
+  for existing surface internals. `useSavedViews` reads the saved-view array directly
+  (that response has no refresh timestamp). Shell code uses the concrete projection readers
+  (`useBoardSnapshot`, `useBoardSidebar`, `useIssueBoard`, `useAgentIdentities`,
+  `useReviewInboxCount`, `useSavedViews`, and status/workspace variants) so a changing
+  root `fetchedAt` does not redraw unrelated content. Only the corresponding
+  `use*Poll` calls in the owner establish timers.
 - Multi-workspace overview uses `useQueries` with board and agent factories per ID,
   enabling only running weavers. It shares the same caches as workspace pages, not
   an overview cache. Keep per-source errors and retained snapshots independent;
   discovery failure is not a zero activity count. Offline snapshots remain visible
   but overview links remain unavailable. Its broader projection rewrite is rwq4x.
 
+## Shell and page seams
+
+`Dashboard` chooses overview versus a keyed workspace and owns only workspace
+initialization. `DashboardShell` renders `DashboardSidebar`, `DashboardHeader`,
+status/error feedback, the page slot, selection panels, and global dialogs. It does
+not receive board/agent/review snapshots from a page. `DashboardOverlays` only
+dispatches the active overlay; `SavedViewDialog` composes projected board/view readers,
+the save mutation, URL selection commands, and the Zustand draft, while
+`ShortcutDialog` subscribes only to browser preferences and their actions.
+`IssueSurface()`, `AgentsView()`, and `ReviewsView()` are prop-free workspace page
+entries; later surface work can change their queries and views without editing the
+route shell. `DashboardShell({ children: ReactNode })` is the explicit page slot.
+`DashboardSidebar()`, `DashboardHeader()`, `DashboardOverlays()`, and
+`WorkspaceResourcePolls()` are prop-free shell entries. IssueSurface renders Graph
+before checking empty filtered cards, keeping graph focus usable even when filters
+match nothing.
+`WorkspacePage` gates startup on a boolean board-snapshot projection. Initialization
+selects only workspace metadata; header/sidebar/dialog content selects cards, labels,
+counts, identities, or saved views. Resource status consumers separately select
+`fetchedAt` and read Query error/fetch state rather than threading metadata through
+page props.
+
 ## Selection and composition conventions
 
-Use a module-level selector for fixed projections; `useCallback` with the actual
-inputs for parameterized selectors (see switcher's selected option and search).
-Select nested content rather than selecting a root containing `fetchedAt`. Query
+Navigation commands come from action-only `useDashboardActions`; URL content comes
+from the concrete scalar hooks in `src/lib/navigation.ts`. Commands whose result
+depends on URL state use Router's functional current-search callback, never a closure
+captured by a broad subscription. Use a module-level selector for fixed projections;
+use `useCallback` with the actual inputs for parameterized selectors (see
+`useIssueBoard`, `useFilteredCardCount`, `useSavedViewBoard`, and the workspace
+switcher). Select nested content rather than selecting a root containing `fetchedAt`. Query
 structural sharing retains unchanged branches; ordinary pure selectors should
 return an existing reference when no transform is needed. Do not put query result
 wrappers/arrays in derived-model dependencies or copy snapshots to Zustand.

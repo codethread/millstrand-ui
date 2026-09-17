@@ -5,10 +5,11 @@ import type {
   LabelTerm,
   Lane,
   Priority,
+  SavedView,
   ViewFilter,
   WorkspaceOption,
 } from '../../shared/api';
-import { emptyFilter } from './board';
+import { emptyFilter, workspaceFilter, type WorkspaceView } from './board';
 
 export type Presentation = 'overview' | 'board' | 'outline' | 'graph' | 'agents' | 'reviews';
 export type DetailTab = 'overview' | 'activity' | 'attributes';
@@ -155,6 +156,35 @@ export function manualFilterSearch(
 
 type WorkspaceDestination =
   { kind: 'board' } | { kind: 'card'; id: string } | { kind: 'agent'; id: string };
+
+/** Selecting a saved view installs its immutable URL snapshot. */
+export function savedViewSearch(
+  search: DashboardSearch,
+  view: SavedView | null,
+): Partial<DashboardSearch> {
+  return {
+    filter: view?.filter ?? emptyFilter(),
+    activeViewId: view?.id ?? null,
+    graphRoot: null,
+    mode:
+      search.mode === 'agents' || search.mode === 'reviews' || search.mode === 'overview'
+        ? 'board'
+        : search.mode,
+  };
+}
+
+/** Built-in workspace views are filter snapshots, not persisted saved views. */
+export function workspaceViewSearch(
+  search: DashboardSearch,
+  view: WorkspaceView,
+): Partial<DashboardSearch> {
+  return {
+    filter: workspaceFilter(view),
+    activeViewId: null,
+    graphRoot: null,
+    mode: search.mode === 'agents' || search.mode === 'reviews' ? 'board' : search.mode,
+  };
+}
 
 /** Cross-weaver links start clean; Back restores the exact prior dashboard. */
 export function workspaceDestination(

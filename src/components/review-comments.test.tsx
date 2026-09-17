@@ -5,7 +5,7 @@ import { commentsFixture } from '../../server/review-comments.fixture';
 import { ReviewComments } from './review-comments';
 
 const mutate = vi.hoisted(() => vi.fn());
-vi.mock('../lib/navigation', () => ({ useDashboardNavigation: () => ({ workspace: 'weaver' }) }));
+vi.mock('../lib/navigation', () => ({ useWorkspaceId: () => 'weaver' }));
 vi.mock('../hooks/use-review-comments', () => ({
   useReviewComments: () => ({ data: parseReviewComments(commentsFixture), error: null }),
   useReviewProposals: () => ({

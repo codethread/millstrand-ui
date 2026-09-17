@@ -1,15 +1,16 @@
 import { ChevronDown, Filter } from 'lucide-react';
 import type { CardType, Priority } from '../../shared/api';
 import { lanes } from '../lib/board';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useDashboardActions, useIssueFilter } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { StatusIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 export function DashboardFilters() {
-  const nav = useDashboardNavigation();
-  const count = nav.filter.lanes.length + nav.filter.types.length + nav.filter.priorities.length;
+  const filter = useIssueFilter();
+  const actions = useDashboardActions();
+  const count = filter.lanes.length + filter.types.length + filter.priorities.length;
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -29,8 +30,8 @@ export function DashboardFilters() {
               .map((lane) => (
                 <button
                   key={lane.id}
-                  className={cn('filter-chip', nav.filter.lanes.includes(lane.id) && 'selected')}
-                  onClick={() => nav.toggleLane(lane.id)}
+                  className={cn('filter-chip', filter.lanes.includes(lane.id) && 'selected')}
+                  onClick={() => actions.toggleLane(lane.id)}
                 >
                   <StatusIcon status={lane.id} />
                   {lane.title}
@@ -42,11 +43,8 @@ export function DashboardFilters() {
             {(['epic', 'feature'] satisfies CardType[]).map((type) => (
               <button
                 key={type}
-                className={cn(
-                  'filter-chip capitalize',
-                  nav.filter.types.includes(type) && 'selected',
-                )}
-                onClick={() => nav.toggleType(type)}
+                className={cn('filter-chip capitalize', filter.types.includes(type) && 'selected')}
+                onClick={() => actions.toggleType(type)}
               >
                 {type}
               </button>
@@ -59,15 +57,15 @@ export function DashboardFilters() {
                 key={priority}
                 className={cn(
                   'filter-chip uppercase',
-                  nav.filter.priorities.includes(priority) && 'selected',
+                  filter.priorities.includes(priority) && 'selected',
                 )}
-                onClick={() => nav.togglePriority(priority)}
+                onClick={() => actions.togglePriority(priority)}
               >
                 {priority}
               </button>
             ))}
           </div>
-          <Button variant="ghost" size="sm" onClick={nav.resetFilters}>
+          <Button variant="ghost" size="sm" onClick={actions.resetFilters}>
             Reset filters
           </Button>
         </div>

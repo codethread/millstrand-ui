@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseReviewList } from '../../server/reviews';
 import { review } from '../../server/reviews.fixture';
-import { reviewPromptTarget, selectReviews } from './reviews';
+import { reviewInboxCount, reviewPromptTarget, selectReviews } from './reviews';
 import { parseDashboardSearch, workspaceDestination, manualFilterSearch } from './dashboard-search';
 import { emptyFilter } from './board';
 describe('review inbox', () => {
@@ -14,6 +14,15 @@ describe('review inbox', () => {
     ],
   });
   it('keeps outdated undecided reviews in the inbox and retains completed history in all', () => {
+    expect(
+      reviewInboxCount({
+        kind: 'available',
+        workspace: { path: '/workspace/.millstrand', name: 'Workspace' },
+        fetchedAt: '2026-09-16T12:00:00Z',
+        reviews: rows,
+      }),
+    ).toBe(3);
+    expect(reviewInboxCount({ kind: 'unsupported', message: 'Unavailable' })).toBeNull();
     expect(selectReviews(rows, 'inbox', null, '').map((row) => row.id)).toEqual([
       'older',
       'r123',

@@ -13,7 +13,7 @@ import { ArrowUpRight, Network, X } from 'lucide-react';
 import type { Card, GraphNode } from '../../shared/api';
 import { useGraph } from '../hooks/use-cards';
 import { graphBody, graphFromCards, layoutGraph, type IssueGraphNode } from '../lib/graph';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useDashboardActions, useGraphRoot, useIssueFilter } from '../lib/navigation';
 import { Button } from './ui/button';
 import { ErrorNotice, Loading } from './issue-parts';
 import { Markdown } from './markdown';
@@ -43,8 +43,9 @@ function GraphCard({ data }: NodeProps<IssueGraphNode>) {
 const nodeTypes = { issue: GraphCard };
 
 export default function GraphView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
-  const { graphRoot: root, filter, setGraphRoot: setRoot, openCard } = useDashboardNavigation();
-  const includeClosed = filter.includeClosed;
+  const root = useGraphRoot();
+  const includeClosed = useIssueFilter().includeClosed;
+  const { setGraphRoot: setRoot, openCard } = useDashboardActions();
   const query = useGraph(root);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const graph = useMemo(

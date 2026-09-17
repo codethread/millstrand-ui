@@ -99,6 +99,47 @@ export function selectCards(cards: Card[], filter: ViewFilter): Card[] {
   );
 }
 
+export interface BoardSidebarContent {
+  workspace: Board['workspace'];
+  cards: Card[];
+  labels: Board['labels'];
+  summary: ReturnType<typeof boardSummary>;
+}
+
+export function boardSidebarContent(board: Board): BoardSidebarContent {
+  return {
+    workspace: board.workspace,
+    cards: board.cards,
+    labels: board.labels,
+    summary: boardSummary(board),
+  };
+}
+
+export function filteredCardCount(board: Board, filter: ViewFilter): number {
+  return board.cards.filter((card) => matchesCard(card, filter)).length;
+}
+
+export interface IssueBoardContent {
+  allCards: Card[];
+  cards: Card[];
+}
+
+export function issueBoardContent(board: Board, filter: ViewFilter): IssueBoardContent {
+  return { allCards: board.cards, cards: selectCards(board.cards, filter) };
+}
+
+export interface SavedViewBoardContent {
+  labels: Board['labels'];
+  matchingCount: number;
+}
+
+export function savedViewBoardContent(board: Board, filter: ViewFilter): SavedViewBoardContent {
+  return {
+    labels: board.labels,
+    matchingCount: filteredCardCount(board, filter),
+  };
+}
+
 export interface OutlineGroup {
   parent: Card | null;
   cards: Card[];

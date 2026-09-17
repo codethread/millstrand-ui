@@ -18,7 +18,7 @@ import type { CardDetail, Note, Task } from '../../shared/api';
 import { PromptAgentButton } from './agent-prompt';
 import { useCard, useLabels, useTaskNotes } from '../hooks/use-cards';
 import { formatDate, relativeTime } from '../lib/board';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useDashboardActions, useDetailTab } from '../lib/navigation';
 import type { DetailTab } from '../lib/dashboard-search';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Button } from './ui/button';
@@ -155,7 +155,7 @@ function LabelsEditor({ detail }: { detail: CardDetail }) {
 }
 
 function DetailOverview({ detail }: { detail: CardDetail }) {
-  const { openCard, exploreGraph } = useDashboardNavigation();
+  const { openCard, exploreGraph } = useDashboardActions();
   const completed = detail.tasks.filter((task) => task.status === 'closed').length;
   return (
     <>
@@ -324,13 +324,8 @@ function CopyLink() {
 
 export function IssueDetail({ id }: { id: string }) {
   const query = useCard(id);
-  const {
-    closeCard,
-    openCard,
-    exploreGraph,
-    detailTab: tab,
-    setDetailTab: setTab,
-  } = useDashboardNavigation();
+  const tab = useDetailTab();
+  const { closeCard, openCard, exploreGraph, setDetailTab: setTab } = useDashboardActions();
   const detail = query.data;
   const tabs: { id: DetailTab; label: string }[] = [
     { id: 'overview', label: 'Overview' },

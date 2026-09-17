@@ -1,14 +1,14 @@
 import { ArrowUpRight, Inbox, Layers } from 'lucide-react';
 import type { Card } from '../../shared/api';
 import { selectBoardLanes, selectOutline } from '../lib/board';
-import { useDashboardNavigation } from '../lib/navigation';
+import { useDashboardActions, useIssueFilter } from '../lib/navigation';
 import { IssueAgents } from './agents-view';
 import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { CardContextMenu, CardMenuButton } from './card-actions';
 
 function IssueCard({ card, allCards }: { card: Card; allCards: Card[] }) {
-  const { openCard } = useDashboardNavigation();
+  const { openCard } = useDashboardActions();
   const epic = allCards.find((parent) => parent.id === card.epicId);
   return (
     <CardContextMenu card={card}>
@@ -58,7 +58,7 @@ function IssueCard({ card, allCards }: { card: Card; allCards: Card[] }) {
 }
 
 export function BoardView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
-  const includeClosed = useDashboardNavigation().filter.includeClosed;
+  const includeClosed = useIssueFilter().includeClosed;
   const columns = selectBoardLanes(cards, includeClosed);
   return (
     <div className="board-canvas">
@@ -97,7 +97,7 @@ export function BoardView({ cards, allCards }: { cards: Card[]; allCards: Card[]
 }
 
 export function OutlineView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
-  const { openCard, exploreGraph } = useDashboardNavigation();
+  const { openCard, exploreGraph } = useDashboardActions();
   const groups = selectOutline(allCards, cards);
   return (
     <div className="outline-canvas">
@@ -166,7 +166,7 @@ export function OutlineView({ cards, allCards }: { cards: Card[]; allCards: Card
 }
 
 export function EmptyBoard() {
-  const reset = useDashboardNavigation().resetFilters;
+  const { resetFilters } = useDashboardActions();
   return (
     <div className="empty-board">
       <div className="empty-board-icon">
@@ -174,7 +174,7 @@ export function EmptyBoard() {
       </div>
       <h2>No issues match this view</h2>
       <p>Try a different search or give your filters a little more room.</p>
-      <Button variant="outline" onClick={reset}>
+      <Button variant="outline" onClick={resetFilters}>
         Clear filters
       </Button>
     </div>

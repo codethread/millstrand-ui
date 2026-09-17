@@ -17,7 +17,13 @@ import {
   selectAgents,
 } from '../lib/agents';
 import { formatDate } from '../lib/board';
-import { useDashboardNavigation } from '../lib/navigation';
+import {
+  useActiveAgentsOnly,
+  useAgentQuery,
+  useDashboardActions,
+  useSelectedAgentRun,
+  useWorkspaceId,
+} from '../lib/navigation';
 import { useDashboardStore } from '../store';
 import { cn } from '../lib/utils';
 import { Avatar, ErrorNotice, Loading } from './issue-parts';
@@ -39,7 +45,7 @@ function RunStatus({ run, stale = false }: { run: AgentRun | null; stale?: boole
  * earn “Working”; a running owner's unrelated session is labelled separately. */
 export function IssueAgents({ owner, target }: { owner: string | null; target: string }) {
   const query = useAgents();
-  const { openAgent } = useDashboardNavigation();
+  const { openAgent } = useDashboardActions();
   const agents = issueAgents(query.data?.identities ?? [], owner, target);
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -86,8 +92,10 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
 }
 
 export function AgentSearchControls() {
-  const s = useDashboardStore();
-  const nav = useDashboardNavigation();
+  const searchShortcut = useDashboardStore((state) => state.shortcuts.search);
+  const agentQuery = useAgentQuery();
+  const activeAgentsOnly = useActiveAgentsOnly();
+  const { setAgentQuery, toggleActiveAgents } = useDashboardActions();
   return (
     <div className="toolbar-actions">
       <div className="search-field">
@@ -96,21 +104,21 @@ export function AgentSearchControls() {
           id="agent-search"
           aria-label="Search agents"
           placeholder="Identity, alias, model…"
-          value={nav.agentQuery}
-          onChange={(event) => nav.setAgentQuery(event.target.value)}
+          value={agentQuery}
+          onChange={(event) => setAgentQuery(event.target.value)}
         />
-        {nav.agentQuery ? (
-          <button aria-label="Clear agent search" onClick={() => nav.setAgentQuery('')}>
+        {agentQuery ? (
+          <button aria-label="Clear agent search" onClick={() => setAgentQuery('')}>
             <X className="size-3" />
           </button>
         ) : (
-          <kbd>{s.shortcuts.search}</kbd>
+          <kbd>{searchShortcut}</kbd>
         )}
       </div>
       <button
-        className={cn('closed-toggle', nav.activeAgentsOnly && 'selected')}
-        aria-pressed={nav.activeAgentsOnly}
-        onClick={nav.toggleActiveAgents}
+        className={cn('closed-toggle', activeAgentsOnly && 'selected')}
+        aria-pressed={activeAgentsOnly}
+        onClick={toggleActiveAgents}
       >
         <Bot className="size-3.5" />
         Active only
@@ -121,7 +129,9 @@ export function AgentSearchControls() {
 
 export function AgentsView() {
   const query = useAgents();
-  const nav = useDashboardNavigation();
+  const agentQuery = useAgentQuery();
+  const activeAgentsOnly = useActiveAgentsOnly();
+  const { openAgent, resetAgentFilters } = useDashboardActions();
   if (!query.data)
     return query.error ? (
       <div className="p-5">
@@ -137,7 +147,7 @@ export function AgentsView() {
     ) : (
       <Loading text="Loading agent identities…" />
     );
-  const agents = selectAgents(query.data.identities, nav.agentQuery, nav.activeAgentsOnly);
+  const agents = selectAgents(query.data.identities, agentQuery, activeAgentsOnly);
   return (
     <div className="agents-canvas">
       <div className="mb-4 pr-10 text-xs text-muted-foreground">
@@ -156,8 +166,8 @@ export function AgentsView() {
               ? 'Search by identity, harness alias, provider, or model.'
               : 'Identities appear when a harness session is registered in this workspace.'}
           </p>
-          {(nav.agentQuery || nav.activeAgentsOnly) && (
-            <Button variant="outline" onClick={nav.resetAgentFilters}>
+          {(agentQuery || activeAgentsOnly) && (
+            <Button variant="outline" onClick={resetAgentFilters}>
               Clear agent filters
             </Button>
           )}
@@ -169,7 +179,7 @@ export function AgentsView() {
               key={agent.id}
               agent={agent}
               stale={!!query.error}
-              onSelect={() => nav.openAgent(agent.id)}
+              onSelect={() => openAgent(agent.id)}
             />
           ))}
         </div>
@@ -211,7 +221,8 @@ function AgentCard({
 
 export function AgentDetail({ id }: { id: string }) {
   const query = useAgents();
-  const { closeAgent, openCard, agentRun, focusAgentRun } = useDashboardNavigation();
+  const agentRun = useSelectedAgentRun();
+  const { closeAgent, openCard, focusAgentRun } = useDashboardActions();
   const agent = query.data?.identities.find((item) => item.id === id);
   const run = agent ? currentRun(agent) : null;
   return (
@@ -359,12 +370,13 @@ export function AgentDetail({ id }: { id: string }) {
 function AgentRunReply({ id }: { id: string }) {
   const query = useAgentReply(id, true);
   const board = useBoard();
-  const nav = useDashboardNavigation();
+  const workspace = useWorkspaceId();
+  const { exploreGraph, openCard, openReview } = useDashboardActions();
   const markRead = useAgentPromptStore((s) => s.markRead);
   const reply = query.data;
   useEffect(() => {
-    if (nav.workspace && reply && runIsFinished(reply) && !query.error) markRead(nav.workspace, id);
-  }, [nav.workspace, id, reply, query.error, markRead]);
+    if (workspace && reply && runIsFinished(reply) && !query.error) markRead(workspace, id);
+  }, [workspace, id, reply, query.error, markRead]);
   const cardId = reply?.prompt?.cardId ?? reply?.target ?? null;
   const card = board.data?.cards.find((candidate) => candidate.id === cardId);
   return (
@@ -379,7 +391,7 @@ function AgentRunReply({ id }: { id: string }) {
                 reviewId: reply.prompt.cardId,
                 commentId: reply.prompt.comment.id,
               });
-            if (cardId) nav.openReview(cardId);
+            if (cardId) openReview(cardId);
           }}
         >
           {reply.prompt.kind === 'review-comment' ? 'View comment' : 'View review'} ·{' '}
@@ -391,8 +403,8 @@ function AgentRunReply({ id }: { id: string }) {
             variant="outline"
             size="sm"
             onClick={() => {
-              if (reply?.target !== card.id) nav.exploreGraph(card.id);
-              else nav.openCard(card.id);
+              if (reply?.target !== card.id) exploreGraph(card.id);
+              else openCard(card.id);
             }}
           >
             View work · {card.id}
