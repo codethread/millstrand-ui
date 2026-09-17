@@ -1,7 +1,8 @@
 import { ArrowUpRight, Inbox, Layers } from 'lucide-react';
-import type { BoardCard, BoardColumn, OutlineGroup } from '../lib/board';
-import { useDashboardActions } from '../lib/navigation';
-import { IssueAgents } from './agents-view';
+import type { Card } from '../../shared/api';
+import { selectBoardLanes, selectOutline } from '../lib/board';
+import { useDashboardActions, useIssueFilter } from '../lib/navigation';
+import { IssueAgents } from './agent-activity';
 import { AutoRunSummary } from './auto-run';
 import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';

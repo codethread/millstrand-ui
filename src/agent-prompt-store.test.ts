@@ -108,7 +108,27 @@ describe('independent browser preference keys', () => {
   it('retains session tracking and explains persistence failures instead of failing a launch', () => {
     const store = createAgentPromptStore(null);
     store.getState().track(workspace, 'run1', requestId);
+    store.getState().setAlias(workspace, 'astra');
+    store.getState().refreshPreferences();
     expect(store.getState().receipts[workspace]?.['run1']?.requestId).toBe(requestId);
+    expect(store.getState().aliases[workspace]).toBe('astra');
+    expect(store.getState().persistenceError).toContain('only for this session');
+    expect(createAgentPromptStore(null, true).getState().persistenceError).toContain(
+      'only for this session',
+    );
+  });
+
+  it('keeps the last session preferences and exposes a cross-tab refresh read failure', () => {
+    const storage = memoryStorage();
+    const store = createAgentPromptStore(storage);
+    store.getState().setAlias(workspace, 'astra');
+    Object.defineProperty(storage, 'length', {
+      get: () => {
+        throw new Error('blocked');
+      },
+    });
+    store.getState().refreshPreferences();
+    expect(store.getState().aliases[workspace]).toBe('astra');
     expect(store.getState().persistenceError).toContain('only for this session');
   });
 });

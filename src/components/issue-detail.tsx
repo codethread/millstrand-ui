@@ -13,7 +13,7 @@ import { Input } from './ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
 import { ErrorNotice, Loading, StatusBadge, TypeIcon } from './issue-parts';
 import { cn } from '../lib/utils';
-import { IssueAgents } from './agents-view';
+import { IssueAgents } from './agent-activity';
 import { AutoRunDetails } from './auto-run';
 import { Notes, TaskRow } from './issue-tasks';
 import { LabelsEditor } from './issue-labels';

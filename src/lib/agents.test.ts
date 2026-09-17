@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { AgentIdentity, AgentRun } from '../../shared/api';
 import {
   agentIsActive,
+  agentRunIdentities,
   currentRun,
   issueAgentActivity,
   issueAgents,
   issueRun,
+  relevantAgentActivity,
   runLabel,
   selectAgents,
+  selectedAgentActivity,
+  targetAgentRunIds,
 } from './agents';
 
 function run(change: Partial<AgentRun> = {}): AgentRun {
@@ -85,11 +89,39 @@ describe('agent activity and issue attribution', () => {
     const agent = identity([run(), targeted]);
     expect(issueRun(agent, 'card1')).toBe(targeted);
     expect(issueAgentActivity(agent, 'card1')).toBe('Queued');
+    expect(relevantAgentActivity([agent], agent.id, 'card1')).toEqual([
+      { identity: agent, run: targeted, label: 'Queued', relation: 'queued' },
+    ]);
   });
 
   it('keeps an active continuation above terminal history', () => {
     const active = run({ id: 'active' });
     expect(currentRun(identity([run({ status: 'stopped' }), active]))).toBe(active);
+  });
+
+  it('resolves an exact run even when a shared URL has no identity or a stale identity', () => {
+    const terminal = run({ id: 'terminal', status: 'stopped', target: 'review1' });
+    const expected = identity([terminal], 'exact-run-owner');
+    const unrelated = identity([run({ id: 'other' })], 'stale-url-owner');
+    expect(selectedAgentActivity([unrelated, expected], null, terminal.id)).toMatchObject({
+      identity: expected,
+      selectedRun: terminal,
+      requestedRunMissing: false,
+    });
+    expect(selectedAgentActivity([unrelated, expected], unrelated.id, terminal.id)?.identity).toBe(
+      expected,
+    );
+  });
+
+  it('publishes run-owner and target indexes without directory refresh metadata', () => {
+    const reviewRun = run({ id: 'review-run', target: 'review1' });
+    const otherRun = run({ id: 'other-run', target: 'card1' });
+    const agents = [identity([reviewRun]), identity([otherRun], 'other-owner')];
+    expect(agentRunIdentities(agents)).toEqual({
+      'review-run': 'calm-young-tiger',
+      'other-run': 'other-owner',
+    });
+    expect(targetAgentRunIds(agents, 'review1')).toEqual(['review-run']);
   });
 });
 

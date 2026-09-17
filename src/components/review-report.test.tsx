@@ -32,7 +32,7 @@ describe('ReviewReport', () => {
     const html = renderToStaticMarkup(
       <ReviewReport
         model={reviewDetailModel(detail())}
-        reviewerRunIdentities={{ 'run-1': 'agent-1' }}
+        reviewerRunIdentities={{}}
         integrations={{
           prompt: <button>Shared prompt entry</button>,
           comments: <section aria-label="Curated comments slot">Comments integration</section>,

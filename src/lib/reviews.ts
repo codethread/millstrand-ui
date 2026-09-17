@@ -1,4 +1,3 @@
-import type { AgentIdentity } from '../../shared/api';
 import { sorted } from '../../shared/array';
 import type {
   ReviewDetail,
@@ -141,19 +140,4 @@ export function reviewDetailModel(review: ReviewDetail): ReviewDetailModel {
       ? { kind: 'current' }
       : { kind: 'outdated', pendingDecision: review.decision === 'pending' },
   };
-}
-
-export function reviewerRunIdentities(
-  review: ReviewDetail,
-  identities: AgentIdentity[],
-): Readonly<Record<string, string>> {
-  const relevantRunIds = new Set(
-    review.reviewers.flatMap((reviewer) => (reviewer.runId === null ? [] : [reviewer.runId])),
-  );
-  const entries = identities.flatMap((identity) =>
-    identity.runs.flatMap((run) =>
-      relevantRunIds.has(run.id) ? ([[run.id, identity.id]] as const) : [],
-    ),
-  );
-  return Object.fromEntries(entries);
 }

@@ -16,7 +16,8 @@ Import concrete modules below; there is no `src/lib/api.ts` facade.
 | `src/lib/api/reviews.ts`                                                                                                | `reviewsQueryOptions`, `reviewQueryOptions`                                                                                                                                                   |
 | `src/lib/api/review-comments.ts`                                                                                        | `reviewCommentsQueryOptions`, `curateReviewMutationOptions`, `reviewPublishMutationOptions`                                                                                                   |
 | `src/hooks/use-workspace.ts`                                                                                            | Narrow Router workspace selector                                                                                                                                                              |
-| `src/hooks/use-cards.ts`, `use-agents.ts`, `use-views.ts`, `use-reviews.ts`, `use-review-comments.ts`                   | React composition: workspace resolution, concrete disabled content/status projections, mutations, dependent queries and route reactions. `use*Poll` exports are reserved for the owner below. |
+| `src/hooks/use-agents.ts`                                                                                               | Agent composition: identity/summary/relevant-item/selected-run/run-owner/target-run readers, reply/options queries and launch mutation. `useAgentsPoll` is reserved for the owner below.      |
+| `src/hooks/use-cards.ts`, `use-views.ts`, `use-reviews.ts`, `use-review-comments.ts`                                    | React composition: workspace resolution, concrete disabled content/status projections, mutations, dependent queries and route reactions. `use*Poll` exports are reserved for the owner below. |
 | `src/Dashboard.tsx`                                                                                                     | Route-level overview/workspace composition, workspace pin/reset, and startup state                                                                                                            |
 | `src/components/dashboard-shell.tsx`, `dashboard-sidebar.tsx`, `dashboard-header.tsx`                                   | Stable workspace shell, status/sidebar/header consumers, selection panels, and page slot                                                                                                      |
 | `src/components/issue-surface.tsx`                                                                                      | Board/outline/graph page entry; owns issue filtering and delegates to existing surface views                                                                                                  |
@@ -27,6 +28,8 @@ Import concrete modules below; there is no `src/lib/api.ts` facade.
 | `src/components/workspace-switcher.tsx`                                                                                 | Working pilot: selected option and filtered options use `select`; separate discovery health reader; URL-owned switching                                                                       |
 | `src/lib/workspaces.ts`                                                                                                 | Pure `selectedWorkspace` and `matchingWorkspaces` projections                                                                                                                                 |
 | `src/components/markdown.tsx`                                                                                           | Shared page-independent Markdown leaf; no issue-detail dependency                                                                                                                             |
+| `src/components/agent-activity.tsx`, `agent-prompt.tsx`, `agent-status.tsx`                                             | Shared issue/task badge, prompt button/dialog and run-status leaves; consumers never import the Agents page                                                                                   |
+| `src/components/agent-directory.tsx`, `agent-detail.tsx`, `agent-run-history.tsx`, `agent-run-reply.tsx`                | Agent directory and selected identity/run presentation boundaries; `agents-view.tsx` is only the page entry                                                                                   |
 | `src/lib/board.ts`, `agents.ts`, `reviews.ts`, `review-comments.ts`, `review-publication.ts`, `overview.ts`, `graph.ts` | Pure domain projections and rules; extend these homes for later surfaces, not API modules or another selector framework                                                                       |
 | `src/lib/navigation.ts`, `dashboard-search.ts`                                                                          | Router composition/actions and URL schemas/destination transforms respectively                                                                                                                |
 | `src/store.ts`, `agent-prompt-store.ts`, `review-comment-store.ts`                                                      | Shared interaction state, preferences/receipts, and keyed persisted drafts; never mirrored server snapshots                                                                                   |
@@ -120,14 +123,16 @@ Infinity`, `subscribed: false`, or a new key as a substitute.
   are readers. Opening a menu does not create another polling authority.
 - `WorkspaceResourcePolls` is the selected-workspace owner for board, agents,
   reviews, and saved views. It remains mounted across issue, agent, and review modes,
-  so sidebar counts and prompt notifications stay fresh in the background. Full-root
-  `useBoard`, `useAgents`, and `useReviews` calls remain disabled readers
-  for existing surface internals. `useSavedViews` reads the saved-view array directly
-  (that response has no refresh timestamp). Shell code uses the concrete projection readers
+  so sidebar counts and prompt notifications stay fresh in the background.
+  `useSavedViews` reads the saved-view array directly (that response has no refresh
+  timestamp). Shell code uses the concrete projection readers
   (`useBoardSnapshot`, `useBoardSidebar`, `useIssueBoard`, `useAgentIdentities`,
+  `useAgentSummary`, `useRelevantAgentActivity`, `useSelectedAgentActivity`,
   `useReviewInboxCount`, `useSavedViews`, and status/workspace variants) so a changing
-  root `fetchedAt` does not redraw unrelated content. Only the corresponding
-  `use*Poll` calls in the owner establish timers.
+  root `fetchedAt` does not redraw unrelated content. Full-root `useBoard` and
+  `useReviews` remain disabled readers for surface internals; agent consumers use only
+  the named projections above. Only the corresponding `use*Poll` calls in the owner
+  establish timers.
 - Multi-workspace overview uses `useQueries` with board and agent factories per ID,
   enabling only running weavers. It shares the same caches as workspace pages, not
   an overview cache. Keep per-source errors and retained snapshots independent;
@@ -181,6 +186,35 @@ domain values and explicit callbacks. Do not require a controller for trivial le
 or replace the dashboard monolith with one omnibus controller. Shared leaves belong
 under `src/components` (primitives under `ui`), never exported from a page for another
 page to consume. Domain options must not import Router; navigation belongs in hooks.
+
+### Agent activity public contract
+
+- Pure projections live in `src/lib/agents.ts`: `activeAgentIdentities` and
+  `agentDirectorySummary` support overview/count consumers; `relevantAgentActivity`
+  preserves owner versus explicitly targeted working/queued semantics;
+  `selectedAgentActivity` resolves an exact run even when a URL has no/stale identity;
+  `agentRunIdentities` and `targetAgentRunIds` support reviews without exposing the
+  timestamp-bearing directory.
+- Selected-workspace consumers use the disabled readers in `src/hooks/use-agents.ts`:
+  `useAgentIdentities`, `useAgentSummary`, `useRelevantAgentActivity`,
+  `useSelectedAgentActivity`, `useAgentRunIdentities`, and `useTargetAgentRunIds`.
+  Fetch health/fetched-at is a separate `useAgentStatus` subscription. Only
+  `WorkspaceResourcePolls` calls `useAgentsPoll`.
+- Import `IssueAgents` from `src/components/agent-activity.tsx` and
+  `PromptAgentButton`, `AgentPromptDialog`, or `WeaverAgentSetting` from
+  `src/components/agent-prompt.tsx`. Do not import shared UI from
+  `agents-view.tsx`; it exports only the `AgentsView` page entry.
+- `agent-prompt-store.ts` owns only composer state, per-workspace aliases, local
+  launch receipts/read markers, persistence feedback and actions. Components select
+  the current composer, current workspace alias/receipts, or one action—not the whole
+  store. Editing the prompt or changing its alias creates a new request ID; an
+  unchanged retry reuses its ID. Storage uses one atomic key per value and refreshes
+  on cross-tab storage events. Query remains authoritative for directories, runs,
+  replies, launch pending/errors and cache effects.
+- `useAgentReply` continues polling terminal runs so a late result remains observable.
+  A successfully read terminal reply marks only a matching local receipt read. Run
+  links retain explicit card/graph/review/comment attribution, and exact `agentRun`
+  URLs can resolve their identity from the directory.
 
 For mutations, capture the workspace and resource at submission; never invalidate a
 newly selected workspace on completion. Keep awaited versus fire-and-forget refresh
