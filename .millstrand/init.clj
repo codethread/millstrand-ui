@@ -15,5 +15,11 @@
                   :after [:millhouse/spools-workflow]
                   :required? true})
 
+(runtime/module! runtime :millstrand-ui/reviewers
+                 {:file "me/reviewers.clj"
+                  :after [:codethread/config-reviewers]
+                  :required? true})
+
 (codethread/register-executor!
- runtime [:millhouse/spools-workflow-providers])
+ runtime [:millhouse/spools-workflow-providers
+          :millstrand-ui/reviewers])
