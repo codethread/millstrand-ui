@@ -3,13 +3,17 @@ import { parseCardLane, moveCardArgs } from './card-actions';
 import { requestValue } from './parse';
 import { StrandData } from './strand';
 
-const exec = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<{ stdout: string }>>());
+const { exec, send } = vi.hoisted(() => ({
+  exec: vi.fn(),
+  send: vi.fn(),
+}));
 vi.mock('node:child_process', async () => {
   const { promisify } = await import('node:util');
   return { execFile: Object.assign(() => undefined, { [promisify.custom]: exec }) };
 });
 beforeEach(() => {
   exec.mockReset();
+  send.mockReset();
 });
 
 it.each(['unknown', '--help', '', null, 3])('rejects invalid destination %s', (lane) => {
@@ -43,18 +47,26 @@ const card = {
   lane: 'pending',
   created_at: '2026-09-15',
 };
+function cardRead(cards: (typeof card)[]) {
+  return Object.assign(Promise.resolve({ stdout: JSON.stringify(JSON.stringify(cards)) }), {
+    child: { stdin: { end: send } },
+  });
+}
+
 function mockBoard() {
   let cards = [card];
-  exec.mockImplementation(async (_file, argv) => {
+  exec.mockImplementation((_file, argv) => {
+    if (_file === 'mill') return cardRead(cards);
     const op = Array.isArray(argv) ? argv.slice(2) : [];
-    if (op[0] === 'kanban' && op[1] === 'board') return { stdout: JSON.stringify({ cards }) };
+    if (op[0] === 'kanban' && op[1] === 'board')
+      return Promise.resolve({ stdout: JSON.stringify({ cards }) });
     if (op[0] === 'burn') {
       cards = [];
-      return { stdout: '{"burned":["card1"],"count":1}' };
+      return Promise.resolve({ stdout: '{"burned":["card1"],"count":1}' });
     }
     if (op[0] === 'update') {
       cards = [{ ...card, lane: 'in_review' }];
-      return { stdout: '{}' };
+      return Promise.resolve({ stdout: '{}' });
     }
     throw new Error(`Unexpected command ${JSON.stringify(op)}`);
   });
@@ -84,7 +96,17 @@ it('does not mutate a non-card or a card removed since the last poll', async () 
   await data.board();
   source.remove();
   await expect(data.changeCard('card1', { kind: 'delete' })).rejects.toMatchObject({ status: 404 });
-  expect(exec.mock.calls.every((call) => JSON.stringify(call[1]).includes('board'))).toBe(true);
+  expect(
+    exec.mock.calls.every((call) => {
+      const args = call[1];
+      return (
+        (call[0] === 'mill' &&
+          JSON.stringify(args) ===
+            JSON.stringify(['weaver', 'repl', '--workspace', '/repo/.millstrand', '--stdin'])) ||
+        (call[0] === 'strand' && Array.isArray(args) && args.includes('board'))
+      );
+    }),
+  ).toBe(true);
 });
 it('moves the card without touching children or assignment attributes', async () => {
   mockBoard();
@@ -101,7 +123,9 @@ it('invalidates the board even when the command fails after a possible side effe
   mockBoard();
   const data = new StrandData('/repo/.millstrand');
   await data.board();
+  // Validation reads the compact board, then hydrates it before the mutation times out.
   exec.mockResolvedValueOnce({ stdout: JSON.stringify({ cards: [card] }) });
+  exec.mockReturnValueOnce(cardRead([card]));
   exec.mockRejectedValueOnce(new Error('Timeout'));
   await expect(data.changeCard('card1', { kind: 'delete' })).rejects.toThrow('Timeout');
   exec.mockResolvedValueOnce({ stdout: '{"cards":[]}' });

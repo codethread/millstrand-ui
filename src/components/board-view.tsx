@@ -3,6 +3,7 @@ import type { Card } from '../../shared/api';
 import { selectBoardLanes, selectOutline } from '../lib/board';
 import { useDashboardActions, useIssueFilter } from '../lib/navigation';
 import { IssueAgents } from './agents-view';
+import { AutoRunSummary } from './auto-run';
 import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { CardContextMenu, CardMenuButton } from './card-actions';
@@ -44,6 +45,7 @@ function IssueCard({ card, allCards }: { card: Card; allCards: Card[] }) {
               ))}
             </div>
           )}
+          <AutoRunSummary autoRun={card.autoRun} />
           <ArrowUpRight className="card-open-icon" />
         </button>
         <div className="card-footer flex-col! items-stretch!">

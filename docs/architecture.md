@@ -43,6 +43,26 @@ schemas belong to `src/review-comment-store.ts`. Browser preference/receipt pars
 is in `src/lib/agent-preferences.ts`. Do not add assertions or repeated parsers in
 components to compensate for a boundary change.
 
+### Auto-run card properties
+
+`Card.autoRun` is a nullable, normalized configuration/dispatcher snapshot parsed in
+`server/parse.ts`; it is not an agent lifecycle. Opt-in comes from the spool's
+`kanban.label/auto-run` string flag, and all `auto-run/*` values are read-only.
+The compact board CLI omits custom attributes, so `StrandData.board` reads its
+membership first, then hydrates attributes through `server/card-inspection.ts`.
+This fixed read-only REPL program selects up to 10,000 card IDs with public
+`list-lean`, then uses a full `list` query restricted to those IDs (including
+errors longer than the CLI's lean-string limit). Unlike strict point hydration,
+that query tolerates IDs deleted between reads. Before serialization, the program
+keeps only card metadata attributes, label flags and the known auto-run fields;
+large bodies and unrelated attributes never enter the board response buffer.
+Deleted cards are omitted; cards
+created after membership was read appear next poll. Overflow and read failures
+remain visible with normal Query refresh-error retention. No per-card requests,
+new endpoints, query keys, or poll owners are added. Raw detail attributes remain
+available unchanged. `AutoRunSummary` and `AutoRunDetails` render this snapshot
+separately from `IssueAgents`, which remains authoritative for worker activity.
+
 ## Checked read inventory
 
 All paths below have `/api` prepended. `w` is a discovered workspace ID; `null`

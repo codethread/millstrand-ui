@@ -101,6 +101,18 @@ dashboard's saved views. Included labels combine with ALL or ANY matching;
 excluded labels always remove a match. Views can also narrow the board using
 search, status, issue type, and priority.
 
+## Auto-run properties
+
+Board cards show auto-run opt-in, configured seat alias, effort, delivery workflow,
+and dispatcher status separately from agent badges. Open the card for the recorded
+Harnesses assignment, workflow run, dispatch error, and dispatch branch/worktree
+snapshot. These are read-only properties, not controls for launching work.
+
+The `auto-run` label opts a card in; it does not confirm eligibility or worker activity.
+`preparing`, `assigned`, and `error` describe the dispatcher, not the worker lifecycle.
+Configuration and dispatch history remain visible even after opt-out. Use the existing
+agent badges and Agents view for actual worker status.
+
 ## Agents and identities
 
 Open **Agents** in the sidebar to search identities, harness aliases, providers,
