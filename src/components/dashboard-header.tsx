@@ -25,7 +25,7 @@ import { useDashboardStore } from '../store';
 import { AgentNotifications } from './agent-notifications';
 import { AgentSearchControls } from './agents-view';
 import { DashboardFilters } from './dashboard-filters';
-import { ReviewSearchControls } from './reviews-view';
+import { ReviewSearchControls } from './review-inbox';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 

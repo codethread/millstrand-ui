@@ -1,11 +1,52 @@
+import type { AgentIdentity } from '../../shared/api';
+import { sorted } from '../../shared/array';
 import type {
+  ReviewDetail,
   ReviewDirectory,
   ReviewScope,
   ReviewStage,
   ReviewSummary,
 } from '../../shared/reviews';
-import { sorted } from '../../shared/array';
 import type { PromptTarget } from '../agent-prompt-store';
+
+export type ReviewDirectoryContent =
+  | Extract<ReviewDirectory, { kind: 'unsupported' }>
+  | { kind: 'available'; reviews: ReviewSummary[] };
+
+export interface ReviewInboxFilters {
+  scope: ReviewScope;
+  stage: ReviewStage | null;
+  query: string;
+}
+
+export type ReviewInboxEmpty = 'matching' | 'inbox' | 'all' | null;
+
+export interface ReviewInboxModel {
+  reviews: ReviewSummary[];
+  inboxCount: number;
+  totalCount: number;
+  empty: ReviewInboxEmpty;
+}
+
+export type ReviewReportState =
+  { kind: 'available'; markdown: string } | { kind: 'empty'; message: string };
+
+export type ReviewCurrentness =
+  { kind: 'current' } | { kind: 'outdated'; pendingDecision: boolean };
+
+export interface ReviewDetailModel {
+  review: ReviewDetail;
+  heading: string;
+  promptTarget: PromptTarget | null;
+  report: ReviewReportState;
+  currentness: ReviewCurrentness;
+}
+
+export function reviewDirectoryContent(directory: ReviewDirectory): ReviewDirectoryContent {
+  return directory.kind === 'unsupported'
+    ? directory
+    : { kind: 'available', reviews: directory.reviews };
+}
 
 export function reviewPromptTarget(review: ReviewSummary): PromptTarget | null {
   return reviewInInbox(review)
@@ -28,6 +69,7 @@ export function reviewLabel(review: ReviewSummary): string {
   if (review.stage === 'failed') return 'Needs attention';
   return review.stage.charAt(0).toUpperCase() + review.stage.slice(1);
 }
+
 export function selectReviews(
   reviews: ReviewSummary[],
   scope: ReviewScope,
@@ -57,4 +99,61 @@ export function selectReviews(
     }),
     (a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '') || a.id.localeCompare(b.id),
   );
+}
+
+export function reviewInboxModel(
+  reviews: ReviewSummary[],
+  filters: ReviewInboxFilters,
+): ReviewInboxModel {
+  const selected = selectReviews(reviews, filters.scope, filters.stage, filters.query);
+  const filtered = filters.query.trim() !== '' || filters.stage !== null;
+  return {
+    reviews: selected,
+    inboxCount: reviews.filter(reviewInInbox).length,
+    totalCount: reviews.length,
+    empty:
+      selected.length > 0
+        ? null
+        : filtered
+          ? 'matching'
+          : filters.scope === 'inbox'
+            ? 'inbox'
+            : 'all',
+  };
+}
+
+function emptyReportMessage(stage: ReviewStage): string {
+  return stage === 'failed'
+    ? 'No final report was produced. Inspect the reviewer evidence below.'
+    : 'The final report will appear here when it is ready.';
+}
+
+export function reviewDetailModel(review: ReviewDetail): ReviewDetailModel {
+  return {
+    review,
+    heading: review.mr.title ?? review.title,
+    promptTarget: reviewPromptTarget(review),
+    report:
+      review.report === null
+        ? { kind: 'empty', message: emptyReportMessage(review.stage) }
+        : { kind: 'available', markdown: review.report },
+    currentness: review.current
+      ? { kind: 'current' }
+      : { kind: 'outdated', pendingDecision: review.decision === 'pending' },
+  };
+}
+
+export function reviewerRunIdentities(
+  review: ReviewDetail,
+  identities: AgentIdentity[],
+): Readonly<Record<string, string>> {
+  const relevantRunIds = new Set(
+    review.reviewers.flatMap((reviewer) => (reviewer.runId === null ? [] : [reviewer.runId])),
+  );
+  const entries = identities.flatMap((identity) =>
+    identity.runs.flatMap((run) =>
+      relevantRunIds.has(run.id) ? ([[run.id, identity.id]] as const) : [],
+    ),
+  );
+  return Object.fromEntries(entries);
 }

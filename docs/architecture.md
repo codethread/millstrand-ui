@@ -20,6 +20,7 @@ Import concrete modules below; there is no `src/lib/api.ts` facade.
 | `src/Dashboard.tsx`                                                                                                     | Route-level overview/workspace composition, workspace pin/reset, and startup state                                                                                                            |
 | `src/components/dashboard-shell.tsx`, `dashboard-sidebar.tsx`, `dashboard-header.tsx`                                   | Stable workspace shell, status/sidebar/header consumers, selection panels, and page slot                                                                                                      |
 | `src/components/issue-surface.tsx`                                                                                      | Board/outline/graph page entry; owns issue filtering and delegates to existing surface views                                                                                                  |
+| `src/components/reviews-view.tsx`, `review-inbox.tsx`, `review-report.tsx`                                              | Review page composition, focused inbox rendering, and the read-only report plus prompt/comments slots; see `docs/reviews.md`                                                                  |
 | `src/components/overlays.tsx`, `saved-view-dialog.tsx`, `shortcut-dialog.tsx`                                           | Narrow overlay dispatch; Query-backed saved-view workflow and focused browser-preference editor                                                                                               |
 | `src/components/workspace-resource-polls.tsx`                                                                           | Single selected-workspace poll owner for board, agents, reviews, and saved views; mounted for every workspace mode                                                                            |
 | `src/components/workspace-discovery.tsx`                                                                                | Single app-lifetime discovery poll owner, mounted in `src/main.tsx`                                                                                                                           |
@@ -143,7 +144,9 @@ the save mutation, URL selection commands, and the Zustand draft, while
 `ShortcutDialog` subscribes only to browser preferences and their actions.
 `IssueSurface()`, `AgentsView()`, and `ReviewsView()` are prop-free workspace page
 entries; later surface work can change their queries and views without editing the
-route shell. `DashboardShell({ children: ReactNode })` is the explicit page slot.
+route shell. Reviews compose `ReviewInbox` and the query-independent `ReviewReport`;
+`ReviewReportIntegrations` is the comments/prompt seam documented in
+`docs/reviews.md`. `DashboardShell({ children: ReactNode })` is the explicit page slot.
 `DashboardSidebar()`, `DashboardHeader()`, `DashboardOverlays()`, and
 `WorkspaceResourcePolls()` are prop-free shell entries. IssueSurface renders Graph
 before checking empty filtered cards, keeping graph focus usable even when filters
