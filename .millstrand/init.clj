@@ -20,6 +20,18 @@
                   :after [:codethread/config-reviewers]
                   :required? true})
 
+(runtime/module! runtime :millstrand-ui/auto-run-workflows
+                 {:file "me/auto_run_workflows.clj"
+                  :after [:millhouse/spools-workflow-providers]
+                  :required? true})
+
+(runtime/module! runtime :millstrand-ui/auto-run
+                 {:file "me/auto_run.clj"
+                  :after [:millstrand-ui/auto-run-workflows
+                          :millstrand/spools-harnesses]
+                  :required? true})
+
 (codethread/register-executor!
  runtime [:millhouse/spools-workflow-providers
-          :millstrand-ui/reviewers])
+          :millstrand-ui/reviewers
+          :millstrand-ui/auto-run])

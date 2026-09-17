@@ -86,6 +86,16 @@ These links track each repository's `main` branch and are discovery entry
 points. A specific workspace's behavior is defined by the direct pins in
 `.millstrand/deps.edn` and any transitive configuration dependencies.
 
+## Automatic assignments
+
+For an auto-run assignment, drive the exact delivery workflow run supplied in
+its guidance; see [automatic delivery](docs/auto-run.md). `auto-human-review`
+explicitly overrides generic instructions to land: prepare the passing PR and
+review package, stop at its human checkpoint, and leave the feature/worktree
+open. Never choose that checkpoint yourself. `auto-full-land` explicitly
+permits driving shared `land` through completion. Do not spawn a coordinator
+agent or keep a session alive polling for human approval.
+
 ## Working here
 
 - Run `strand prime kanban`, claim a feature card, and use its recorded worktree.

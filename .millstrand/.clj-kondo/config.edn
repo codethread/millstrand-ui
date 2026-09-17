@@ -1,0 +1,2 @@
+;; Workspace modules are loaded by :file, not by namespace-derived classpaths.
+{:linters {:namespace-name-mismatch {:level :off}}}
