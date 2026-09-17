@@ -110,7 +110,7 @@
              intervention rather than spawning a coordinator or retry loop.
            " {:card card :branch branch :worktree worktree})))]
       [(workflow/checkpoint
-        :human-acceptance "Human review: return the passing PR and stop" 
+        :human-acceptance "Human review: return the passing PR and stop"
         :depends-on [:review-card]
         :kind :human
         :choices [{:key :reviewed :label "Human review recorded"}]

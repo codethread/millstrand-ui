@@ -49,16 +49,22 @@ export function verifyReviewPackage(value: unknown, branch: string, head: string
   if (!passing || !qualityPassed) {
     throw new Error('All PR checks must pass, including the quality job');
   }
-  for (const section of ['Summary', 'Walkthrough', 'Verification', 'Screenshots']) {
-    const content = new RegExp(`^## ${section}\\s*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))`, 'm').exec(
-      pr.body,
-    )?.[1];
-    if (!content?.trim()) throw new Error(`PR requires a nonempty ## ${section} section`);
+  for (const section of ['Summary', 'Verification', 'Screenshots']) {
+    requireSection(pr.body, section);
   }
-  if (!/```mermaid\s*\n[\s\S]+?```/.test(pr.body)) {
+  const walkthrough = requireSection(pr.body, 'Walkthrough');
+  if (!/```mermaid\s*\n[\s\S]+?```/.test(walkthrough)) {
     throw new Error('PR walkthrough requires a Mermaid C4-level diagram');
   }
   return { pr: pr.number, url: pr.url, head: pr.headRefOid, checks: 'passed' };
+}
+
+function requireSection(body: string, section: string): string {
+  const content = new RegExp(`^## ${section}\\s*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))`, 'm')
+    .exec(body)?.[1]
+    ?.trim();
+  if (!content) throw new Error(`PR requires a nonempty ## ${section} section`);
+  return content;
 }
 
 function command(program: string, args: string[]): string {

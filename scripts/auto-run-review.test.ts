@@ -49,6 +49,11 @@ describe('automatic review handoff', () => {
     { body: pr.body.replace('## Screenshots', '## Images') },
     { body: pr.body.replace('pnpm quality; browser checks.', '') },
     { body: pr.body.replace('```mermaid', '```text') },
+    {
+      body: pr.body
+        .replace('## Walkthrough\nC4 component view:\n', '')
+        .replace('## Verification', '## Walkthrough\nPlain text only.\n## Verification'),
+    },
   ])('rejects a non-reviewable handoff: %j', (patch) => {
     expect(() => verifyReviewPackage({ ...pr, ...patch }, 'auto/card', head)).toThrow();
   });
