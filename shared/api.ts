@@ -10,6 +10,20 @@ export type TaskStatus = 'ready' | 'doing' | 'blocked' | 'closed';
 export type JsonValue =
   null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
+/** Recorded configuration and dispatcher snapshot, never agent process activity. */
+export interface AutoRun {
+  optedIn: boolean;
+  seat: string | null;
+  effort: string | null;
+  workflow: string | null;
+  status: 'preparing' | 'assigned' | 'error' | null;
+  runId: string | null;
+  workflowRunId: string | null;
+  error: string | null;
+  worktree: string | null;
+  branch: string | null;
+}
+
 export interface Card {
   id: string;
   title: string;
@@ -24,6 +38,7 @@ export interface Card {
   source: string | null;
   outcome: string | null;
   labels: string[];
+  autoRun: AutoRun | null;
   createdAt: string;
   updatedAt: string | null;
 }

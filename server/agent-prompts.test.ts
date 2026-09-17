@@ -156,6 +156,16 @@ describe('scoped launch process', () => {
             },
           ],
         };
+      else if (operation === 'list --query kanban-cards --limit 10001')
+        value = [
+          {
+            id: 'card1',
+            title: 'Feature',
+            state: 'active',
+            created_at: '2026-09-14',
+            attributes: { worktree },
+          },
+        ];
       else if (operation === `review show ${reviewDetail.id}`) {
         const current = readReview();
         const { sha, ...mr } = current.mr;

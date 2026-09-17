@@ -27,6 +27,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
 import { ErrorNotice, LabelPill, Loading, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { cn } from '../lib/utils';
 import { IssueAgents } from './agents-view';
+import { AutoRunDetails } from './auto-run';
 
 function Notes({ notes }: { notes: Note[] }) {
   return notes.length ? (
@@ -167,6 +168,7 @@ function DetailOverview({ detail }: { detail: CardDetail }) {
           <p className="detail-empty">No description has been added to this issue.</p>
         )}
       </section>
+      <AutoRunDetails autoRun={detail.card.autoRun} />
       <section className="detail-section">
         <div className="flex items-center justify-between">
           <h3 className="detail-section-title">

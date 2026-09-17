@@ -41,6 +41,7 @@ import {
   HttpError,
   object,
   parseCard,
+  parseBoardCards,
   parseGraph,
   parseNote,
   parseRelation,
@@ -237,8 +238,12 @@ export class StrandData {
 
   board(): Promise<Board> {
     return this.boards.get('board', async () => {
-      const raw = object(await this.run(['kanban', 'board', '--all', 'true']), 'board');
-      const cards = array(raw['cards'], 'board.cards').map(parseCard);
+      const [board, attributes] = await Promise.all([
+        this.run(['kanban', 'board', '--all', 'true']),
+        this.run(['list', '--query', 'kanban-cards', '--limit', '10001']),
+      ]);
+      const raw = object(board, 'board');
+      const cards = parseBoardCards(raw['cards'], attributes);
       const counts = new Map<string, number>();
       for (const card of cards) {
         for (const label of card.labels) counts.set(label, (counts.get(label) ?? 0) + 1);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseCard,
+  parseBoardCards,
   parseGraph,
   parseLabelChange,
   parseRelation,
@@ -118,6 +119,83 @@ describe('strand projection boundaries', () => {
       expect(
         parseTask({ id: 'task1', title: 'Build', state: 'active', status, owner: 'codex' }).status,
       ).toBe(status);
+    },
+  );
+});
+
+describe('auto-run card projections', () => {
+  const row = { ...entity, created_at: '2026-09-17 10:00:00' };
+
+  it('keeps absent configuration quiet and never derives dispatch from opt-in', () => {
+    expect(parseCard(row).autoRun).toBeNull();
+    expect(parseCard({ ...row, labels: ['auto-run'] }).autoRun).toMatchObject({
+      optedIn: true,
+      status: null,
+      runId: null,
+      workflowRunId: null,
+    });
+    expect(parseCard({ ...row, attributes: { 'kanban.label/auto-run': 'true' } }).autoRun).toEqual(
+      parseCard({ ...row, labels: ['auto-run'] }).autoRun,
+    );
+    expect(
+      parseCard({ ...row, attributes: { 'kanban.label/auto-run': 'false' } }).autoRun,
+    ).toBeNull();
+  });
+
+  it('joins bulk attributes by id while preserving compact epic membership', () => {
+    const attributes = {
+      'auto-run/seat': 'implementer',
+      'auto-run/effort': 'high',
+      'auto-run/workflow': 'land',
+      'auto-run/status': 'assigned',
+      'auto-run/run-id': 'assignment-1',
+      'auto-run/workflow-run-id': 'delivery-1',
+      'auto-run/error': 'Earlier dispatch diagnostic',
+      'auto-run/branch': 'feat/snapshot',
+      'auto-run/worktree': '/work/snapshot',
+      branch: 'feat/current',
+    };
+    const raw = { ...row, attributes };
+    const cards = parseBoardCards([{ ...row, epic: 'epic1' }], [{ ...row, id: 'other' }, raw]);
+    expect(cards[0]).toMatchObject({
+      epicId: 'epic1',
+      branch: 'feat/current',
+      autoRun: {
+        optedIn: false,
+        seat: 'implementer',
+        effort: 'high',
+        workflow: 'land',
+        status: 'assigned',
+        runId: 'assignment-1',
+        workflowRunId: 'delivery-1',
+        error: 'Earlier dispatch diagnostic',
+        branch: 'feat/snapshot',
+        worktree: '/work/snapshot',
+      },
+    });
+    expect(cards[0]?.autoRun).toEqual(parseCard(raw).autoRun);
+  });
+
+  it('does not silently show unconfigured cards when the attribute read is incomplete', () => {
+    expect(() => parseBoardCards([row], [])).toThrow('missing from the board attribute read');
+    expect(() =>
+      parseBoardCards(
+        [],
+        Array.from({ length: 10001 }, () => row),
+      ),
+    ).toThrow('10,000');
+  });
+
+  it.each(['preparing', 'assigned', 'error'])('preserves dispatcher status %s', (status) => {
+    expect(parseCard({ ...row, attributes: { 'auto-run/status': status } }).autoRun?.status).toBe(
+      status,
+    );
+  });
+
+  it.each([{ 'auto-run/status': 'running' }, { 'auto-run/effort': 3 }])(
+    'rejects malformed known auto-run fields: %j',
+    (attributes) => {
+      expect(() => parseCard({ ...row, attributes })).toThrow('auto-run/');
     },
   );
 });

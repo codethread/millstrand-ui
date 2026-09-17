@@ -1,4 +1,5 @@
 import type {
+  AutoRun,
   Card,
   CardGraph,
   GraphEdge,
@@ -238,6 +239,48 @@ function enumValue<T extends string>(
   return parsed.data;
 }
 
+const autoRunStatuses = ['preparing', 'assigned', 'error'] as const;
+const autoRunStatusSchema = z.enum(autoRunStatuses);
+
+function parseAutoRun(attrs: ObjectValue, labels: string[]): AutoRun | null {
+  const read = (key: string) => maybeString(attrs[`auto-run/${key}`], `auto-run/${key}`);
+  const status = read('status');
+  const autoRun: AutoRun = {
+    optedIn: labels.includes('auto-run'),
+    seat: read('seat'),
+    effort: read('effort'),
+    workflow: read('workflow'),
+    status:
+      status === null
+        ? null
+        : enumValue(autoRunStatusSchema, status, autoRunStatuses, 'auto-run/status'),
+    runId: read('run-id'),
+    workflowRunId: read('workflow-run-id'),
+    error: read('error'),
+    worktree: read('worktree'),
+    branch: read('branch'),
+  };
+  return Object.values(autoRun).some((value) => value !== null && value !== false) ? autoRun : null;
+}
+
+/** The compact board supplies membership; raw cards supply attributes it omits. */
+export function parseBoardCards(compact: unknown, raw: unknown): Card[] {
+  const rows = array(raw, 'board card attributes');
+  if (rows.length > 10_000) throw new Error('Board exceeds the 10,000 card attribute limit.');
+  const cards = new Map(
+    rows.map((row) => {
+      const card = parseCard(row);
+      return [card.id, card];
+    }),
+  );
+  return array(compact, 'board.cards').map((row) => {
+    const membership = parseCard(row);
+    const card = cards.get(membership.id);
+    if (!card) throw new Error(`Card ${membership.id} is missing from the board attribute read.`);
+    return { ...card, epicId: membership.epicId };
+  });
+}
+
 export function parseCard(value: unknown): Card {
   const row = parseSchema(compiledCardSchema, value, 'card');
   const attrs = row.attributes === undefined ? {} : jsonObject(row.attributes, 'card.attributes');
@@ -276,6 +319,7 @@ export function parseCard(value: unknown): Card {
     source: maybeString(read('source', 'kanban/source'), 'card.source'),
     outcome: maybeString(read('outcome', 'kanban/outcome'), 'card.outcome'),
     labels: sorted([...new Set(labels)]),
+    autoRun: parseAutoRun(attrs, labels),
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,
   };
