@@ -6,6 +6,7 @@ import { commentsFixture } from '../../server/review-comments.fixture';
 
 const mutation = vi.hoisted(() => ({
   mutate: vi.fn(),
+  reset: vi.fn(),
   isPending: false,
   data: undefined,
   error: null as Error | null,

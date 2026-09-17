@@ -1,7 +1,24 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
+import type { ReviewPublicationReceipt } from '../../shared/review-comments';
 import { reviewPublishMutationOptions } from './api/review-comments';
 import { useReviewCommentStore } from '../review-comment-store';
+
+const partialReceipt = {
+  reviewId: 'review1',
+  revision: 'frozen',
+  curationVersion: 3,
+  state: 'partial',
+  comments: [
+    {
+      id: 'comment1',
+      state: 'failed',
+      retryable: true,
+      discussionId: null,
+      error: 'Remote outcome unknown',
+    },
+  ],
+} satisfies ReviewPublicationReceipt;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -13,7 +30,7 @@ it.each([true, false])(
     const invalidate = vi.spyOn(client, 'invalidateQueries');
     const fetch = vi.fn(async () => {
       if (!success) throw new Error('Network outcome unknown');
-      return Response.json({ state: 'partial' });
+      return Response.json(partialReceipt);
     });
     vi.stubGlobal('fetch', fetch);
     vi.stubGlobal('localStorage', { setItem: vi.fn() });

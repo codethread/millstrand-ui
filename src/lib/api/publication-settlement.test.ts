@@ -1,6 +1,23 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { MutationObserver, QueryClient } from '@tanstack/react-query';
+import type { ReviewPublicationReceipt } from '../../../shared/review-comments';
 import { reviewPublishMutationOptions } from './review-comments';
+
+const partialReceipt = {
+  reviewId: 'r1',
+  revision: 'frozen',
+  curationVersion: 3,
+  state: 'partial',
+  comments: [
+    {
+      id: 'comment1',
+      state: 'failed',
+      retryable: true,
+      discussionId: null,
+      error: 'Remote outcome unknown',
+    },
+  ],
+} satisfies ReviewPublicationReceipt;
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -15,7 +32,7 @@ it.each([true, false])(
       'fetch',
       vi.fn(async () => {
         if (!success) throw new Error('Outcome unknown');
-        return Response.json({ state: 'partial' });
+        return Response.json(partialReceipt);
       }),
     );
     const client = new QueryClient();
