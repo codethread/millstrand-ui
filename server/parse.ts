@@ -273,11 +273,10 @@ export function parseBoardCards(compact: unknown, raw: unknown): Card[] {
       return [card.id, card];
     }),
   );
-  return array(compact, 'board.cards').map((row) => {
+  return array(compact, 'board.cards').flatMap((row) => {
     const membership = parseCard(row);
     const card = cards.get(membership.id);
-    if (!card) throw new Error(`Card ${membership.id} is missing from the board attribute read.`);
-    return { ...card, epicId: membership.epicId };
+    return card ? [{ ...card, epicId: membership.epicId }] : [];
   });
 }
 

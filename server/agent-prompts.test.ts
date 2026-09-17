@@ -24,7 +24,10 @@ const reviewDetail = parseReviewDetail({
   },
 });
 
-const exec = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<{ stdout: string }>>());
+const { exec, send } = vi.hoisted(() => ({
+  exec: vi.fn(),
+  send: vi.fn(),
+}));
 vi.mock('node:child_process', async () => {
   const { promisify } = await import('node:util');
   return { execFile: Object.assign(() => undefined, { [promisify.custom]: exec }) };
@@ -76,6 +79,7 @@ const reply = {
 
 beforeEach(() => {
   exec.mockReset();
+  send.mockReset();
 });
 
 describe('prompt boundaries', () => {
@@ -134,13 +138,30 @@ describe('scoped launch process', () => {
     registered = [process.cwd()],
     readReview = () => reviewDetail,
   ) {
-    exec.mockImplementation(async (_file, argv) => {
+    exec.mockImplementation((_file, argv) => {
+      if (_file === 'mill')
+        return Object.assign(
+          Promise.resolve({
+            stdout: JSON.stringify(
+              JSON.stringify([
+                {
+                  id: 'card1',
+                  title: 'Feature',
+                  state: 'active',
+                  created_at: '2026-09-14',
+                  attributes: { worktree },
+                },
+              ]),
+            ),
+          }),
+          { child: { stdin: { end: send } } },
+        );
       if (_file === 'git')
-        return {
+        return Promise.resolve({
           stdout: registered
             .map((path) => `worktree ${path}\0HEAD abc\0branch refs/heads/feature\0\0`)
             .join(''),
-        };
+        });
       const args = Array.isArray(argv) ? argv : [];
       const operation = args.slice(2).join(' ');
       let value: unknown;
@@ -156,16 +177,6 @@ describe('scoped launch process', () => {
             },
           ],
         };
-      else if (operation === 'list --query kanban-cards --limit 10001')
-        value = [
-          {
-            id: 'card1',
-            title: 'Feature',
-            state: 'active',
-            created_at: '2026-09-14',
-            attributes: { worktree },
-          },
-        ];
       else if (operation === `review show ${reviewDetail.id}`) {
         const current = readReview();
         const { sha, ...mr } = current.mr;
@@ -188,7 +199,7 @@ describe('scoped launch process', () => {
         };
       else if (operation.startsWith('agent run tui ')) value = reply;
       else throw new Error(`Unexpected command ${JSON.stringify([_file, argv])}`);
-      return { stdout: JSON.stringify(value) };
+      return Promise.resolve({ stdout: JSON.stringify(value) });
     });
   }
   it('uses the selected canonical weaver and its server-owned cwd, never a shell', async () => {

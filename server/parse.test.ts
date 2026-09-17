@@ -176,8 +176,17 @@ describe('auto-run card projections', () => {
     expect(cards[0]?.autoRun).toEqual(parseCard(raw).autoRun);
   });
 
-  it('does not silently show unconfigured cards when the attribute read is incomplete', () => {
-    expect(() => parseBoardCards([row], [])).toThrow('missing from the board attribute read');
+  it('omits concurrently deleted cards and defers newly created cards to the next poll', () => {
+    const added = { ...row, id: 'added' };
+    expect(parseBoardCards([row], [])).toEqual([]);
+    expect(parseBoardCards([row], [row, added]).map((card) => card.id)).toEqual([row.id]);
+    expect(parseBoardCards([row, added], [row, added]).map((card) => card.id)).toEqual([
+      row.id,
+      'added',
+    ]);
+  });
+
+  it('fails visibly on a card attribute overflow', () => {
     expect(() =>
       parseBoardCards(
         [],

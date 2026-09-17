@@ -16,6 +16,7 @@ import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { parseAgents } from './agents.ts';
 import { readAgentStrands } from './agent-inspection.ts';
+import { readCardStrands } from './card-inspection.ts';
 import {
   agentLaunchArgs,
   parseAgentOptions,
@@ -238,12 +239,10 @@ export class StrandData {
 
   board(): Promise<Board> {
     return this.boards.get('board', async () => {
-      const [board, attributes] = await Promise.all([
-        this.run(['kanban', 'board', '--all', 'true']),
-        this.run(['list', '--query', 'kanban-cards', '--limit', '10001']),
-      ]);
-      const raw = object(board, 'board');
-      const cards = parseBoardCards(raw['cards'], attributes);
+      const raw = object(await this.run(['kanban', 'board', '--all', 'true']), 'board');
+      // Read membership first. New cards wait for the next poll; cards deleted
+      // before hydration are omitted instead of failing the entire board.
+      const cards = parseBoardCards(raw['cards'], await readCardStrands(this.workspace));
       const counts = new Map<string, number>();
       for (const card of cards) {
         for (const label of card.labels) counts.set(label, (counts.get(label) ?? 0) + 1);

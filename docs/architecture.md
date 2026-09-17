@@ -48,10 +48,13 @@ components to compensate for a boundary change.
 `Card.autoRun` is a nullable, normalized configuration/dispatcher snapshot parsed in
 `server/parse.ts`; it is not an agent lifecycle. Opt-in comes from the spool's
 `kanban.label/auto-run` string flag, and all `auto-run/*` values are read-only.
-The compact board CLI omits custom attributes, so `StrandData.board` joins its epic
-membership with one `list --query kanban-cards --limit 10001` read. More than 10,000
-raw cards or a missing joined card fails visibly rather than silently dropping
-configuration; normal Query refresh-error retention applies. No per-card requests,
+The compact board CLI omits custom attributes, so `StrandData.board` reads its
+membership first, then hydrates attributes through `server/card-inspection.ts`.
+This fixed read-only REPL program selects up to 10,000 card IDs with public
+`list-lean`, then uses `graph/strands-by-ids` to bulk-read full values (including
+errors longer than the CLI's lean-string limit). Deleted cards are omitted; cards
+created after membership was read appear next poll. Overflow and read failures
+remain visible with normal Query refresh-error retention. No per-card requests,
 new endpoints, query keys, or poll owners are added. Raw detail attributes remain
 available unchanged. `AutoRunSummary` and `AutoRunDetails` render this snapshot
 separately from `IssueAgents`, which remains authoritative for worker activity.
