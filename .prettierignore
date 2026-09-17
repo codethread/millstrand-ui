@@ -2,3 +2,6 @@ node_modules
 dist
 .beads
 pnpm-lock.yaml
+.millstrand/.cpcache
+.millstrand/.clj-kondo/.cache
+.millstrand/.clj-kondo/imports

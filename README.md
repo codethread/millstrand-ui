@@ -113,6 +113,15 @@ The `auto-run` label opts a card in; it does not confirm eligibility or worker a
 Configuration and dispatch history remain visible even after opt-out. Use the existing
 agent badges and Agents view for actual worker status.
 
+## Automatic card delivery
+
+Opted-in pending features can be picked up automatically with a planner-selected
+seat, effort, and repository delivery workflow. The default prepares a passing PR
+with a C4-level walkthrough, browser evidence and screenshots where applicable,
+then stops for human review. An explicitly selected full-land workflow also
+performs shared landing. Configuration lives in version-controlled `.millstrand`
+modules; see [automatic delivery](docs/auto-run.md) for setup and operation.
+
 ## Agents and identities
 
 Open **Agents** in the sidebar to search identities, harness aliases, providers,
