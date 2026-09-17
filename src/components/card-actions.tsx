@@ -1,9 +1,10 @@
 import { Check, MoreHorizontal, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Card } from '../../shared/api';
-import { useCardAction, useCardActionFeedback, useCardActionPending } from '../hooks/use-cards';
+import { useCardMenu, useDeleteCard, useCardActionFeedback } from '../hooks/use-cards';
 import { lanes } from '../lib/board';
 import { useDashboardStore } from '../store';
+
 import { ErrorNotice } from './issue-parts';
 import { Button } from './ui/button';
 import {
@@ -31,9 +32,12 @@ import {
   DialogFooter,
 } from './ui/dialog';
 
+function preserveDeleteFocus(event: Event) {
+  if (useDashboardStore.getState().overlay.kind === 'delete-card') event.preventDefault();
+}
+
 function CardMenuItems({ card, context }: { card: Card; context: boolean }) {
-  const mutation = useCardAction();
-  const pending = useCardActionPending();
+  const { pending, move, confirmDelete } = useCardMenu(card);
   const Item = context ? ContextMenuItem : DropdownMenuItem;
   const Label = context ? ContextMenuLabel : DropdownMenuLabel;
   const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
@@ -42,11 +46,7 @@ function CardMenuItems({ card, context }: { card: Card; context: boolean }) {
       <Label>Move to lane</Label>
       {lanes.map(({ id, title }) =>
         id === 'unknown' ? null : (
-          <Item
-            key={id}
-            disabled={pending || card.lane === id}
-            onSelect={() => mutation.mutate({ id: card.id, action: { kind: 'move', lane: id } })}
-          >
+          <Item key={id} disabled={pending || card.lane === id} onSelect={() => move(id)}>
             <span className="size-4">{card.lane === id && <Check />}</span>
             {title}
           </Item>
@@ -56,7 +56,7 @@ function CardMenuItems({ card, context }: { card: Card; context: boolean }) {
       <Item
         className="text-destructive focus:text-destructive"
         disabled={pending}
-        onSelect={() => useDashboardStore.getState().confirmDeleteCard(card)}
+        onSelect={confirmDelete}
       >
         <Trash2 />
         Delete card…
@@ -69,7 +69,10 @@ export function CardContextMenu({ card, children }: { card: Card; children: Reac
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent aria-label={`Actions for ${card.title}`}>
+      <ContextMenuContent
+        onCloseAutoFocus={preserveDeleteFocus}
+        aria-label={`Actions for ${card.title}`}
+      >
         <CardMenuItems card={card} context />
       </ContextMenuContent>
     </ContextMenu>
@@ -84,7 +87,7 @@ export function CardMenuButton({ card }: { card: Card }) {
           <MoreHorizontal />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" onCloseAutoFocus={preserveDeleteFocus}>
         <CardMenuItems card={card} context={false} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -108,17 +111,16 @@ export function CardActionFeedback() {
 }
 
 export function DeleteCardDialog({ card }: { card: Card }) {
-  const mutation = useCardAction();
-  const close = useDashboardStore((s) => s.closeOverlay);
+  const { pending, error, close, remove } = useDeleteCard(card.id);
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !mutation.isPending) close();
+        if (!open && !pending) close();
       }}
     >
       <DialogContent
-        showCloseButton={!mutation.isPending}
+        showCloseButton={!pending}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           document.getElementById('cancel-card-delete')?.focus();
@@ -131,24 +133,13 @@ export function DeleteCardDialog({ card }: { card: Card }) {
             not deleted. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
-        {mutation.error && <ErrorNotice error={mutation.error} />}
+        {error && <ErrorNotice error={error} />}
         <DialogFooter>
-          <Button
-            id="cancel-card-delete"
-            variant="outline"
-            disabled={mutation.isPending}
-            onClick={close}
-          >
+          <Button id="cancel-card-delete" variant="outline" disabled={pending} onClick={close}>
             Cancel
           </Button>
-          <Button
-            variant="destructive"
-            disabled={mutation.isPending}
-            onClick={() =>
-              mutation.mutate({ id: card.id, action: { kind: 'delete' } }, { onSuccess: close })
-            }
-          >
-            {mutation.isPending ? 'Deleting…' : 'Delete card'}
+          <Button variant="destructive" disabled={pending} onClick={remove}>
+            {pending ? 'Deleting…' : 'Delete card'}
           </Button>
         </DialogFooter>
       </DialogContent>

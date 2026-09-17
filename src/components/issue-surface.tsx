@@ -22,8 +22,8 @@ export function IssueSurface() {
     );
   if (cards.length === 0) return <EmptyBoard />;
   return mode === 'board' ? (
-    <BoardView cards={cards} allCards={allCards} />
+    <BoardView columns={board.data?.columns ?? []} />
   ) : (
-    <OutlineView cards={cards} allCards={allCards} />
+    <OutlineView groups={board.data?.outline ?? []} />
   );
 }

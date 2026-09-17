@@ -1,16 +1,14 @@
 import { ArrowUpRight, Inbox, Layers } from 'lucide-react';
-import type { Card } from '../../shared/api';
-import { selectBoardLanes, selectOutline } from '../lib/board';
-import { useDashboardActions, useIssueFilter } from '../lib/navigation';
+import type { BoardCard, BoardColumn, OutlineGroup } from '../lib/board';
+import { useDashboardActions } from '../lib/navigation';
 import { IssueAgents } from './agents-view';
 import { AutoRunSummary } from './auto-run';
 import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { CardContextMenu, CardMenuButton } from './card-actions';
 
-function IssueCard({ card, allCards }: { card: Card; allCards: Card[] }) {
+function IssueCard({ card, parent: epic }: BoardCard) {
   const { openCard } = useDashboardActions();
-  const epic = allCards.find((parent) => parent.id === card.epicId);
   return (
     <CardContextMenu card={card}>
       <article className="issue-card group">
@@ -59,14 +57,11 @@ function IssueCard({ card, allCards }: { card: Card; allCards: Card[] }) {
   );
 }
 
-export function BoardView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
-  const includeClosed = useIssueFilter().includeClosed;
-  const columns = selectBoardLanes(cards, includeClosed);
+export function BoardView({ columns }: { columns: BoardColumn[] }) {
   return (
     <div className="board-canvas">
       <div className="board-columns">
-        {columns.map((lane) => {
-          const items = cards.filter((card) => card.lane === lane.id);
+        {columns.map(({ lane, items }) => {
           return (
             <section
               className={`board-column lane-${lane.id}`}
@@ -80,8 +75,8 @@ export function BoardView({ cards, allCards }: { cards: Card[]; allCards: Card[]
               </div>
               <p className="column-description">{lane.description}</p>
               <div className="column-cards">
-                {items.map((card) => (
-                  <IssueCard key={card.id} card={card} allCards={allCards} />
+                {items.map(({ card, parent }) => (
+                  <IssueCard key={card.id} card={card} parent={parent} />
                 ))}
                 {items.length === 0 && (
                   <div className="empty-lane">
@@ -98,9 +93,8 @@ export function BoardView({ cards, allCards }: { cards: Card[]; allCards: Card[]
   );
 }
 
-export function OutlineView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
+export function OutlineView({ groups }: { groups: OutlineGroup[] }) {
   const { openCard, exploreGraph } = useDashboardActions();
-  const groups = selectOutline(allCards, cards);
   return (
     <div className="outline-canvas">
       {groups.map((group) => (

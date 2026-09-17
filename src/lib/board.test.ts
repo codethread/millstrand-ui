@@ -4,7 +4,7 @@ import { overviewCards } from './overview';
 import {
   boardSidebarContent,
   emptyFilter,
-  issueBoardContent,
+  issueSurfaceContent,
   matchesWorkspaceView,
   savedViewBoardContent,
   selectBoardLanes,
@@ -54,7 +54,10 @@ describe('board content projections', () => {
       labels,
       summary: { active: 1, inProgress: 0, ready: 1, review: 0, closed: 1 },
     });
-    expect(issueBoardContent(board, filter)).toEqual({ allCards: cards, cards: [active] });
+    expect(issueSurfaceContent(board.cards, filter)).toMatchObject({
+      allCards: cards,
+      cards: [active],
+    });
     expect(savedViewBoardContent(board, filter)).toEqual({ labels, matchingCount: 1 });
   });
 });
@@ -260,4 +263,31 @@ describe('outline context', () => {
       { parent: null, cards: [loose, orphan], context: false },
     ]);
   });
+});
+
+it('shares filtered membership across columns, outline and graph while retaining parent context', () => {
+  const parent: Card = { ...card('parent'), type: 'epic' };
+  const production: Card = {
+    ...card('production', ['web']),
+    epicId: parent.id,
+    lane: 'in_production',
+  };
+  const completed: Card = { ...card('completed', ['web']), state: 'closed', lane: 'closed' };
+  const all = [parent, production, completed];
+  const filter: ViewFilter = { ...emptyFilter(), terms: { web: 'include' } };
+  const model = issueSurfaceContent(all, filter);
+  expect(model.allCards).toBe(all);
+  expect(model.cards).toEqual([production]);
+  expect(model.columns.flatMap((column) => column.items)).toEqual([{ card: production, parent }]);
+  expect(model.outline).toEqual([{ parent, cards: [production], context: true }]);
+  const withClosed = issueSurfaceContent(all, { ...filter, includeClosed: true });
+  expect(withClosed.columns.find(({ lane }) => lane.id === 'closed')?.items).toEqual([
+    { card: completed, parent: null },
+  ]);
+  const moved = issueSurfaceContent([parent, { ...production, lane: 'pending' }, completed], {
+    ...filter,
+    lanes: ['in_production'],
+  });
+  expect(moved.cards).toEqual([]);
+  expect(moved.columns.some(({ lane }) => lane.id === 'in_production')).toBe(false);
 });

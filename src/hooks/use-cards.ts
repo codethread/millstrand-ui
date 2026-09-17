@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   useIsMutating,
   useMutation,
@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import type { Board, ViewFilter } from '../../shared/api';
+import type { Board, Card, CardLane, ViewFilter } from '../../shared/api';
 import { useNavigate } from '@tanstack/react-router';
 import {
   boardQueryOptions,
@@ -19,10 +19,11 @@ import {
 import {
   boardSidebarContent,
   filteredCardCount,
-  issueBoardContent,
+  issueSurfaceContent,
   savedViewBoardContent,
 } from '../lib/board';
 import { useWorkspace } from './use-workspace';
+import { useDashboardStore } from '../store';
 
 const selectBoardWorkspace = (board: Board) => board.workspace;
 const selectBoardFetchedAt = (board: Board) => board.fetchedAt;
@@ -79,14 +80,21 @@ export function useBoardSidebar() {
   });
 }
 
+const selectBoardCards = (board: Board) => board.cards;
+
 export function useIssueBoard(filter: ViewFilter) {
-  const select = useCallback((board: Board) => issueBoardContent(board, filter), [filter]);
-  return useQuery({
+  const query = useQuery({
     ...boardQueryOptions(useWorkspace()),
     enabled: false,
     refetchInterval: false,
-    select,
+    select: selectBoardCards,
   });
+  const cards = query.data;
+  const data = useMemo(
+    () => (cards === undefined ? undefined : issueSurfaceContent(cards, filter)),
+    [cards, filter],
+  );
+  return { data };
 }
 
 export function useFilteredCardCount(filter: ViewFilter) {
@@ -161,4 +169,42 @@ export function useCardActionFeedback() {
 
 export function useCardActionPending() {
   return useIsMutating({ mutationKey: ['card-action', useWorkspace()] }) > 0;
+}
+
+export function useCardMenu(card: Card) {
+  const mutation = useCardAction();
+  const pending = useCardActionPending();
+  const confirmDelete = useDashboardStore((state) => state.confirmDeleteCard);
+  return {
+    pending,
+    move: (lane: CardLane) => mutation.mutate({ id: card.id, action: { kind: 'move', lane } }),
+    confirmDelete: () => confirmDelete(card),
+  };
+}
+
+export function useDeleteCard(id: string) {
+  const mutation = useCardAction();
+  const close = useDashboardStore((state) => state.closeOverlay);
+  return {
+    pending: mutation.isPending,
+    error: mutation.error,
+    close,
+    remove: () => mutation.mutate({ id, action: { kind: 'delete' } }, { onSuccess: close }),
+  };
+}
+
+export function useLabelEditor(id: string) {
+  const mutation = useLabels(id);
+  return {
+    pending: mutation.isPending,
+    error: mutation.error,
+    add: (value: string, onSuccess: () => void) => {
+      const labels = value
+        .split(',')
+        .map((label) => label.trim())
+        .filter(Boolean);
+      if (labels.length) mutation.mutate({ action: 'add', labels }, { onSuccess });
+    },
+    remove: (label: string) => mutation.mutate({ action: 'remove', labels: [label] }),
+  };
 }
