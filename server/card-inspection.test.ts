@@ -34,7 +34,13 @@ it('reads membership before bounded full hydration and retains long dispatch err
   expect(exec.mock.calls[1]?.[1]).toEqual(['weaver', 'repl', '--workspace', workspace, '--stdin']);
   const source: unknown = send.mock.calls[0]?.[0];
   expect(source).toEqual(expect.stringContaining('[:attr "kanban/card"] "true"] {} 10000'));
-  expect(source).toEqual(expect.stringContaining('millstrand.api.graph.alpha/strands-by-ids'));
+  expect(source).toEqual(
+    expect.stringContaining(
+      'millstrand.api.weaver.alpha/list runtime [:in :id (mapv :id cards)] {}',
+    ),
+  );
+  expect(source).toEqual(expect.stringContaining('(if (seq cards)'));
+  expect(source).not.toEqual(expect.stringContaining('strands-by-ids'));
   expect(source).not.toEqual(expect.stringContaining(workspace));
   expect(await data.board()).toBe(board);
   expect(exec).toHaveBeenCalledTimes(2);

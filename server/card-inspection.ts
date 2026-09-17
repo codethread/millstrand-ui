@@ -7,18 +7,20 @@ const exec = promisify(execFile);
 
 // Fixed read-only program, never interpolated with HTTP input. Select bounded
 // card IDs first, then hydrate in bulk: CLI list's lean omission descriptors
-// cannot represent long dispatcher errors (or other string properties).
+// cannot represent long dispatcher errors (or other string properties). The
+// full list query tolerates deleted IDs; strict strands-by-ids hydration does not.
 const inspectionSource = `
 (do
   (require 'clojure.data.json
            'millstrand.api.current.alpha
-           'millstrand.api.weaver.alpha
-           'millstrand.api.graph.alpha)
+           'millstrand.api.weaver.alpha)
   (let [runtime (millstrand.api.current.alpha/runtime)
         cards (millstrand.api.weaver.alpha/list-lean
                 runtime 0 [:= [:attr "kanban/card"] "true"] {} 10000)]
     (clojure.data.json/write-str
-      (millstrand.api.graph.alpha/strands-by-ids runtime (mapv :id cards))
+      (if (seq cards)
+        (millstrand.api.weaver.alpha/list runtime [:in :id (mapv :id cards)] {})
+        [])
       :key-fn (fn [key] (if (keyword? key) (subs (str key) 1) key)))))
 `;
 
