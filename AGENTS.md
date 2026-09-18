@@ -113,6 +113,15 @@ session alive polling for human approval. On an observed autonomous delivery or
 handoff failure, add `auto-run-failure`, record evidence, and stop for manual
 intervention without retrying gates or withdrawing the merge reservation.
 
+## Human attention
+
+Use `human-attention` as the generic scan label on active cards needing a human
+decision, authorization, review, or intervention. Add a feature note stating the
+exact ask, and remove the label when resolved. Keep `auto-run-failure` as the
+specific autonomous-delivery intervention reason; `auto-human-review` together
+with `in_review` remains the human-acceptance signal. Labels do not approve
+checkpoints, cancel workers, or authorize retries.
+
 ## Working here
 
 - Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
