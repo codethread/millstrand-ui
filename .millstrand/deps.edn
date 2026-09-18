@@ -5,7 +5,7 @@
    :deps/root "spools/batteries"}
   millhouse.spools/identity
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "f80b80c8697e48a6ce56344372a32136d2bf279c"
+   :git/sha "e74fd518cc393bb42f4002c67b71f4f6d955844a"
    :deps/root "spools/identity"}
   millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
