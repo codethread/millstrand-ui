@@ -18,9 +18,10 @@ accepted runs remain under normal Harnesses control.
 - **auto-human-review:** implement and browser-test; pass `pnpm quality`; publish
   a non-draft PR and review package; wait for CI; mechanically verify the PR
   head/checks/package; move the card into review; stop at human acceptance.
-- **auto-full-land:** perform the same preparation, then drive shared `land`,
-  including basic review, FIFO merge, card completion, and cleanup. Selecting
-  this workflow is explicit authorisation to land, not just to implement.
+- **auto-full-land:** perform the same preparation and shared `land` basic review,
+  then hand the existing run to a canonical-root `grunt` before sign-off. Once the
+  original worker settles, the grunt drives FIFO merge, cleanup and card completion.
+  Selecting this workflow is explicit authorisation to land, not just to implement.
 
 The worker drives the exact workflow run created by the dispatcher. Ordinary
 steps contain maintainer-authored instructions; shell/code gates enforce
@@ -55,6 +56,63 @@ the exact Harnesses run when withdrawing work. Failures remain visible and are
 not automatically retried; an operator can explicitly continue a settled worker
 against the retained card, worktree and delivery workflow.
 
+## Autonomous landing handoff
+
+This is delivery policy, not a dispatcher teardown feature. Shared `land` stays
+unchanged. Its sign-off starts an executor-owned chain that includes worktree
+removal, so the handoff must happen **before approval**, not just before cleanup.
+A per-command shell `cd` does not move the original agent session's persistent cwd.
+
+The assigned worker drives `land-auto-CARD` through PR resolution and mandatory
+review, adjudicates findings, and stops at sign-off. It records the exact PR/head,
+review disposition, land and delivery run IDs, ready delivery step ID, original
+Harnesses run ID, canonical root, branch/worktree, and owned resource inventory on
+the card. Stop owned servers/browser sessions before handoff where practical;
+identify remaining resources by exact PID/session name/path, or explicitly none.
+
+It then uses headless `strand agent run grunt` in the canonical root, with explicit
+`--workspace`, its own `--by-identity`, and the complete finisher prompt from the
+rendered delivery step. This must be an independent tracked agent, not a synchronous
+subagent: the parent must be able to exit while the finisher waits.
+
+- `--target` is the **delivery handoff step ID**, not the card; the active worker
+  already reserves the card target. No second assignment or feature claim is needed.
+- `--request-id` is `auto-land-finisher/HANDOFF_STEP_ID`. An uncertain CLI response
+  is inspected with `agent show --request` using that key, not a fresh launch key.
+- The accepted run ID is recorded as `auto-run/finisher-run-id` on the handoff step
+  and in a card note. The worker then returns without completing that step or card.
+- The grunt awaits `agent-run-settled` for the **original worker**, with
+  `--min-count 1`. A terminal status alone is insufficient. Before sign-off it
+  requires successful settlement, its matching receipt, no failure label, and the
+  matching land run still at sign-off.
+- From the canonical root, the grunt approves sign-off and drives the existing land
+  run. It awaits executor-owned gates, tidies only recorded resources, and lets
+  land's final card gate close the card after cleanup. Only then does it complete
+  the outer delivery step. It must never close the card early to unblock dependents.
+
+The original worker's settlement frees its dispatcher slot. The finisher is outside
+that two-worker count; unrelated cards can start, while dependent cards still wait
+for card completion. Shared FIFO reservations continue to serialize merges.
+
+### Failure policy
+
+For `auto-full-land`, an observed delivery-gate, handoff or landing failure means:
+
+1. Add the `auto-run-failure` label and note the failed run/step, command/evidence,
+   retained resources and any held merge reservation on the feature.
+2. Stop with the card open. Do not clear a failed gate, spawn a replacement, retry
+   landing or withdraw the queue entry. This overrides shared land's repair advice.
+3. Leave recovery to the user. A failed queue head may deliberately retain the merge
+   lock and block subsequent landings. An uncertain merge needs reconciliation,
+   not a blind retry. Normal queue waits and bounded-await timeouts are not failures.
+
+Failure to complete the outer delivery bookkeeping after land already closed the
+card is reported with the same label/note, but never reopens or re-merges landed
+work. The label is diagnostic, not an admission switch or retry trigger. There is
+no automatic label clearing. Labeling is best-effort: a hard crash cannot annotate
+itself, and CLI failure must be reported in the final reply. No crash watcher or
+automatic recovery is added. `auto-human-review` retains its existing behavior.
+
 ## Human review handoff
 
 The PR must have the exact local committed HEAD, target main, be open and
@@ -80,7 +138,13 @@ there is no automatic approval-by-label or lane-triggered rerun in v1.
   `clojure -M:test` boots the actual init/modules in disposable
   in-memory Weaver worlds. It verifies activation, defaults, ordinary worker
   entry steps, executor gates, and the human versus autonomous exit boundaries.
-  It creates no opted-in cards and launches no paid agents.
+  It creates no opted-in cards and launches no paid agents. It also checks the
+  rendered autonomous handoff instructions: pre-sign-off delegation, step-targeted
+  idempotent launch, settlement wait, late card closure and failure policy. These
+  tests verify the policy contract, not guaranteed agent compliance or a live merge.
 - Updating the Codethread dependency pin requires the supported Weaver restart,
   with explicit user approval. Source-only module edits use normal refresh.
   Never bypass the dependency-basis check with runtime or classloader mutation.
+- This handoff is a source-only delivery-policy change. Normal module refresh
+  updates new workflow runs, not instructions already poured into existing runs.
+  Do not restart, relabel, or rearm existing assignments to apply it retroactively.
