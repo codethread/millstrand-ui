@@ -1,86 +1,40 @@
-import { useMemo, useState } from 'react';
-import {
-  Background,
-  BackgroundVariant,
-  Controls,
-  Handle,
-  MiniMap,
-  Position,
-  ReactFlow,
-  type NodeProps,
-} from '@xyflow/react';
-import { ArrowUpRight, Network, X } from 'lucide-react';
-import type { Card, GraphNode } from '../../shared/api';
-import { useGraph } from '../hooks/use-cards';
-import { graphBody, graphFromCards, layoutGraph, type IssueGraphNode } from '../lib/graph';
+import { useMemo } from 'react';
+import { Network } from 'lucide-react';
+import type { Card } from '../../shared/api';
+import { useGraphSource } from '../hooks/use-graph';
+import { layoutGraph, type GraphSource, type GraphLayout } from '../lib/graph';
 import { useDashboardActions, useGraphRoot, useIssueFilter } from '../lib/navigation';
-import { Button } from './ui/button';
 import { ErrorNotice, Loading } from './issue-parts';
-import { Markdown } from './markdown';
-import { PromptAgentButton } from './agent-prompt';
-import '@xyflow/react/dist/style.css';
-
-function GraphCard({ data }: NodeProps<IssueGraphNode>) {
-  return (
-    <div className={`graph-node graph-kind-${data.item.kind}`}>
-      <Handle type="target" position={Position.Left} />
-      <div className="graph-node-header">
-        <span className={`graph-kind-label kind-${data.item.kind}`}>{data.item.kind}</span>
-        <span className="issue-id">{data.item.id}</span>
-        <span className={`graph-status-dot status-${data.status}`} title={data.status} />
-      </div>
-      <strong>{data.item.title}</strong>
-      <div className="graph-node-footer">
-        <span className={`status-${data.status}`}>
-          {data.status === 'closed' ? 'Completed' : data.status.replaceAll('_', ' ')}
-        </span>
-        <ArrowUpRight className="size-3" />
-      </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-const nodeTypes = { issue: GraphCard };
+import { GraphCanvas } from './graph-canvas';
 
 export default function GraphView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
   const root = useGraphRoot();
-  const includeClosed = useIssueFilter().includeClosed;
-  const { setGraphRoot: setRoot, openCard } = useDashboardActions();
-  const query = useGraph(root);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const graph = useMemo(
-    () => (root === null ? graphFromCards(cards, allCards) : (query.data ?? null)),
-    [root, cards, allCards, query.data],
+  const filter = useIssueFilter();
+  const { setGraphRoot, openCard } = useDashboardActions();
+  const source = useGraphSource(root, cards, allCards);
+  const graph = source.kind === 'ready' ? source.graph : null;
+  const layout = useMemo(
+    () => (graph === null ? null : layoutGraph(graph, filter.includeClosed)),
+    [graph, filter.includeClosed],
   );
-  const result = useMemo(
-    () => (graph ? layoutGraph(graph, includeClosed) : null),
-    [graph, includeClosed],
-  );
-  const layout = result?.kind === 'ready' ? result : { nodes: [], edges: [] };
-  const selected = layout.nodes.find((node) => node.id === selectedId)?.data.item ?? null;
-  function selectNode(item: GraphNode) {
-    if (item.kind === 'epic' || item.kind === 'feature') openCard(item.id);
-    else setSelectedId(item.id);
-  }
   return (
     <div className="graph-workspace">
       <div className="graph-toolbar">
         <div>
           <Network className="size-4" />
           <strong>Relationships</strong>
-          <span>
-            {layout.nodes.length} nodes · {layout.edges.length} connections
-          </span>
+          {layout?.kind === 'ready' && (
+            <span>
+              {layout.nodes.length} nodes · {layout.edges.length} connections
+            </span>
+          )}
         </div>
         <label>
           Focus
           <select
             aria-label="Graph focus"
             value={root ?? ''}
-            onChange={(event) => {
-              setRoot(event.target.value || null);
-              setSelectedId(null);
-            }}
+            onChange={(event) => setGraphRoot(event.target.value || null)}
           >
             <option value="">All filtered issues</option>
             {allCards.map((card) => (
@@ -91,109 +45,49 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
           </select>
         </label>
       </div>
-      {query.error && <ErrorNotice error={query.error} />}
-      {root !== null && query.isPending ? (
-        <Loading text="Mapping this issue’s tasks and dependencies…" />
-      ) : layout.nodes.length === 0 ? (
-        <div className="empty-board">
-          <Network />
-          <h2>
-            {result?.kind === 'too-large'
-              ? `${result.count} nodes is a lot to take in`
-              : 'No relationships to show'}
-          </h2>
-          <p>
-            {result?.kind === 'too-large'
-              ? 'Narrow your filters or choose a focused issue. Graphs are limited to 150 nodes to stay readable.'
-              : 'Choose an issue above or adjust the board filters.'}
-          </p>
-        </div>
-      ) : (
-        <div
-          className="graph-canvas"
-          onKeyDownCapture={(event) => {
-            if (
-              (event.key !== 'Enter' && event.key !== ' ') ||
-              !(event.target instanceof HTMLElement)
-            )
-              return;
-            const id = event.target.closest<HTMLElement>('.react-flow__node')?.dataset['id'];
-            const item = layout.nodes.find((node) => node.id === id)?.data.item;
-            if (item) {
-              event.preventDefault();
-              event.stopPropagation();
-              selectNode(item);
-            }
-          }}
-        >
-          <ReactFlow
-            key={`${root ?? 'all'}-${includeClosed}-${layout.nodes.map((node) => node.id).join(',')}`}
-            nodes={layout.nodes}
-            edges={layout.edges}
-            nodeTypes={nodeTypes}
-            colorMode="system"
-            fitView
-            fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
-            minZoom={0.15}
-            maxZoom={1.6}
-            nodesDraggable={false}
-            nodesConnectable={false}
-            elementsSelectable
-            onNodeClick={(_event, node) => selectNode(node.data.item)}
-            onPaneClick={() => setSelectedId(null)}
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              gap={20}
-              size={1}
-              color="var(--graph-dots)"
-            />
-            <Controls showInteractive={false} />
-            <MiniMap pannable zoomable nodeColor="#b4bac7" maskColor="var(--graph-canvas)" />
-          </ReactFlow>
-          <div className="graph-legend">
-            <span>
-              <i />
-              Parent → child
-            </span>
-            <span>
-              <i className="dependency" />
-              Depends on → prerequisite
-            </span>
-          </div>
-          <div className="graph-help">Scroll to zoom · drag to pan · click to inspect</div>
-          {selected && (
-            <aside className="graph-inspector">
-              <div className="flex items-center justify-between">
-                <span className="issue-id">
-                  {selected.kind} / {selected.id}
-                </span>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => setSelectedId(null)}
-                  aria-label="Close graph inspector"
-                >
-                  <X />
-                </Button>
-              </div>
-              <h3>{selected.title}</h3>
-              {root && (
-                <PromptAgentButton
-                  target={{ kind: 'card', cardId: root, id: selected.id, title: selected.title }}
-                />
-              )}
-              <span className="text-xs text-muted-foreground">{selected.state}</span>
-              {graphBody(selected.attributes) && <Markdown text={graphBody(selected.attributes)} />}
-              <details>
-                <summary>Attributes</summary>
-                <pre className="raw-attributes">{JSON.stringify(selected.attributes, null, 2)}</pre>
-              </details>
-            </aside>
-          )}
-        </div>
-      )}
+      <GraphSourceNotice source={source} />
+      {layout?.kind === 'ready' ? (
+        <GraphCanvas
+          key={JSON.stringify([root, filter])}
+          layout={layout}
+          root={root}
+          openCard={openCard}
+        />
+      ) : layout !== null ? (
+        <GraphEmpty layout={layout} />
+      ) : null}
+    </div>
+  );
+}
+
+export function GraphSourceNotice({ source }: { source: GraphSource }) {
+  if (source.kind === 'loading')
+    return <Loading text="Mapping this issue’s tasks and dependencies…" />;
+  if (source.kind === 'unavailable') return <ErrorNotice error={source.error} />;
+  if (source.error)
+    return (
+      <div>
+        <ErrorNotice error={source.error} />
+        <p className="px-4 text-xs text-muted-foreground">Showing last-known graph.</p>
+      </div>
+    );
+  return null;
+}
+
+export function GraphEmpty({ layout }: { layout: Exclude<GraphLayout, { kind: 'ready' }> }) {
+  return (
+    <div className="empty-board">
+      <Network />
+      <h2>
+        {layout.kind === 'too-large'
+          ? `${layout.count} nodes is a lot to take in`
+          : 'No relationships to show'}
+      </h2>
+      <p>
+        {layout.kind === 'too-large'
+          ? 'Narrow your filters or choose a focused issue. Graphs are limited to 150 nodes to stay readable.'
+          : 'Choose an issue above or adjust the board filters.'}
+      </p>
     </div>
   );
 }

@@ -1,0 +1,135 @@
+import { useState } from 'react';
+import {
+  Background,
+  BackgroundVariant,
+  Controls,
+  Handle,
+  MiniMap,
+  Position,
+  ReactFlow,
+  type NodeProps,
+} from '@xyflow/react';
+import { ArrowUpRight, X } from 'lucide-react';
+import type { GraphNode } from '../../shared/api';
+import { graphBody, type ReadyGraphLayout, type IssueGraphNode } from '../lib/graph';
+import { Button } from './ui/button';
+import { Markdown } from './markdown';
+import { PromptAgentButton } from './agent-prompt';
+import '@xyflow/react/dist/style.css';
+
+function GraphCard({ data }: NodeProps<IssueGraphNode>) {
+  return (
+    <div className={`graph-node graph-kind-${data.item.kind}`}>
+      <Handle type="target" position={Position.Left} />
+      <div className="graph-node-header">
+        <span className={`graph-kind-label kind-${data.item.kind}`}>{data.item.kind}</span>
+        <span className="issue-id">{data.item.id}</span>
+        <span className={`graph-status-dot status-${data.status}`} title={data.status} />
+      </div>
+      <strong>{data.item.title}</strong>
+      <div className="graph-node-footer">
+        <span className={`status-${data.status}`}>
+          {data.status === 'closed' ? 'Completed' : data.status.replaceAll('_', ' ')}
+        </span>
+        <ArrowUpRight className="size-3" />
+      </div>
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+const nodeTypes = { issue: GraphCard };
+
+/** Keyed by navigation intent by GraphView, never by refreshed node membership. */
+export function GraphCanvas({
+  layout,
+  root,
+  openCard,
+}: {
+  layout: ReadyGraphLayout;
+  root: string | null;
+  openCard: (id: string) => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = layout.nodes.find((node) => node.id === selectedId)?.data.item ?? null;
+  function selectNode(item: GraphNode) {
+    if (item.kind === 'epic' || item.kind === 'feature') openCard(item.id);
+    else setSelectedId(item.id);
+  }
+  return (
+    <div
+      className="graph-canvas"
+      onKeyDownCapture={(event) => {
+        if ((event.key !== 'Enter' && event.key !== ' ') || !(event.target instanceof HTMLElement))
+          return;
+        const id = event.target.closest<HTMLElement>('.react-flow__node')?.dataset['id'];
+        const item = layout.nodes.find((node) => node.id === id)?.data.item;
+        if (item) {
+          event.preventDefault();
+          event.stopPropagation();
+          selectNode(item);
+        }
+      }}
+    >
+      <ReactFlow
+        nodes={layout.nodes}
+        edges={layout.edges}
+        nodeTypes={nodeTypes}
+        colorMode="system"
+        fitView
+        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+        minZoom={0.15}
+        maxZoom={1.6}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable
+        onNodeClick={(_event, node) => selectNode(node.data.item)}
+        onPaneClick={() => setSelectedId(null)}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--graph-dots)" />
+        <Controls showInteractive={false} />
+        <MiniMap pannable zoomable nodeColor="#b4bac7" maskColor="var(--graph-canvas)" />
+      </ReactFlow>
+      <div className="graph-legend">
+        <span>
+          <i />
+          Parent → child
+        </span>
+        <span>
+          <i className="dependency" />
+          Depends on → prerequisite
+        </span>
+      </div>
+      <div className="graph-help">Scroll to zoom · drag to pan · click to inspect</div>
+      {selected && (
+        <aside className="graph-inspector">
+          <div className="flex items-center justify-between">
+            <span className="issue-id">
+              {selected.kind} / {selected.id}
+            </span>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              onClick={() => setSelectedId(null)}
+              aria-label="Close graph inspector"
+            >
+              <X />
+            </Button>
+          </div>
+          <h3>{selected.title}</h3>
+          {root && (
+            <PromptAgentButton
+              target={{ kind: 'card', cardId: root, id: selected.id, title: selected.title }}
+            />
+          )}
+          <span className="text-xs text-muted-foreground">{selected.state}</span>
+          {graphBody(selected.attributes) && <Markdown text={graphBody(selected.attributes)} />}
+          <details>
+            <summary>Attributes</summary>
+            <pre className="raw-attributes">{JSON.stringify(selected.attributes, null, 2)}</pre>
+          </details>
+        </aside>
+      )}
+    </div>
+  );
+}

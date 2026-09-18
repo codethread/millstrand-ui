@@ -46,8 +46,19 @@ export function graphBody(attributes: Record<string, JsonValue>): string {
   return typeof body === 'string' ? body : '';
 }
 
+export type GraphSource =
+  | { kind: 'loading' }
+  | { kind: 'unavailable'; error: Error }
+  | { kind: 'ready'; graph: CardGraph; error: Error | null };
+
+export interface ReadyGraphLayout {
+  kind: 'ready';
+  nodes: IssueGraphNode[];
+  edges: Edge[];
+}
+
 export type GraphLayout =
-  { kind: 'ready'; nodes: IssueGraphNode[]; edges: Edge[] } | { kind: 'too-large'; count: number };
+  ReadyGraphLayout | { kind: 'empty' } | { kind: 'too-large'; count: number };
 
 export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayout {
   const children = graph.nodes.filter(
@@ -65,8 +76,10 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
       }
   }
   const items = graph.nodes.filter((item) => ids.has(item.id));
+  if (items.length === 0) return { kind: 'empty' };
   if (items.length > 150) return { kind: 'too-large', count: items.length };
-  const validEdges = graph.edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
+  const itemIds = new Set(items.map((item) => item.id));
+  const validEdges = graph.edges.filter((edge) => itemIds.has(edge.from) && itemIds.has(edge.to));
   const layout = new graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   layout.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 95, marginx: 35, marginy: 35 });
   for (const item of items) layout.setNode(item.id, { width: 260, height: 110 });
