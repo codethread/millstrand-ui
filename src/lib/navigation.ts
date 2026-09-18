@@ -140,6 +140,7 @@ export function useDashboardActions() {
     focusAgentRun: (agentRun: string) => update({ agentRun }, true),
     closeAgent: () => update({ agent: null }),
     closeCard: () => update({ issue: null }),
+    openAgents: () => update({ mode: 'agents', issue: null, agent: null, activeAgentsOnly: true }),
     setMode: (mode: Presentation) => update({ mode, issue: null, agent: null }),
     exploreGraph: (graphRoot: string) =>
       update({ graphRoot, mode: 'graph', issue: null, agent: null }),
