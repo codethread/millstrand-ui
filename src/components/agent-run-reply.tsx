@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAgentPromptStore } from '../agent-prompt-store';
 import { useAgentReply } from '../hooks/use-agents';
+import { useBoard } from '../hooks/use-cards';
 import { runIsFinished } from '../lib/agent-notifications';
 import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { useReviewCommentStore } from '../review-comment-store';
@@ -10,6 +11,7 @@ import { Button } from './ui/button';
 
 export function AgentRunReply({ id }: { id: string }) {
   const query = useAgentReply(id, true);
+  const board = useBoard();
   const workspace = useWorkspaceId();
   const { exploreGraph, openCard, openReview } = useDashboardActions();
   const markRead = useAgentPromptStore((state) => state.markRead);
@@ -18,6 +20,7 @@ export function AgentRunReply({ id }: { id: string }) {
     if (workspace && reply && runIsFinished(reply) && !query.error) markRead(workspace, id);
   }, [workspace, id, reply, query.error, markRead]);
   const targetId = reply?.prompt?.cardId ?? reply?.target ?? null;
+  const card = board.data?.cards.find((candidate) => candidate.id === targetId);
   return (
     <section className="mb-5 space-y-3" aria-label="Prompt and agent reply">
       {reply?.prompt && reply.prompt.kind !== 'card' ? (
@@ -37,16 +40,16 @@ export function AgentRunReply({ id }: { id: string }) {
           {reply.prompt.kind === 'review-comment' ? reply.prompt.comment.id : reply.prompt.cardId}
         </Button>
       ) : (
-        targetId && (
+        card && (
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              if (reply?.target !== targetId) exploreGraph(targetId);
-              else openCard(targetId);
+              if (reply?.target !== card.id) exploreGraph(card.id);
+              else openCard(card.id);
             }}
           >
-            View work · {targetId}
+            View work · {card.id}
           </Button>
         )
       )}
