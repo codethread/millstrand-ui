@@ -6,7 +6,7 @@ import {
   type CommentDraftState,
 } from './lib/review-comment-draft';
 
-interface SavedDraft {
+export interface SavedDraft {
   state: CommentDraftState;
   candidateVersion: number;
 }
@@ -34,7 +34,7 @@ const savedCommentDraftSchema = z.compile(
   { strict: true },
 );
 
-interface DraftStore {
+export interface DraftStore {
   drafts: Record<string, SavedDraft>;
   errors: Record<string, { kind: 'read' | 'write'; message: string }>;
   load: (key: string) => void;
@@ -44,8 +44,8 @@ interface DraftStore {
   discard: (key: string) => void;
   adopted: (key: string, submitted: CommentDraft) => void;
   rebase: (key: string, version: number) => void;
-  focus: { reviewId: string; commentId: string } | null;
-  focusComment: (target: { reviewId: string; commentId: string } | null) => void;
+  focusKey: string | null;
+  focusDraft: (key: string | null) => void;
 }
 
 export function reviewDraftKey(
@@ -55,6 +55,16 @@ export function reviewDraftKey(
   comment: string,
 ): string {
   return `millstrand-review-draft:v1:${JSON.stringify([workspace, review, revision, comment])}`;
+}
+
+export function reviewDraftReadiness(
+  state: Pick<DraftStore, 'drafts' | 'errors'>,
+  keys: readonly string[],
+): { unsaved: boolean; storageError: boolean } {
+  return {
+    unsaved: keys.some((key) => state.drafts[key]?.state.kind === 'editing'),
+    storageError: keys.some((key) => state.errors[key] !== undefined),
+  };
 }
 
 export function parseSavedCommentDraft(value: unknown): SavedDraft {
@@ -113,8 +123,8 @@ export const useReviewCommentStore = create<DraftStore>((set, get) => {
   return {
     drafts: {},
     errors: {},
-    focus: null,
-    focusComment: (focus) => set({ focus }),
+    focusKey: null,
+    focusDraft: (focusKey) => set({ focusKey }),
     rebase: (key, version) => {
       const existing = get().drafts[key];
       if (existing?.state.kind === 'editing')
@@ -178,3 +188,23 @@ export const useReviewCommentStore = create<DraftStore>((set, get) => {
     },
   };
 });
+
+export function useReviewCommentDraft(key: string): SavedDraft | null {
+  return useReviewCommentStore((state) => state.drafts[key] ?? null);
+}
+
+export function useReviewCommentDraftError(key: string): DraftStore['errors'][string] | null {
+  return useReviewCommentStore((state) => state.errors[key] ?? null);
+}
+
+export function useReviewCommentFocus(key: string): boolean {
+  return useReviewCommentStore((state) => state.focusKey === key);
+}
+
+export function useReviewHasUnsavedDraft(keys: readonly string[]): boolean {
+  return useReviewCommentStore((state) => reviewDraftReadiness(state, keys).unsaved);
+}
+
+export function useReviewHasDraftStorageError(keys: readonly string[]): boolean {
+  return useReviewCommentStore((state) => reviewDraftReadiness(state, keys).storageError);
+}

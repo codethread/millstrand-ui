@@ -59,3 +59,32 @@ continues to own `src/components/review-comments.tsx`,
 `src/review-comment-store.ts`, and the corresponding pure comment/publication
 modules. Browsing must not infer comments from report Markdown or alter draft,
 curation, receipt, or publication semantics.
+
+## Curation and publication ownership
+
+- `useReviewCommentsRead` exposes explicit loading, failed, and ready-with-optional-
+  retained-error states for the canonical `review-comments` Query snapshot.
+  `useReviewProposals` separately composes targeted agent replies as loading, ready,
+  partial, or failed; a directory/reply failure never hides proposals that remain
+  available. `reviewCommentModels` in `src/lib/review-comments.ts` filters proposals
+  by review, frozen revision, and comment while retaining the revision and curation
+  version required by mutations.
+- Canonical candidates, inclusion, curation versions, publication receipts, and all
+  mutation feedback remain in TanStack Query. A proposal is only agent output until
+  a user opens it as a draft and explicitly adopts it. Curation success updates the
+  canonical snapshot through invalidation; it does not make Zustand authoritative.
+- `src/review-comment-store.ts` owns only browser drafts, per-key storage failures,
+  and focus. Every key includes workspace, review, frozen revision, and comment.
+  Comment controllers subscribe to one key; publication subscribes only to aggregate
+  unsaved/error booleans for the displayed keys. Loading preserves the validated
+  closed/editing discriminant and safe candidate/edit counters. Rebase is explicit,
+  cancel closes the draft, and adoption closes only the exact submitted draft so a
+  newer in-flight edit or replacement survives an older success.
+- Publication hydrates every displayed draft key before evaluating readiness and
+  remains locked by unsaved drafts, storage errors, comment refresh/read errors,
+  active curation, or publishing. The first send captures the displayed revision and
+  curation version; retries reuse that exact snapshot until the user explicitly
+  chooses the currently displayed saved snapshot. Comment-query receipts are rendered
+  as authoritative reconciliation state. A failed HTTP response is an uncertain
+  external outcome, triggers receipt refresh, and never clears drafts or implies that
+  nothing was published.

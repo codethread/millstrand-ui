@@ -1,18 +1,23 @@
-import { useEffect, useRef } from 'react';
-import type { AgentReply } from '../../shared/api';
-import type { ReviewComment, ReviewComments as Snapshot } from '../../shared/review-comments';
+import { useEffect, useMemo, useRef } from 'react';
 import {
-  useReviewComments,
+  useReviewCommentsRead,
   useCurateReview,
   useReviewProposals,
   useReviewMutationPending,
 } from '../hooks/use-review-comments';
 import { useWorkspaceId } from '../lib/navigation';
 import { useAgentPromptStore } from '../agent-prompt-store';
-import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
 import {
-  reviewCommentPositionLabel,
-  reviewCommentPositionValidation,
+  reviewDraftKey,
+  useReviewCommentDraft,
+  useReviewCommentDraftError,
+  useReviewCommentFocus,
+  useReviewCommentStore,
+} from '../review-comment-store';
+import {
+  reviewCommentCandidateConflict,
+  reviewCommentModels,
+  type ReviewCommentModel,
 } from '../lib/review-comments';
 import { ReviewCommentCard } from './review-comment-card';
 import { ReviewCommentProposal } from './review-comment-proposal';
@@ -20,55 +25,51 @@ import { ReviewPublication } from './review-publication';
 import { Markdown } from './markdown';
 import { Button } from './ui/button';
 
-function Comment({
-  snapshot,
-  comment,
-  replies,
-}: {
-  snapshot: Snapshot;
-  comment: ReviewComment;
-  replies: AgentReply[];
-}) {
+function ReviewCommentController({ model }: { model: ReviewCommentModel }) {
+  const { comment, curation, proposals } = model;
   const workspace = useWorkspaceId();
-  const mutation = useCurateReview(snapshot.review.id);
-  const publishing = useReviewMutationPending(snapshot.review.id, 'publish');
-  const store = useReviewCommentStore();
-  const { focus, focusComment, load } = store;
-  const openPrompt = useAgentPromptStore((s) => s.open);
+  const mutation = useCurateReview(curation.reviewId);
+  const publishing = useReviewMutationPending(curation.reviewId, 'publish');
+  const loadDraft = useReviewCommentStore((state) => state.load);
+  const retryDraft = useReviewCommentStore((state) => state.retry);
+  const openDraft = useReviewCommentStore((state) => state.open);
+  const editDraft = useReviewCommentStore((state) => state.edit);
+  const discardDraft = useReviewCommentStore((state) => state.discard);
+  const rebaseDraft = useReviewCommentStore((state) => state.rebase);
+  const acknowledgeAdoption = useReviewCommentStore((state) => state.adopted);
+  const focusDraft = useReviewCommentStore((state) => state.focusDraft);
+  const openPrompt = useAgentPromptStore((state) => state.open);
   const element = useRef<HTMLDivElement>(null);
+  const key = reviewDraftKey(workspace ?? '', curation.reviewId, curation.revision, comment.id);
+  const focused = useReviewCommentFocus(key);
+  const saved = useReviewCommentDraft(key);
+  const storageError = useReviewCommentDraftError(key);
+  const draft = saved?.state.kind === 'editing' ? saved.state.draft : null;
+  const mutable = !publishing && curation.mutable;
+  const candidateConflict =
+    draft !== null &&
+    reviewCommentCandidateConflict(saved?.candidateVersion ?? null, comment.candidate.version);
+
   useEffect(() => {
-    if (focus?.reviewId === snapshot.review.id && focus.commentId === comment.id) {
+    if (focused) {
       element.current?.scrollIntoView({ block: 'center' });
       element.current?.focus({ preventScroll: true });
-      focusComment(null);
+      focusDraft(null);
     }
-  }, [focus, focusComment, snapshot.review.id, comment.id]);
-  const key = reviewDraftKey(
-    workspace ?? '',
-    snapshot.review.id,
-    snapshot.review.revision,
-    comment.id,
-  );
+  }, [focusDraft, focused]);
   useEffect(() => {
-    load(key);
-  }, [key, load]);
-  const saved = store.drafts[key];
-  const draft = saved?.state.kind === 'editing' ? saved.state.draft : null;
-  const mutable = !publishing && snapshot.review.current && snapshot.review.curation.mutable;
-  const proposals = replies.filter(
-    (reply) =>
-      reply.prompt?.kind === 'review-comment' &&
-      reply.prompt.comment.id === comment.id &&
-      reply.prompt.comment.revision === snapshot.review.revision,
-  );
+    loadDraft(key);
+  }, [key, loadDraft]);
+
   function choose(inclusion: 'included' | 'dismissed') {
     mutation.mutate({
-      revision: snapshot.review.revision,
-      expectedVersion: snapshot.review.curation.version,
+      revision: curation.revision,
+      expectedVersion: curation.curationVersion,
       by: 'millstrand-ui',
       changes: [{ id: comment.id, inclusion }],
     });
   }
+
   return (
     <div ref={element} tabIndex={-1} id={`comment-${comment.id}`} className="space-y-2">
       <h4 className="break-words text-sm font-semibold">{comment.title}</h4>
@@ -84,11 +85,9 @@ function Comment({
       </p>
       <ReviewCommentCard
         body={comment.candidate.text}
-        positionLabel={reviewCommentPositionLabel(comment.position)}
+        positionLabel={model.positionLabel}
         inclusion={comment.inclusion}
-        validationText={
-          !mutable ? 'Curation is locked.' : reviewCommentPositionValidation(comment.position)
-        }
+        validationText={!mutable ? 'Curation is locked.' : model.positionValidation}
         errorText={mutation.error?.message ?? comment.publication.error}
         busy={mutation.isPending}
         disabled={!mutable || workspace === null}
@@ -99,12 +98,12 @@ function Comment({
             openPrompt(
               {
                 kind: 'review-comment',
-                cardId: snapshot.review.id,
-                id: snapshot.review.id,
+                cardId: curation.reviewId,
+                id: curation.reviewId,
                 title: comment.title,
                 comment: {
                   id: comment.id,
-                  revision: snapshot.review.revision,
+                  revision: curation.revision,
                   candidateVersion: comment.candidate.version,
                 },
               },
@@ -114,17 +113,17 @@ function Comment({
         }}
         proposalEditor={
           <>
-            {store.errors[key] && (
+            {storageError && (
               <div className="space-y-2">
                 <p role="alert" className="text-sm text-destructive">
-                  {store.errors[key].message}
+                  {storageError.message}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => store.retry(key)}>
+                  <Button size="sm" variant="outline" onClick={() => retryDraft(key)}>
                     Retry draft storage
                   </Button>
-                  {store.errors[key].kind === 'read' && (
-                    <Button size="sm" variant="outline" onClick={() => store.discard(key)}>
+                  {storageError.kind === 'read' && (
+                    <Button size="sm" variant="outline" onClick={() => discardDraft(key)}>
                       Discard unread saved draft
                     </Button>
                   )}
@@ -135,7 +134,7 @@ function Comment({
               <summary className="cursor-pointer text-xs">Original reviewer text</summary>
               <Markdown text={comment.candidate.original.text} />
             </details>
-            {draft !== null && saved?.candidateVersion !== comment.candidate.version && (
+            {candidateConflict && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground">
                   Compare the canonical text above with your draft before using the current
@@ -146,7 +145,7 @@ function Comment({
                   variant="outline"
                   disabled={!mutable || mutation.isPending}
                   onClick={() => {
-                    store.rebase(key, comment.candidate.version);
+                    rebaseDraft(key, comment.candidate.version);
                     mutation.reset();
                   }}
                 >
@@ -158,8 +157,8 @@ function Comment({
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!mutable || store.errors[key]?.kind === 'read'}
-                onClick={() => store.open(key, comment.candidate.text, comment.candidate.version)}
+                disabled={!mutable || storageError?.kind === 'read'}
+                onClick={() => openDraft(key, comment.candidate.text, comment.candidate.version)}
               >
                 Edit revised text
               </Button>
@@ -169,16 +168,17 @@ function Comment({
                 busy={mutation.isPending}
                 adoptDisabled={
                   !mutable ||
+                  candidateConflict ||
                   saved?.candidateVersion !== comment.candidate.version ||
                   draft.text === comment.candidate.text
                 }
                 errorText={
-                  saved?.candidateVersion !== comment.candidate.version
+                  candidateConflict
                     ? 'The canonical candidate changed. Compare it above, then explicitly keep the draft against the new candidate or cancel.'
                     : (mutation.error?.message ?? null)
                 }
-                onEdit={(text) => store.edit(key, text)}
-                onCancel={() => store.discard(key)}
+                onEdit={(text) => editDraft(key, text)}
+                onCancel={() => discardDraft(key)}
                 onAdopt={() => {
                   if (
                     !saved ||
@@ -189,8 +189,8 @@ function Comment({
                     return;
                   mutation.mutate(
                     {
-                      revision: snapshot.review.revision,
-                      expectedVersion: snapshot.review.curation.version,
+                      revision: curation.revision,
+                      expectedVersion: curation.curationVersion,
                       by: 'millstrand-ui',
                       changes: [
                         {
@@ -203,22 +203,20 @@ function Comment({
                         },
                       ],
                     },
-                    { onSuccess: () => store.adopted(key, draft) },
+                    { onSuccess: () => acknowledgeAdoption(key, draft) },
                   );
                 }}
               />
             )}
-            {proposals.map((reply) => (
+            {proposals.map(({ reply, candidateVersion }) => (
               <details key={reply.id} className="border-t border-border pt-2">
                 <summary className="cursor-pointer text-xs">
                   Agent proposal · {reply.id} · {reply.status}
                 </summary>
-                {reply.prompt?.kind === 'review-comment' && (
-                  <p className="my-2 text-xs text-muted-foreground">
-                    Requested against candidate {reply.prompt.comment.candidateVersion}. Proposals
-                    do not change included text.
-                  </p>
-                )}
+                <p className="my-2 text-xs text-muted-foreground">
+                  Requested against candidate {candidateVersion}. Proposals do not change included
+                  text.
+                </p>
                 {reply.result !== null && (
                   <>
                     <Markdown text={reply.result} />
@@ -231,7 +229,7 @@ function Comment({
                         reply.status === 'ready' ||
                         reply.status === 'running'
                       }
-                      onClick={() => store.open(key, reply.result ?? '', comment.candidate.version)}
+                      onClick={() => openDraft(key, reply.result ?? '', comment.candidate.version)}
                     >
                       Inspect and edit proposal
                     </Button>
@@ -252,45 +250,64 @@ function Comment({
 }
 
 export function ReviewComments({ id }: { id: string }) {
-  const query = useReviewComments(id);
-  const proposals = useReviewProposals(id);
+  const commentsRead = useReviewCommentsRead(id);
+  const proposalsRead = useReviewProposals(id);
+  const snapshot = commentsRead.kind === 'ready' ? commentsRead.snapshot : null;
+  const models = useMemo(
+    () => (snapshot ? reviewCommentModels(snapshot, proposalsRead.replies) : []),
+    [snapshot, proposalsRead.replies],
+  );
+  const commentsError =
+    commentsRead.kind === 'failed'
+      ? commentsRead.error
+      : commentsRead.kind === 'ready'
+        ? commentsRead.readError
+        : null;
+  const retryComments =
+    commentsRead.kind === 'failed' || commentsRead.kind === 'ready' ? commentsRead.retry : null;
+  const proposalsError =
+    proposalsRead.kind === 'partial' || proposalsRead.kind === 'failed'
+      ? proposalsRead.error
+      : null;
+
   return (
     <section aria-label="Review comments" className="space-y-4 border-t border-border p-5 md:p-7">
       <h3 className="text-sm font-semibold">Review comments</h3>
-      {query.data && (
+      {snapshot && commentsRead.kind === 'ready' && (
         <ReviewPublication
-          key={`${id}:${query.data.review.revision}`}
-          snapshot={query.data}
-          refreshing={query.isFetching}
-          readError={query.error !== null}
+          key={`${id}:${snapshot.review.revision}`}
+          snapshot={snapshot}
+          refreshing={commentsRead.refreshing}
+          readError={commentsRead.readError !== null}
         />
       )}
-      {query.error && (
+      {commentsError && (
         <p role="alert" className="text-sm text-destructive">
-          Comments unavailable: {query.error.message}{' '}
-          <Button variant="ghost" size="sm" onClick={() => void query.refetch()}>
-            Retry
-          </Button>
+          Comments unavailable: {commentsError.message}{' '}
+          {retryComments && (
+            <Button variant="ghost" size="sm" onClick={retryComments}>
+              Retry
+            </Button>
+          )}
         </p>
       )}
-      {proposals.error && (
+      {proposalsError && (
         <p role="alert" className="text-xs text-destructive">
-          Agent proposals could not refresh: {proposals.error.message}
+          Agent proposals could not refresh: {proposalsError.message}
+          {proposalsRead.kind === 'partial' && ' Showing the proposals that remain available.'}
         </p>
       )}
-      {!query.data && !query.error && (
+      {commentsRead.kind === 'loading' && (
         <p className="text-sm text-muted-foreground">Loading comments…</p>
       )}
-      {query.data?.comments.length === 0 && (
+      {proposalsRead.kind === 'loading' && (
+        <p className="text-xs text-muted-foreground">Loading agent proposals…</p>
+      )}
+      {snapshot?.comments.length === 0 && (
         <p className="text-sm text-muted-foreground">No structured comments in this review.</p>
       )}
-      {query.data?.comments.map((comment) => (
-        <Comment
-          key={comment.id}
-          snapshot={query.data}
-          comment={comment}
-          replies={proposals.replies}
-        />
+      {models.map((model) => (
+        <ReviewCommentController key={model.comment.id} model={model} />
       ))}
     </section>
   );

@@ -1,12 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import {
   reviewDraftKey,
+  reviewDraftReadiness,
   useReviewCommentStore,
   parseSavedCommentDraft,
 } from './review-comment-store';
 
 beforeEach(() => {
-  useReviewCommentStore.setState({ drafts: {}, errors: {} });
+  useReviewCommentStore.setState({ drafts: {}, errors: {}, focusKey: null });
   vi.unstubAllGlobals();
 });
 it('keeps unread A blocked after unrelated B save/discard and resolves errors only by key', () => {
@@ -115,6 +116,45 @@ it('retains memory edits when persistence fails and rejects malformed persisted 
     }),
   ).toThrow();
 });
+it.each([
+  { candidateVersion: 0, state: { kind: 'closed' } },
+  { candidateVersion: Number.MAX_SAFE_INTEGER + 1, state: { kind: 'closed' } },
+  {
+    candidateVersion: 1,
+    state: { kind: 'editing', draft: { id: 'draft', text: 'Text', edit: -1 } },
+  },
+  {
+    candidateVersion: 1,
+    state: {
+      kind: 'editing',
+      draft: { id: 'draft', text: 'Text', edit: Number.MAX_SAFE_INTEGER + 1 },
+    },
+  },
+])('rejects persisted candidate and edit counters outside safe bounds', (saved) => {
+  expect(() => parseSavedCommentDraft(saved)).toThrow('Invalid saved draft');
+});
+
+it('scopes focus and publication readiness to complete draft keys', () => {
+  vi.stubGlobal('localStorage', { setItem: vi.fn() });
+  const selected = reviewDraftKey('workspace', 'review', 'revision', 'comment');
+  const otherWorkspace = reviewDraftKey('other', 'review', 'revision', 'comment');
+  const otherRevision = reviewDraftKey('workspace', 'review', 'next', 'comment');
+  const store = useReviewCommentStore.getState();
+  store.focusDraft(selected);
+  store.open(otherWorkspace, 'Other workspace', 1);
+  store.open(otherRevision, 'Other revision', 1);
+  expect(useReviewCommentStore.getState().focusKey).toBe(selected);
+  expect(reviewDraftReadiness(useReviewCommentStore.getState(), [selected])).toEqual({
+    unsaved: false,
+    storageError: false,
+  });
+  store.open(selected, 'Selected draft', 1);
+  expect(reviewDraftReadiness(useReviewCommentStore.getState(), [selected])).toEqual({
+    unsaved: true,
+    storageError: false,
+  });
+});
+
 it('explicitly rebases text to the new candidate and ignores an older adoption acknowledgment', () => {
   vi.stubGlobal('localStorage', { setItem: vi.fn() });
   const store = useReviewCommentStore.getState();

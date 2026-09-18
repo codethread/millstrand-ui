@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { PublishReview, ReviewComments } from '../../shared/review-comments';
-import { sendReviewBlock } from '../lib/review-publication';
+import {
+  publicationReceiptMatchesSnapshot,
+  publicationRequest,
+  publicationSnapshotChanged,
+  sendReviewBlock,
+} from '../lib/review-publication';
 import { usePublishReview, useReviewMutationPending } from '../hooks/use-review-comments';
 import { useWorkspaceId } from '../lib/navigation';
-import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
+import {
+  reviewDraftKey,
+  useReviewCommentStore,
+  useReviewHasDraftStorageError,
+  useReviewHasUnsavedDraft,
+} from '../review-comment-store';
 import { Button } from './ui/button';
 
 export function ReviewPublication({
@@ -16,8 +26,7 @@ export function ReviewPublication({
   readError: boolean;
 }) {
   const workspace = useWorkspaceId();
-  const store = useReviewCommentStore();
-  const loadDraft = store.load;
+  const loadDraft = useReviewCommentStore((state) => state.load);
   const mutation = usePublishReview(snapshot.review.id);
   const curating = useReviewMutationPending(snapshot.review.id, 'curate');
   const [attempt, setAttempt] = useState<PublishReview | null>(null);
@@ -36,14 +45,12 @@ export function ReviewPublication({
     // oxlint-disable-next-line react/set-state-in-effect
     setHydrated(signature);
   }, [keys, loadDraft, signature]);
-  const unsaved = keys.some((key) => store.drafts[key]?.state.kind === 'editing');
-  const changed =
-    attempt !== null &&
-    (attempt.revision !== snapshot.review.revision ||
-      attempt.curationVersion !== snapshot.review.curation.version);
+  const unsaved = useReviewHasUnsavedDraft(keys);
+  const storageError = useReviewHasDraftStorageError(keys);
+  const changed = publicationSnapshotChanged(snapshot, attempt);
   const block = sendReviewBlock(snapshot, {
     hydrated: workspace !== null && hydrated === signature,
-    storageError: keys.some((key) => store.errors[key] !== undefined),
+    storageError,
     unsaved,
     refreshing: refreshing || curating,
     readError,
@@ -51,7 +58,9 @@ export function ReviewPublication({
   });
   const retry = attempt !== null || snapshot.review.publication.state !== 'unpublished';
   const published =
-    snapshot.review.publication.state === 'published' || mutation.data?.state === 'published';
+    snapshot.review.publication.state === 'published' ||
+    (publicationReceiptMatchesSnapshot(snapshot, mutation.data) &&
+      mutation.data?.state === 'published');
   const receipts = snapshot.comments.map((comment) => ({
     id: comment.id,
     ...comment.publication,
@@ -66,10 +75,7 @@ export function ReviewPublication({
         disabled={block !== null || mutation.isPending || published}
         onClick={() => {
           if (block !== null || mutation.isPending || published) return;
-          const input = attempt ?? {
-            revision: snapshot.review.revision,
-            curationVersion: snapshot.review.curation.version,
-          };
+          const input = publicationRequest(snapshot, attempt);
           setAttempt(input);
           mutation.mutate(input);
         }}
