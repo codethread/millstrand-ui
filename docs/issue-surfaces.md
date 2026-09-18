@@ -12,7 +12,8 @@
   returns `cards` (sorted visible membership), `allCards` (unfiltered context),
   `columns` (`BoardColumn[]`, each containing `{ card, parent }` rows), and
   `outline` (`OutlineGroup[]`). No timestamps or query result wrappers are inputs.
-  Graph keeps its existing `{ cards, allCards }` props unchanged. Overview can use
+  Graph keeps its `{ cards, allCards }` props unchanged; its source, layout and
+  canvas lifecycle are documented in [graph ownership](graph.md). Overview can use
   the pure projections without importing issue components or starting another cache.
 - `BoardView({ columns })` and `OutlineView({ groups })` render explicit models;
   individual cards receive only their card and nullable parent. Parent context can
@@ -45,4 +46,3 @@ Browser-local request aborts verified retained detail/notes and label/move/delet
 errors without changing real work. Delete confirmation remains open on failure;
 label text remains in the editor. Menu lanes include production/completed and disable
 the current lane. No real card mutations, paid launches or external reviews occurred.
-Screenshots are in `docs/evidence/vl3cr/`.
