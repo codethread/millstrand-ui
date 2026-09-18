@@ -1,162 +1,26 @@
-import { useState, type FormEvent } from 'react';
-import {
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  Clock3,
-  Copy,
-  GitBranch,
-  Layers,
-  MessageSquare,
-  Network,
-  Plus,
-  Tag,
-  X,
-} from 'lucide-react';
+import { useState } from 'react';
+import { ArrowUpRight, Check, Clock3, Copy, GitBranch, Layers, Network } from 'lucide-react';
 import { Markdown } from './markdown';
-import type { CardDetail, Note, Task } from '../../shared/api';
+import type { CardDetail } from '../../shared/api';
 import { PromptAgentButton } from './agent-prompt';
-import { useCard, useLabels, useTaskNotes } from '../hooks/use-cards';
-import { formatDate, relativeTime } from '../lib/board';
+import { useCard } from '../hooks/use-cards';
+import { formatDate } from '../lib/board';
 import { useDashboardActions, useDetailTab } from '../lib/navigation';
 import type { DetailTab } from '../lib/dashboard-search';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './ui/sheet';
-import { ErrorNotice, LabelPill, Loading, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
+import { ErrorNotice, Loading, StatusBadge, TypeIcon } from './issue-parts';
 import { cn } from '../lib/utils';
 import { IssueAgents } from './agents-view';
 import { AutoRunDetails } from './auto-run';
-
-function Notes({ notes }: { notes: Note[] }) {
-  return notes.length ? (
-    <div className="notes-timeline">
-      {notes.map((note) => (
-        <article className="note" key={note.id}>
-          <span className="note-marker">
-            <MessageSquare className="size-3" />
-          </span>
-          <header>
-            <strong>{note.by ?? 'Workspace note'}</strong>
-            {note.kind && <span className="note-kind">{note.kind}</span>}
-            <time title={note.at}>{relativeTime(note.at)}</time>
-          </header>
-          <Markdown text={note.text} />
-          {note.truncated && (
-            <p className="text-xs text-muted-foreground">This note was truncated at the source.</p>
-          )}
-        </article>
-      ))}
-    </div>
-  ) : (
-    <p className="detail-empty">No notes yet. Updates from agents will appear here.</p>
-  );
-}
-
-function TaskRow({ task, cardId }: { task: Task; cardId: string }) {
-  const [open, setOpen] = useState(false);
-  const notes = useTaskNotes(cardId, task.id, open);
-  return (
-    <div className="task-item">
-      <button className="task-row" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <StatusIcon status={task.status} />
-        <span>
-          <strong>{task.title}</strong>
-          <small>
-            <span className="issue-id">{task.id}</span>
-            <span className={cn('task-status', `status-${task.status}`)}>
-              {task.status === 'closed' ? 'completed' : task.status}
-            </span>
-            {task.owner && <span>{task.owner}</span>}
-          </small>
-        </span>
-        <ChevronDown
-          className={cn(
-            'ml-auto size-4 shrink-0 text-muted-foreground transition-transform',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-      {open && (
-        <div className="task-expanded">
-          <div className="mb-4">
-            <IssueAgents owner={task.owner} target={task.id} />
-          </div>
-          {task.body ? (
-            <Markdown text={task.body} />
-          ) : (
-            <p className="detail-empty">No task description.</p>
-          )}
-          <h4 className="detail-section-title">Task activity</h4>
-          {notes.isPending ? (
-            <Loading text="Loading notes…" />
-          ) : notes.error ? (
-            <ErrorNotice error={notes.error} />
-          ) : (
-            <Notes notes={notes.data} />
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LabelsEditor({ detail }: { detail: CardDetail }) {
-  const mutation = useLabels(detail.card.id);
-  function addLabels(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const entry = new FormData(form).get('labels');
-    const value = typeof entry === 'string' ? entry : '';
-    const labels = value
-      .split(',')
-      .map((label) => label.trim())
-      .filter(Boolean);
-    if (labels.length)
-      mutation.mutate({ action: 'add', labels }, { onSuccess: () => form.reset() });
-  }
-  return (
-    <section className="detail-labels">
-      <div className="detail-section-title">
-        <Tag className="size-3.5" />
-        Labels<span className="editable-tag">Editable</span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {detail.card.labels.map((label) => (
-          <span className="editable-label" key={label}>
-            <LabelPill label={label} />
-            <button
-              disabled={mutation.isPending}
-              onClick={() => mutation.mutate({ action: 'remove', labels: [label] })}
-              aria-label={`Remove label ${label}`}
-            >
-              <X className="size-3" />
-            </button>
-          </span>
-        ))}
-      </div>
-      <form onSubmit={addLabels} className="label-form">
-        <Input
-          name="labels"
-          aria-label="New labels"
-          placeholder="Add a label…"
-          disabled={mutation.isPending}
-          autoComplete="off"
-        />
-        <Button type="submit" variant="outline" size="sm" disabled={mutation.isPending}>
-          <Plus />
-          Add
-        </Button>
-      </form>
-      <p className="input-hint">Lowercase slugs; separate multiple labels with commas.</p>
-      {mutation.error && <ErrorNotice error={mutation.error} />}
-    </section>
-  );
-}
+import { Notes, TaskRow } from './issue-tasks';
+import { LabelsEditor } from './issue-labels';
+import { IssueProperties } from './issue-properties';
 
 function DetailOverview({ detail }: { detail: CardDetail }) {
-  const { openCard, exploreGraph } = useDashboardActions();
+  const { exploreGraph } = useDashboardActions();
   const completed = detail.tasks.filter((task) => task.status === 'closed').length;
   return (
     <>
@@ -232,55 +96,8 @@ function DetailOverview({ detail }: { detail: CardDetail }) {
           ))}
         </section>
       )}
-      <LabelsEditor detail={detail} />
-      <section className="detail-section">
-        <h3 className="detail-section-title">Properties</h3>
-        <dl className="property-list">
-          {detail.card.epicId && (
-            <>
-              <dt>Parent epic</dt>
-              <dd>
-                <button className="text-action" onClick={() => openCard(detail.card.epicId!)}>
-                  <Layers className="size-3.5" />
-                  {detail.card.epicId}
-                  <ArrowUpRight className="size-3" />
-                </button>
-              </dd>
-            </>
-          )}
-          {detail.card.branch && (
-            <>
-              <dt>Branch</dt>
-              <dd>
-                <GitBranch className="size-3.5" />
-                {detail.card.branch}
-              </dd>
-            </>
-          )}
-          {detail.card.worktree && (
-            <>
-              <dt>Worktree</dt>
-              <dd className="font-mono text-xs">{detail.card.worktree}</dd>
-            </>
-          )}
-          {detail.card.source && (
-            <>
-              <dt>Source</dt>
-              <dd>{detail.card.source}</dd>
-            </>
-          )}
-          {detail.card.outcome && (
-            <>
-              <dt>Outcome</dt>
-              <dd>{detail.card.outcome}</dd>
-            </>
-          )}
-          <dt>Created</dt>
-          <dd>{formatDate(detail.card.createdAt)}</dd>
-          <dt>Updated</dt>
-          <dd>{formatDate(detail.card.updatedAt)}</dd>
-        </dl>
-      </section>
+      <LabelsEditor card={detail.card} />
+      <IssueProperties card={detail.card} />
     </>
   );
 }
@@ -407,7 +224,12 @@ export function IssueDetail({ id }: { id: string }) {
                   <Network className="size-4" />
                 </button>
               </div>
-              {query.error && <ErrorNotice error={query.error} />}
+              {query.error && (
+                <>
+                  <ErrorNotice error={query.error} />
+                  <p className="detail-empty">Showing last-known issue details.</p>
+                </>
+              )}
               <TabsContent value="overview" className="detail-body">
                 <DetailOverview detail={detail} />
               </TabsContent>

@@ -165,7 +165,7 @@ from the concrete scalar hooks in `src/lib/navigation.ts`. Commands whose result
 depends on URL state use Router's functional current-search callback, never a closure
 captured by a broad subscription. Use a module-level selector for fixed projections;
 use `useCallback` with the actual inputs for parameterized selectors (see
-`useIssueBoard`, `useFilteredCardCount`, `useSavedViewBoard`, and the workspace
+`useFilteredCardCount`, `useSavedViewBoard`, and the workspace
 switcher). Select nested content rather than selecting a root containing `fetchedAt`. Query
 structural sharing retains unchanged branches; ordinary pure selectors should
 return an existing reference when no transform is needed. Do not put query result
@@ -192,3 +192,12 @@ data (retain it and label last-known). Empty means a successful empty snapshot, 
 failure. The workspace switcher now preserves known choices with an explicit discovery
 error, matching overview's retained-data policy; offline choices still navigate to the
 existing disconnected workspace screen. No server restart is a verification technique.
+
+### Issue surface models
+
+See [issue surface handover](issue-surfaces.md) for the concrete board/outline/graph
+contract and verification evidence. `useIssueBoard` selects only `board.cards`, then
+memoizes `issueSurfaceContent(cards, filter)` on those actual inputs. Graph receives
+stable `cards` and `allCards`; board rows receive explicit nullable parent context.
+Detail notes, label editing and properties have focused component entries; mutation
+controllers remain in `use-cards.ts`, with cache settlement in `api/cards.ts`.

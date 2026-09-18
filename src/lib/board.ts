@@ -122,10 +122,33 @@ export function filteredCardCount(board: Board, filter: ViewFilter): number {
 export interface IssueBoardContent {
   allCards: Card[];
   cards: Card[];
+  columns: BoardColumn[];
+  outline: OutlineGroup[];
 }
 
-export function issueBoardContent(board: Board, filter: ViewFilter): IssueBoardContent {
-  return { allCards: board.cards, cards: selectCards(board.cards, filter) };
+export interface BoardCard {
+  card: Card;
+  parent: Card | null;
+}
+
+export interface BoardColumn {
+  lane: (typeof lanes)[number];
+  items: BoardCard[];
+}
+
+export function issueSurfaceContent(allCards: Card[], filter: ViewFilter): IssueBoardContent {
+  const cards = selectCards(allCards, filter);
+  const parents = new Map(allCards.map((card) => [card.id, card]));
+  const columns = selectBoardLanes(cards, filter.includeClosed).map((lane) => ({
+    lane,
+    items: cards
+      .filter((card) => card.lane === lane.id)
+      .map((card) => ({
+        card,
+        parent: card.epicId === null ? null : (parents.get(card.epicId) ?? null),
+      })),
+  }));
+  return { allCards, cards, columns, outline: selectOutline(allCards, cards) };
 }
 
 export interface SavedViewBoardContent {
