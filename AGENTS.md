@@ -73,6 +73,10 @@ This repo uses Millstrand strands to track work. Start with `strand --help`. Run
   database.
 - Use spool operations for domain-semantic actions when it makes sense to expose the
   action from the spool itself, rather than reproducing its domain rules in the UI.
+- Use `strand update CARD_ID --attr kanban/lane=LANE` for simple Kanban lane changes:
+  `pending` for promotion, `in_review` for review, `claimed` for rework, and optional
+  `in_production` for post-merge observation. Preserve the structured `strand kanban`
+  `claim`, `finish`, and `reopen` operations.
 
 Target other repos with direct `--workspace` flag:
 
