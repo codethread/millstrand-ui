@@ -50,19 +50,20 @@ components to compensate for a boundary change.
 `server/parse.ts`; it is not an agent lifecycle. Opt-in comes from the spool's
 `kanban.label/auto-run` string flag, and all `auto-run/*` values are read-only.
 The compact board CLI omits custom attributes, so `StrandData.board` reads its
-membership first, then hydrates attributes through `server/card-inspection.ts`.
-This fixed read-only REPL program selects up to 10,000 card IDs with public
-`list-lean`, then uses a full `list` query restricted to those IDs (including
-errors longer than the CLI's lean-string limit). Unlike strict point hydration,
-that query tolerates IDs deleted between reads. Before serialization, the program
-keeps only card metadata attributes, label flags and the known auto-run fields;
-large bodies and unrelated attributes never enter the board response buffer.
-Deleted cards are omitted; cards
-created after membership was read appear next poll. Overflow and read failures
-remain visible with normal Query refresh-error retention. No per-card requests,
-new endpoints, query keys, or poll owners are added. Raw detail attributes remain
-available unchanged. `AutoRunSummary` and `AutoRunDetails` render this snapshot
-separately from `IssueAgents`, which remains authoritative for worker activity.
+domain membership first, then hydrates persisted attributes through
+`server/workspace-database.ts`. The reader discovers the workspace's file-backed
+SQLite database from `mill weaver list`, opens it read-only with `query_only`, and
+requires the supported persisted schema version. Its bounded SQL projection selects
+up to 10,001 card rows so overflow fails instead of truncating, while retaining errors
+longer than the CLI's lean-string limit. The query tolerates IDs deleted between the
+membership and hydration reads. It selects only card metadata, label flags and known
+auto-run fields; large bodies and unrelated attributes never enter the server result.
+Deleted cards are omitted, and cards created after membership was read appear next
+poll. Reads stay in short autocommit transactions so they do not pin the WAL. Failures
+remain visible with normal Query refresh-error retention. No per-card requests, new
+endpoints, query keys, or poll owners are added. Raw detail attributes remain available
+unchanged. `AutoRunSummary` and `AutoRunDetails` render this snapshot separately from
+`IssueAgents`, which remains authoritative for worker activity.
 
 ## Checked read inventory
 

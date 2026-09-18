@@ -1,24 +1,15 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { StrandData } from './strand.ts';
 
-const { exec, send } = vi.hoisted(() => ({
-  exec: vi.fn(),
-  send: vi.fn(),
-}));
-vi.mock('node:child_process', async () => {
-  const { promisify } = await import('node:util');
-  return { execFile: Object.assign(() => undefined, { [promisify.custom]: exec }) };
-});
-
-function result(value: unknown) {
-  return Object.assign(Promise.resolve({ stdout: JSON.stringify(JSON.stringify(value)) }), {
-    child: { stdin: { end: send } },
-  });
-}
+const readAgentStrands = vi.fn();
+const database = {
+  readAgentStrands,
+  readCardStrands: vi.fn(),
+};
 
 beforeEach(() => {
-  exec.mockReset();
-  send.mockReset();
+  readAgentStrands.mockReset();
+  database.readCardStrands.mockReset();
 });
 
 const identity = {
@@ -50,16 +41,13 @@ const run = {
   },
 };
 
-it('inspects a large workspace without a whole-strand list and retains completed runs and owned work', async () => {
-  exec.mockImplementation((file) => {
-    if (file !== 'mill') throw new Error('Read result matched 18054 strands, exceeding cap');
-    return result([
-      identity,
-      run,
-      { ...identity, id: 'card1', attributes: { owner: 'test-agent', 'kanban/card': 'true' } },
-    ]);
-  });
-  const data = new StrandData('/repo/.millstrand');
+it('retains completed runs and owned work without exposing unselected attributes', async () => {
+  readAgentStrands.mockResolvedValue([
+    identity,
+    run,
+    { ...identity, id: 'card1', attributes: { owner: 'test-agent', 'kanban/card': 'true' } },
+  ]);
+  const data = new StrandData('/repo/.millstrand', database);
   const directory = await data.agents();
   expect(directory.identities).toHaveLength(1);
   expect(directory.identities[0]).toMatchObject({
@@ -69,46 +57,22 @@ it('inspects a large workspace without a whole-strand list and retains completed
   });
   expect(JSON.stringify(directory)).not.toContain('private');
   expect(await data.agents()).toBe(directory);
-  expect(exec).toHaveBeenCalledTimes(1);
-  expect(exec.mock.calls[0]?.slice(0, 2)).toEqual([
-    'mill',
-    ['weaver', 'repl', '--workspace', '/repo/.millstrand', '--stdin'],
-  ]);
+  expect(readAgentStrands).toHaveBeenCalledTimes(1);
 });
 
-it('sends a fixed bounded selective program, not interpolated workspace input', async () => {
-  exec.mockImplementation(() => result([]));
-  const workspace = '/repo/"(throw (Exception.))/.millstrand';
-  expect((await new StrandData(workspace).agents()).identities).toEqual([]);
-  const source: unknown = send.mock.calls[0]?.[0];
-  expect(source).toEqual(expect.stringContaining('millstrand.api.weaver.alpha/list-lean'));
-  expect(source).toEqual(expect.stringContaining('[:attr "identity/session"]'));
-  expect(source).toEqual(expect.stringContaining('"harness/published"'));
-  expect(source).toEqual(expect.stringContaining('[:exists [:attr "owner"]]'));
-  expect(source).toEqual(expect.stringContaining('{} 10000'));
-  expect(source).not.toEqual(expect.stringContaining(workspace));
-  expect(source).not.toEqual(expect.stringContaining('[:state'));
-});
-
-it('reports query/transport failures without caching an empty directory and can refresh again', async () => {
-  exec.mockImplementationOnce(() =>
-    Object.assign(Promise.reject(new Error('Read result exceeded matching-row cap')), {
-      child: { stdin: { end: send } },
-    }),
+it('reports persisted read failures without caching an empty directory and can refresh again', async () => {
+  readAgentStrands.mockRejectedValueOnce(
+    Object.assign(new Error('Read result exceeded matching-row cap'), { status: 502 }),
   );
-  const data = new StrandData('/repo/.millstrand');
+  const data = new StrandData('/repo/.millstrand', database);
   await expect(data.agents()).rejects.toMatchObject({ status: 502 });
-  exec.mockImplementation(() => result([identity]));
+  readAgentStrands.mockResolvedValue([identity]);
   expect((await data.agents()).identities).toHaveLength(1);
 });
 
-it('rejects malformed envelopes and malformed domain data rather than claiming no agents', async () => {
-  exec.mockImplementationOnce(() =>
-    Object.assign(Promise.resolve({ stdout: 'nil' }), { child: { stdin: { end: send } } }),
+it('rejects malformed persisted domain data rather than claiming no agents', async () => {
+  readAgentStrands.mockResolvedValue([{ ...identity, attributes: { 'identity/session': 'true' } }]);
+  await expect(new StrandData('/repo/.millstrand', database).agents()).rejects.toThrow(
+    'identity/id',
   );
-  await expect(new StrandData('/repo/.millstrand').agents()).rejects.toMatchObject({ status: 502 });
-  exec.mockImplementationOnce(() =>
-    result([{ ...identity, attributes: { 'identity/session': 'true' } }]),
-  );
-  await expect(new StrandData('/repo/.millstrand').agents()).rejects.toThrow('identity/id');
 });

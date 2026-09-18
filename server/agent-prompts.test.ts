@@ -24,14 +24,20 @@ const reviewDetail = parseReviewDetail({
   },
 });
 
-const { exec, send } = vi.hoisted(() => ({
+const { exec, readCardStrands } = vi.hoisted(() => ({
   exec: vi.fn(),
-  send: vi.fn(),
+  readCardStrands: vi.fn(),
 }));
 vi.mock('node:child_process', async () => {
   const { promisify } = await import('node:util');
   return { execFile: Object.assign(() => undefined, { [promisify.custom]: exec }) };
 });
+vi.mock('./workspace-database.ts', () => ({
+  WorkspaceDatabase: class {
+    readAgentStrands = vi.fn();
+    readCardStrands = readCardStrands;
+  },
+}));
 
 const prompt = {
   targetId: 'card1',
@@ -79,7 +85,7 @@ const reply = {
 
 beforeEach(() => {
   exec.mockReset();
-  send.mockReset();
+  readCardStrands.mockReset();
 });
 
 describe('prompt boundaries', () => {
@@ -138,24 +144,16 @@ describe('scoped launch process', () => {
     registered = [process.cwd()],
     readReview = () => reviewDetail,
   ) {
+    readCardStrands.mockResolvedValue([
+      {
+        id: 'card1',
+        title: 'Feature',
+        state: 'active',
+        created_at: '2026-09-14',
+        attributes: { worktree },
+      },
+    ]);
     exec.mockImplementation((_file, argv) => {
-      if (_file === 'mill')
-        return Object.assign(
-          Promise.resolve({
-            stdout: JSON.stringify(
-              JSON.stringify([
-                {
-                  id: 'card1',
-                  title: 'Feature',
-                  state: 'active',
-                  created_at: '2026-09-14',
-                  attributes: { worktree },
-                },
-              ]),
-            ),
-          }),
-          { child: { stdin: { end: send } } },
-        );
       if (_file === 'git')
         return Promise.resolve({
           stdout: registered

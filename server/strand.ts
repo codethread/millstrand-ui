@@ -15,8 +15,7 @@ import { promisify } from 'node:util';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { parseAgents } from './agents.ts';
-import { readAgentStrands } from './agent-inspection.ts';
-import { readCardStrands } from './card-inspection.ts';
+import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
 import {
   agentLaunchArgs,
   parseAgentOptions,
@@ -96,7 +95,10 @@ export class StrandData {
   private readonly reviewDirectories = new ReadCache<ReviewDirectory>();
   private readonly reviewDetails = new ReadCache<ReviewDetail>();
 
-  constructor(readonly workspace: string) {}
+  constructor(
+    readonly workspace: string,
+    private readonly database: PersistedWorkspaceReads = new WorkspaceDatabase(workspace),
+  ) {}
 
   reviews(): Promise<ReviewDirectory> {
     return this.reviewDirectories.get('reviews', async () => {
@@ -242,7 +244,7 @@ export class StrandData {
       const raw = object(await this.run(['kanban', 'board', '--all', 'true']), 'board');
       // Read membership first. New cards wait for the next poll; cards deleted
       // before hydration are omitted instead of failing the entire board.
-      const cards = parseBoardCards(raw['cards'], await readCardStrands(this.workspace));
+      const cards = parseBoardCards(raw['cards'], await this.database.readCardStrands());
       const counts = new Map<string, number>();
       for (const card of cards) {
         for (const label of card.labels) counts.set(label, (counts.get(label) ?? 0) + 1);
@@ -261,7 +263,7 @@ export class StrandData {
 
   agents(): Promise<AgentDirectory> {
     return this.agentDirectories.get('agents', async () => {
-      const rows = await readAgentStrands(this.workspace);
+      const rows = await this.database.readAgentStrands();
       return {
         workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
         fetchedAt: new Date().toISOString(),
