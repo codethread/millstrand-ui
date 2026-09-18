@@ -1,4 +1,79 @@
-import type { ReviewCommentPosition } from '../../shared/review-comments';
+import type { AgentReply } from '../../shared/api';
+import type {
+  ReviewComment,
+  ReviewCommentPosition,
+  ReviewComments,
+} from '../../shared/review-comments';
+
+export interface ReviewCurationContext {
+  reviewId: string;
+  revision: string;
+  curationVersion: number;
+  mutable: boolean;
+}
+
+export interface ReviewCommentProposalModel {
+  reply: AgentReply;
+  candidateVersion: number;
+}
+
+export interface ReviewCommentModel {
+  comment: ReviewComment;
+  curation: ReviewCurationContext;
+  positionLabel: string;
+  positionValidation: string | null;
+  proposals: ReviewCommentProposalModel[];
+}
+
+function reviewCommentProposals(
+  replies: AgentReply[],
+  reviewId: string,
+  revision: string,
+  commentId: string,
+): ReviewCommentProposalModel[] {
+  return replies.flatMap((reply) => {
+    const prompt = reply.prompt;
+    if (
+      prompt?.kind !== 'review-comment' ||
+      prompt.cardId !== reviewId ||
+      prompt.comment.id !== commentId ||
+      prompt.comment.revision !== revision
+    )
+      return [];
+    return [{ reply, candidateVersion: prompt.comment.candidateVersion }];
+  });
+}
+
+export function reviewCommentModels(
+  snapshot: ReviewComments,
+  replies: AgentReply[],
+): ReviewCommentModel[] {
+  const curation: ReviewCurationContext = {
+    reviewId: snapshot.review.id,
+    revision: snapshot.review.revision,
+    curationVersion: snapshot.review.curation.version,
+    mutable: snapshot.review.current && snapshot.review.curation.mutable,
+  };
+  return snapshot.comments.map((comment) => ({
+    comment,
+    curation,
+    positionLabel: reviewCommentPositionLabel(comment.position),
+    positionValidation: reviewCommentPositionValidation(comment.position),
+    proposals: reviewCommentProposals(
+      replies,
+      snapshot.review.id,
+      snapshot.review.revision,
+      comment.id,
+    ),
+  }));
+}
+
+export function reviewCommentCandidateConflict(
+  savedCandidateVersion: number | null,
+  canonicalCandidateVersion: number,
+): boolean {
+  return savedCandidateVersion !== null && savedCandidateVersion !== canonicalCandidateVersion;
+}
 
 export function reviewCommentPositionLabel(position: ReviewCommentPosition): string {
   if (position.kind === 'general') return `General discussion · ${position.reason}`;

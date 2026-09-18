@@ -1,4 +1,45 @@
-import { reviewPublicationBlock, type ReviewComments } from '../../shared/review-comments';
+import {
+  reviewPublicationBlock,
+  type PublishReview,
+  type ReviewComments,
+  type ReviewPublicationReceipt,
+} from '../../shared/review-comments';
+
+export function savedPublicationAttempt(snapshot: ReviewComments): PublishReview {
+  return {
+    revision: snapshot.review.revision,
+    curationVersion: snapshot.review.curation.version,
+  };
+}
+
+export function publicationRequest(
+  snapshot: ReviewComments,
+  savedAttempt: PublishReview | null,
+): PublishReview {
+  return savedAttempt ?? savedPublicationAttempt(snapshot);
+}
+
+export function publicationSnapshotChanged(
+  snapshot: ReviewComments,
+  attempt: PublishReview | null,
+): boolean {
+  return (
+    attempt !== null &&
+    (attempt.revision !== snapshot.review.revision ||
+      attempt.curationVersion !== snapshot.review.curation.version)
+  );
+}
+
+export function publicationReceiptMatchesSnapshot(
+  snapshot: ReviewComments,
+  receipt: ReviewPublicationReceipt | undefined,
+): boolean {
+  return (
+    receipt !== undefined &&
+    receipt.revision === snapshot.review.revision &&
+    receipt.curationVersion === snapshot.review.curation.version
+  );
+}
 
 export function sendReviewBlock(
   snapshot: ReviewComments,

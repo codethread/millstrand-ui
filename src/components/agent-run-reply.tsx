@@ -4,7 +4,7 @@ import { useAgentReply } from '../hooks/use-agents';
 import { useBoard } from '../hooks/use-cards';
 import { runIsFinished } from '../lib/agent-notifications';
 import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
-import { useReviewCommentStore } from '../review-comment-store';
+import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
 import { Loading } from './issue-parts';
 import { Markdown } from './markdown';
 import { Button } from './ui/button';
@@ -28,11 +28,17 @@ export function AgentRunReply({ id }: { id: string }) {
           variant="outline"
           size="sm"
           onClick={() => {
-            if (reply.prompt?.kind === 'review-comment')
-              useReviewCommentStore.getState().focusComment({
-                reviewId: reply.prompt.cardId,
-                commentId: reply.prompt.comment.id,
-              });
+            if (workspace && reply.prompt?.kind === 'review-comment')
+              useReviewCommentStore
+                .getState()
+                .focusDraft(
+                  reviewDraftKey(
+                    workspace,
+                    reply.prompt.cardId,
+                    reply.prompt.comment.revision,
+                    reply.prompt.comment.id,
+                  ),
+                );
             openReview(reply.prompt?.cardId ?? '');
           }}
         >

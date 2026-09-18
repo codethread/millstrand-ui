@@ -9,17 +9,19 @@ const controls = vi.hoisted(() => ({
   mutate: vi.fn(),
   refetch: vi.fn(),
   reset: vi.fn(),
+  proposalError: null as Error | null,
 }));
 vi.mock('../lib/navigation', () => ({ useWorkspaceId: () => 'weaver' }));
 vi.mock('../hooks/use-review-comments', () => ({
-  useReviewComments: () => ({
-    data: parseReviewComments(commentsFixture),
-    error: null,
-    isFetching: false,
-    refetch: controls.refetch,
+  useReviewCommentsRead: () => ({
+    kind: 'ready',
+    snapshot: parseReviewComments(commentsFixture),
+    refreshing: false,
+    readError: null,
+    retry: controls.refetch,
   }),
   useReviewProposals: () => ({
-    error: null,
+    kind: controls.proposalError ? 'partial' : 'ready',
     replies: [
       {
         id: 'proposal1',
@@ -40,6 +42,7 @@ vi.mock('../hooks/use-review-comments', () => ({
         },
       } satisfies AgentReply,
     ],
+    ...(controls.proposalError ? { error: controls.proposalError } : {}),
   }),
   useCurateReview: () => ({
     mutate: controls.mutate,
@@ -63,4 +66,13 @@ it('shows completed proposals separately from canonical text without curating on
   expect(html).toContain('Proposed alternative wording');
   expect(html).toContain('Inspect and edit proposal');
   expect(controls.mutate).not.toHaveBeenCalled();
+});
+
+it('keeps available proposals visible when another proposal read fails', () => {
+  controls.proposalError = new Error('Reply unavailable');
+  const html = renderToStaticMarkup(<ReviewComments id="review1" />);
+  expect(html).toContain('Agent proposals could not refresh: Reply unavailable');
+  expect(html).toContain('Showing the proposals that remain available');
+  expect(html).toContain('Proposed alternative wording');
+  controls.proposalError = null;
 });

@@ -1,7 +1,12 @@
 import { expect, it } from 'vitest';
 import { parseReviewComments } from '../../server/review-comments';
 import { commentsFixture } from '../../server/review-comments.fixture';
-import { sendReviewBlock } from './review-publication';
+import {
+  publicationReceiptMatchesSnapshot,
+  publicationRequest,
+  publicationSnapshotChanged,
+  sendReviewBlock,
+} from './review-publication';
 
 const ready = {
   hydrated: true,
@@ -34,6 +39,24 @@ it('permits same-snapshot retry after a partial or uncertain effect, without req
   snapshot.comments[0]!.publication.state = 'published';
   expect(sendReviewBlock(snapshot, ready)).toBeNull();
 });
+it('retries the saved snapshot and accepts receipts only for the displayed revision and version', () => {
+  const snapshot = parseReviewComments(commentsFixture);
+  const saved = publicationRequest(snapshot, null);
+  snapshot.review.curation.version += 1;
+  expect(publicationRequest(snapshot, saved)).toBe(saved);
+  expect(publicationSnapshotChanged(snapshot, saved)).toBe(true);
+  const receipt = {
+    reviewId: snapshot.review.id,
+    revision: saved.revision,
+    curationVersion: saved.curationVersion,
+    state: 'published' as const,
+    comments: [],
+  };
+  expect(publicationReceiptMatchesSnapshot(snapshot, receipt)).toBe(false);
+  snapshot.review.curation.version = saved.curationVersion;
+  expect(publicationReceiptMatchesSnapshot(snapshot, receipt)).toBe(true);
+});
+
 it.each(['empty', 'unsupported', 'outdated', 'complete'] as const)(
   'blocks %s saved snapshots',
   (kind) => {
