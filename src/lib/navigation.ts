@@ -107,7 +107,8 @@ export function useDashboardActions() {
     updateCurrent((current) => manualFilterSearch(current, change(current.filter)), replace);
   }
   return {
-    openReview: (review: string) => update({ mode: 'reviews', review, issue: null, agent: null }),
+    openReview: (review: string) =>
+      update({ mode: 'reviews', review, issue: null, agent: null, agentRun: null }),
     closeReview: () => update({ review: null }),
     setReviewQuery: (reviewQuery: string) => update({ reviewQuery }, true),
     setReviewScope: (reviewScope: ReviewScope) => update({ reviewScope }),
@@ -119,9 +120,10 @@ export function useDashboardActions() {
     },
     openOverview: () => {
       useDashboardStore.getState().resetWorkspace();
-      update({ mode: 'overview', issue: null, agent: null });
+      update({ mode: 'overview', issue: null, agent: null, agentRun: null });
     },
-    openCard: (issue: string) => update({ issue, agent: null, detailTab: 'overview' }),
+    openCard: (issue: string) =>
+      update({ issue, agent: null, agentRun: null, detailTab: 'overview' }),
     openAgent: (agent: string) => {
       useDashboardStore.getState().setSidebarOpen(false);
       update({ agent, agentRun: null, issue: null });
@@ -138,12 +140,13 @@ export function useDashboardActions() {
       });
     },
     focusAgentRun: (agentRun: string) => update({ agentRun }, true),
-    closeAgent: () => update({ agent: null }),
+    closeAgent: () => update({ agent: null, agentRun: null }),
     closeCard: () => update({ issue: null }),
-    openAgents: () => update({ mode: 'agents', issue: null, agent: null, activeAgentsOnly: true }),
-    setMode: (mode: Presentation) => update({ mode, issue: null, agent: null }),
+    openAgents: () =>
+      update({ mode: 'agents', issue: null, agent: null, agentRun: null, activeAgentsOnly: true }),
+    setMode: (mode: Presentation) => update({ mode, issue: null, agent: null, agentRun: null }),
     exploreGraph: (graphRoot: string) =>
-      update({ graphRoot, mode: 'graph', issue: null, agent: null }),
+      update({ graphRoot, mode: 'graph', issue: null, agent: null, agentRun: null }),
     setGraphRoot: (graphRoot: string | null) => update({ graphRoot }),
     setDetailTab: (detailTab: DetailTab) => update({ detailTab }),
     setAgentQuery: (agentQuery: string) => update({ agentQuery }, true),
@@ -194,12 +197,18 @@ export function useDashboardKeys() {
   const { setMode } = useDashboardActions();
   const issue = useSelectedIssue();
   const agent = useSelectedAgent();
+  const agentRun = useSelectedAgentRun();
   const mode = useDashboardMode();
   const client = useQueryClient();
   const keys = useDashboardStore((state) => state.shortcuts);
   const overlay = useDashboardStore((state) => state.overlay.kind);
   const composer = useAgentPromptStore((state) => state.composer.kind);
-  const enabled = overlay === 'closed' && composer === 'closed' && issue === null && agent === null;
+  const enabled =
+    overlay === 'closed' &&
+    composer === 'closed' &&
+    issue === null &&
+    agent === null &&
+    agentRun === null;
   const workspaceEnabled = enabled && mode !== 'overview';
   useHotkeys(
     hotkeys(keys.search),

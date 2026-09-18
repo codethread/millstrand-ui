@@ -39,7 +39,10 @@ interface AgentPromptState extends AgentPreferences {
   close: () => void;
 }
 
-export function createAgentPromptStore(storage: Storage | null) {
+const persistenceFailure =
+  'Browser storage is unavailable. Preferences and notifications are kept only for this session.';
+
+export function createAgentPromptStore(storage: Storage | null, storageAccessFailed = false) {
   return create<AgentPromptState>()((set, get) => {
     function write(key: string, value: string) {
       try {
@@ -47,26 +50,26 @@ export function createAgentPromptStore(storage: Storage | null) {
         storage.setItem(key, value);
         set({ persistenceError: null });
       } catch {
-        set({
-          persistenceError:
-            'Browser storage is unavailable. Preferences and notifications are kept only for this session.',
-        });
+        set({ persistenceError: persistenceFailure });
       }
     }
     let preferences: AgentPreferences = { aliases: {}, receipts: {} };
+    let persistenceError: string | null = storageAccessFailed ? persistenceFailure : null;
     try {
       preferences = readAgentPreferences(storage);
     } catch {
-      /* Keep session state when storage is blocked. */
+      persistenceError = persistenceFailure;
     }
     return {
       ...preferences,
-      persistenceError: null,
+      persistenceError,
       refreshPreferences: () => {
         try {
+          if (!storage) throw new Error('Storage unavailable');
           const refreshedPreferences = readAgentPreferences(storage);
           set((s) => ({
             ...refreshedPreferences,
+            persistenceError: null,
             composer:
               s.composer.kind === 'composing' &&
               (s.aliases[s.composer.workspace] ?? 'tui') !==
@@ -75,7 +78,7 @@ export function createAgentPromptStore(storage: Storage | null) {
                 : s.composer,
           }));
         } catch {
-          /* Retain the last successful preferences. */
+          set({ persistenceError: persistenceFailure });
         }
       },
       track: (workspace, id, requestId) => {
@@ -133,13 +136,18 @@ export function createAgentPromptStore(storage: Storage | null) {
 }
 
 function browserStorage(): Storage | null {
+  return typeof window === 'undefined' ? null : window.localStorage;
+}
+
+function createBrowserAgentPromptStore() {
   try {
-    return typeof window === 'undefined' ? null : window.localStorage;
+    return createAgentPromptStore(browserStorage());
   } catch {
-    return null;
+    return createAgentPromptStore(null, true);
   }
 }
-export const useAgentPromptStore = createAgentPromptStore(browserStorage());
+
+export const useAgentPromptStore = createBrowserAgentPromptStore();
 if (typeof window !== 'undefined')
   window.addEventListener('storage', (event) => {
     if (event.key === null || event.key.startsWith(agentPreferencePrefix))

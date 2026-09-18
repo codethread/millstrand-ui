@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { ArrowLeft, GitPullRequest } from 'lucide-react';
-import { useAgentIdentities } from '../hooks/use-agents';
+import { useAgentRunIdentities } from '../hooks/use-agents';
 import {
   useReviewDetail,
   useReviewDetailPoll,
@@ -15,7 +15,7 @@ import {
   useReviewStage,
   useSelectedReview,
 } from '../lib/navigation';
-import { reviewDetailModel, reviewInboxModel, reviewerRunIdentities } from '../lib/reviews';
+import { reviewDetailModel, reviewInboxModel } from '../lib/reviews';
 import { PromptAgentButton } from './agent-prompt';
 import { ErrorNotice, Loading } from './issue-parts';
 import { ReviewComments } from './review-comments';
@@ -30,12 +30,8 @@ function ReviewDetailPoll({ id }: { id: string }) {
 
 function SelectedReviewReport({ id }: { id: string }) {
   const detail = useReviewDetail(id).data;
-  const identities = useAgentIdentities().data;
+  const runIdentities = useAgentRunIdentities().data ?? {};
   const model = useMemo(() => (detail ? reviewDetailModel(detail) : null), [detail]);
-  const runIdentities = useMemo(
-    () => (detail ? reviewerRunIdentities(detail, identities ?? []) : {}),
-    [detail, identities],
-  );
   const { openAgentRun, openCard, openReview } = useDashboardActions();
   if (model === null) return null;
   return (

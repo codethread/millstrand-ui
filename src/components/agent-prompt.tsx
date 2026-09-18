@@ -108,18 +108,29 @@ export function PromptAgentButton({ target }: { target: PromptTarget }) {
 }
 
 export function AgentPromptDialog() {
-  const composer = useAgentPromptStore((s) => s.composer);
+  const composer = useAgentPromptStore((state) => state.composer);
   const workspace = useWorkspaceId();
-  if (composer.kind === 'closed' || workspace === null) return null;
-  return <ComposePrompt key={`${workspace}:${composer.target.id}`} workspace={workspace} />;
+  if (composer.kind === 'closed' || workspace === null || composer.workspace !== workspace)
+    return null;
+  const revisionKey =
+    composer.target.kind === 'review-comment'
+      ? `:${composer.target.comment.id}:${composer.target.comment.revision}:${composer.target.comment.candidateVersion}`
+      : '';
+  return (
+    <ComposePrompt
+      key={`${workspace}:${composer.target.kind}:${composer.target.id}${revisionKey}`}
+      workspace={workspace}
+    />
+  );
 }
 
 function ComposePrompt({ workspace }: { workspace: string }) {
-  const s = useAgentPromptStore();
-  const composer = s.composer;
+  const composer = useAgentPromptStore((state) => state.composer);
+  const alias = useAgentPromptStore((state) => state.aliases[workspace] ?? 'tui');
+  const edit = useAgentPromptStore((state) => state.edit);
+  const close = useAgentPromptStore((state) => state.close);
   const { openAgentRun } = useDashboardActions();
   const options = useAgentOptions(workspace);
-  const alias = s.aliases[workspace] ?? 'tui';
   const mutation = usePromptAgent(composer.kind === 'composing' ? composer.target.cardId : '');
   const promptId = useId();
   const prompt = useRef<HTMLTextAreaElement>(null);
@@ -129,7 +140,7 @@ function ComposePrompt({ workspace }: { workspace: string }) {
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !mutation.isPending) s.close();
+        if (!open && !mutation.isPending) close();
       }}
     >
       <DialogContent
@@ -147,7 +158,12 @@ function ComposePrompt({ workspace }: { workspace: string }) {
         <DialogHeader>
           <DialogTitle>Prompt agent</DialogTitle>
           <DialogDescription className="break-words">
-            {composer.target.id} · {composer.target.title}
+            {composer.target.kind === 'card'
+              ? `Card ${composer.target.id}`
+              : composer.target.kind === 'review'
+                ? `Review ${composer.target.id}`
+                : `Review ${composer.target.cardId} · comment ${composer.target.comment.id} · revision ${composer.target.comment.revision} · candidate ${composer.target.comment.candidateVersion}`}{' '}
+            · {composer.target.title}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -169,7 +185,7 @@ function ComposePrompt({ workspace }: { workspace: string }) {
               },
               {
                 onSuccess: (reply) => {
-                  s.close();
+                  close();
                   openAgentRun(reply.identity, reply.id);
                 },
               },
@@ -189,7 +205,7 @@ function ComposePrompt({ workspace }: { workspace: string }) {
               disabled={mutation.isPending}
               maxLength={12000}
               placeholder="Ask a question or describe the work…"
-              onChange={(event) => s.edit(event.target.value)}
+              onChange={(event) => edit(event.target.value)}
             />
           </div>
           <p className="text-xs text-foreground">
@@ -204,7 +220,7 @@ function ComposePrompt({ workspace }: { workspace: string }) {
             </p>
           )}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" type="button" disabled={mutation.isPending} onClick={s.close}>
+            <Button variant="ghost" type="button" disabled={mutation.isPending} onClick={close}>
               Cancel
             </Button>
             <Button

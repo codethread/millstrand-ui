@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentIdentity } from '../../shared/api';
 import { parseReviewDetail, parseReviewList } from '../../server/reviews';
 import { review } from '../../server/reviews.fixture';
 import {
@@ -8,7 +7,6 @@ import {
   reviewInboxCount,
   reviewInboxModel,
   reviewPromptTarget,
-  reviewerRunIdentities,
   selectReviews,
 } from './reviews';
 import { parseDashboardSearch, workspaceDestination, manualFilterSearch } from './dashboard-search';
@@ -136,56 +134,6 @@ describe('review detail projections', () => {
       history: [review],
     },
   });
-  const identities: AgentIdentity[] = [
-    {
-      id: 'agent-1',
-      strandId: 'identity-1',
-      harness: 'pi',
-      model: null,
-      effort: null,
-      createdAt: '2026-09-16T12:00:00Z',
-      work: [],
-      runs: [
-        {
-          id: 'run-1',
-          requestId: null,
-          title: 'Review',
-          alias: 'reviewer',
-          harness: 'pi',
-          status: 'stopped',
-          substatus: 'completed',
-          mode: 'headless',
-          model: null,
-          effort: null,
-          cwd: null,
-          target: 'r123',
-          rootTargets: [],
-          createdAt: '2026-09-16T12:00:00Z',
-          startedAt: null,
-          finishedAt: null,
-        },
-        {
-          id: 'unrelated-run',
-          requestId: null,
-          title: 'Other',
-          alias: 'reviewer',
-          harness: 'pi',
-          status: 'running',
-          substatus: null,
-          mode: 'headless',
-          model: null,
-          effort: null,
-          cwd: null,
-          target: null,
-          rootTargets: [],
-          createdAt: '2026-09-16T12:00:00Z',
-          startedAt: null,
-          finishedAt: null,
-        },
-      ],
-    },
-  ];
-
   it('preserves outdated pending status and the stage-specific empty report message', () => {
     expect(reviewDetailModel(detail)).toMatchObject({
       heading: 'Fix race',
@@ -200,10 +148,5 @@ describe('review detail projections', () => {
       kind: 'empty',
       message: 'No final report was produced. Inspect the reviewer evidence below.',
     });
-  });
-
-  it('projects only identities that can open a reviewer run', () => {
-    expect(reviewerRunIdentities(detail, identities)).toEqual({ 'run-1': 'agent-1' });
-    expect(reviewerRunIdentities({ ...detail, reviewers: [] }, identities)).toEqual({});
   });
 });

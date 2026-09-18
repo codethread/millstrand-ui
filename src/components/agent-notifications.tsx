@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Bot } from 'lucide-react';
 import { useAgentPromptStore } from '../agent-prompt-store';
-import { useAgentIdentities } from '../hooks/use-agents';
+import { useAgentIdentities, useAgentStatus } from '../hooks/use-agents';
 import { promptedRuns } from '../lib/agent-notifications';
 import { runLabel } from '../lib/agents';
 import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
@@ -9,13 +9,16 @@ import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 export function AgentNotifications() {
-  const query = useAgentIdentities();
+  const identities = useAgentIdentities();
+  const health = useAgentStatus();
   const workspace = useWorkspaceId();
   const { openAgentRun, setMode } = useDashboardActions();
-  const receipts = useAgentPromptStore((s) => s.receipts);
-  const persistenceError = useAgentPromptStore((s) => s.persistenceError);
+  const receipts = useAgentPromptStore((state) =>
+    workspace ? state.receipts[workspace] : undefined,
+  );
+  const persistenceError = useAgentPromptStore((state) => state.persistenceError);
   const [open, setOpen] = useState(false);
-  const runs = promptedRuns(query.data ?? [], receipts[workspace ?? ''] ?? {});
+  const runs = promptedRuns(identities.data ?? [], receipts ?? {});
   const active = runs.filter(({ run }) => run.status === 'ready' || run.status === 'running');
   const unread = runs.filter((item) => item.unread);
   const items = [...unread, ...runs.filter((item) => !item.unread)].slice(0, 20);
@@ -30,7 +33,7 @@ export function AgentNotifications() {
           title="Your UI prompts in this weaver"
         >
           <Bot />
-          <span>{query.error ? '?' : active.length}</span>
+          <span>{health.error ? '?' : active.length}</span>
           {unread.length > 0 && (
             <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
               {unread.length}
@@ -51,7 +54,7 @@ export function AgentNotifications() {
         <p className="mt-1 text-xs text-muted-foreground">
           This weaver · prompts sent from this browser.
         </p>
-        {query.error && (
+        {health.error && (
           <p role="alert" className="mt-2 text-xs text-destructive">
             Refresh interrupted. Showing last known activity.
           </p>

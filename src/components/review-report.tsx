@@ -18,7 +18,7 @@ export interface ReviewReportProps {
   model: ReviewDetailModel;
   reviewerRunIdentities: Readonly<Record<string, string>>;
   integrations: ReviewReportIntegrations;
-  onOpenAgentRun: (identity: string, runId: string) => void;
+  onOpenAgentRun: (identity: string | null, runId: string) => void;
   onOpenHistory: (reviewId: string) => void;
   onOpenRelatedStrand: (strandId: string) => void;
 }
@@ -121,16 +121,14 @@ export function ReviewReport({
                   {runId && (
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <code className="break-all text-muted-foreground">Run {runId}</code>
-                      {identity && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onOpenAgentRun(identity, runId)}
-                        >
-                          <Bot />
-                          Inspect agent run
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onOpenAgentRun(identity ?? null, runId)}
+                      >
+                        <Bot />
+                        Inspect agent run
+                      </Button>
                     </div>
                   )}
                   {seat.error && (

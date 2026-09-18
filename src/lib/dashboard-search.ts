@@ -92,10 +92,11 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
   };
   const workspace = text(search.workspace);
   const agent = text(search.agent);
-  const issue = agent ? null : text(search.issue);
+  const agentRun = text(search.agentRun);
+  const issue = agent || agentRun ? null : text(search.issue);
   const mode = parseOptional(modeSchema, search.mode);
   return {
-    mode: mode ?? (workspace || issue || agent ? 'board' : 'overview'),
+    mode: mode ?? (agent || agentRun ? 'agents' : workspace || issue ? 'board' : 'overview'),
     workspace,
     review: text(search.review),
     reviewQuery: text(search.reviewQuery) ?? '',
@@ -103,7 +104,7 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
     reviewStage: parseOptional(reviewStageSchema, search.reviewStage),
     issue,
     agent,
-    agentRun: agent ? text(search.agentRun) : null,
+    agentRun,
     filter,
     activeViewId: text(search.activeViewId),
     graphRoot: text(search.graphRoot),

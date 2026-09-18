@@ -5,7 +5,7 @@ import { useTaskNotes } from '../hooks/use-cards';
 import { relativeTime } from '../lib/board';
 import { cn } from '../lib/utils';
 import { Markdown } from './markdown';
-import { IssueAgents } from './agents-view';
+import { IssueAgents } from './agent-activity';
 import { ErrorNotice, Loading, StatusIcon } from './issue-parts';
 
 export function Notes({ notes }: { notes: Note[] }) {

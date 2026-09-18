@@ -5,7 +5,7 @@ import type { AgentDirectory, Board, WorkspaceOption } from '../../shared/api';
 import { agentQueryOptions } from '../lib/api/agents';
 import { boardQueryOptions } from '../lib/api/cards';
 import { useWorkspaces } from '../lib/api/workspaces';
-import { currentRun, runLabel, selectAgents } from '../lib/agents';
+import { activeAgentIdentities, currentRun, runLabel } from '../lib/agents';
 import { workspaceActivityDestination } from '../lib/dashboard-search';
 import { overviewCards } from '../lib/overview';
 import { cn } from '../lib/utils';
@@ -22,7 +22,7 @@ interface WorkspaceSnapshot {
 function WorkspaceActivity({ workspace, board, agents }: WorkspaceSnapshot) {
   const online = workspace.status === 'running';
   const cards = overviewCards(board.data?.cards ?? []);
-  const activeAgents = selectAgents(agents.data?.identities ?? [], '', true);
+  const activeAgents = activeAgentIdentities(agents.data?.identities ?? []);
   const staleBoard = !online || !!board.error;
   const staleAgents = !online || !!agents.error;
   const dashboardDestination = workspaceActivityDestination(workspace, { kind: 'board' });
@@ -275,7 +275,7 @@ export function Overview() {
   const busy = snapshots.filter(
     ({ board, agents }) =>
       overviewCards(board.data?.cards ?? []).length > 0 ||
-      selectAgents(agents.data?.identities ?? [], '', true).length > 0,
+      activeAgentIdentities(agents.data?.identities ?? []).length > 0,
   );
   const other = snapshots.filter((snapshot) => !busy.includes(snapshot));
   const cardCount = busy.reduce(
@@ -283,7 +283,7 @@ export function Overview() {
     0,
   );
   const agentCount = busy.reduce(
-    (count, { agents }) => count + selectAgents(agents.data?.identities ?? [], '', true).length,
+    (count, { agents }) => count + activeAgentIdentities(agents.data?.identities ?? []).length,
     0,
   );
   const partial = snapshots.some(

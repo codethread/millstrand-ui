@@ -1,7 +1,7 @@
 import { ArrowUpRight, Inbox, Layers } from 'lucide-react';
 import type { BoardCard, BoardColumn, OutlineGroup } from '../lib/board';
 import { useDashboardActions } from '../lib/navigation';
-import { IssueAgents } from './agents-view';
+import { IssueAgents } from './agent-activity';
 import { AutoRunSummary } from './auto-run';
 import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';

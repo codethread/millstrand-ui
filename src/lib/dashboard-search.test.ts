@@ -17,15 +17,19 @@ describe('shareable dashboard navigation', () => {
     expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(state)))).toEqual(state);
   });
 
-  it('preserves the exact agent run destination and clears it when opening a card', () => {
+  it('preserves the exact agent run destination without requiring an identity', () => {
     const state = parseDashboardSearch({
       mode: 'agents',
       workspace: 'weaver-a',
-      agent: 'tiger',
+      agent: null,
       agentRun: 'run-a',
     });
     expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(state)))).toEqual(state);
-    expect(parseDashboardSearch({ issue: 'card-a', agentRun: 'run-a' }).agentRun).toBeNull();
+    expect(parseDashboardSearch({ issue: 'card-a', agentRun: 'run-a' })).toMatchObject({
+      mode: 'agents',
+      issue: null,
+      agentRun: 'run-a',
+    });
     expect(workspaceDestination('weaver-b', { kind: 'card', id: 'card-b' }).agentRun).toBeNull();
   });
   it('opens the overview at home and a dashboard for workspace/item links', () => {
@@ -86,7 +90,7 @@ describe('shareable dashboard navigation', () => {
       },
     });
     expect(state).toMatchObject({
-      mode: 'board',
+      mode: 'agents',
       workspace: null,
       issue: null,
       agent: 'identity',

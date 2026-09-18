@@ -15,7 +15,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useActiveAgentCount, useAgentStatus, useAgentWorkspace } from '../hooks/use-agents';
+import { useAgentStatus, useAgentSummary, useAgentWorkspace } from '../hooks/use-agents';
 import { useBoardSidebar, useBoardStatus } from '../hooks/use-cards';
 import { useReviewInboxCount, useReviewsStatus } from '../hooks/use-reviews';
 import { useSavedViews } from '../hooks/use-views';
@@ -84,7 +84,8 @@ function WorkspaceStatus() {
 
 function SidebarContents() {
   const board = useBoardSidebar();
-  const agentCount = useActiveAgentCount();
+  const agentSummary = useAgentSummary();
+  const agentHealth = useAgentStatus();
   const agentWorkspace = useAgentWorkspace();
   const reviewCount = useReviewInboxCount();
   const views = useSavedViews();
@@ -158,7 +159,9 @@ function SidebarContents() {
         >
           <Bot />
           Agents
-          <span className="nav-count">{agentCount.error ? '?' : (agentCount.data ?? '…')}</span>
+          <span className="nav-count">
+            {agentHealth.error ? '?' : (agentSummary.data?.active ?? '…')}
+          </span>
         </button>
         <button
           className={cn('nav-item', mode === 'reviews' && 'active')}

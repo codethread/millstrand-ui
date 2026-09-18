@@ -19,10 +19,11 @@ modules listed under **Curation integration**.
   focused hooks in `src/lib/navigation.ts`. Search typing replaces the current
   history entry; scope, stage, selection, report history, and related-strand
   navigation are discrete navigation actions.
-- `reviewDirectoryContent`, `reviewInboxModel`, `reviewDetailModel`, and
-  `reviewerRunIdentities` in `src/lib/reviews.ts` are pure projections. Inbox means
-  active plus locally pending, including outdated revisions. Unsupported review
-  directories never become a successful empty inbox.
+- `reviewDirectoryContent`, `reviewInboxModel`, and `reviewDetailModel` in
+  `src/lib/reviews.ts` are pure projections. Inbox means active plus locally pending,
+  including outdated revisions. Unsupported review directories never become a
+  successful empty inbox. Reviewer run ownership comes from the shared
+  `useAgentRunIdentities` projection in `src/hooks/use-agents.ts`.
 
 ## Component boundaries
 
@@ -32,8 +33,9 @@ modules listed under **Curation integration**.
   owns only the header's focused Router controls.
 - `ReviewReport` renders report metadata and Markdown, reviewer evidence, history,
   activity, and related-strand links. It has no Query, Router, Zustand, prompt, or
-  curation imports. Reviewer run links receive only the run-to-identity projection,
-  not the full agent directory or its refresh timestamp.
+  curation imports. Reviewer run links receive only the shared run-to-identity
+  projection, not the full agent directory or its refresh timestamp. A run remains
+  inspectable by exact ID while identity publication is absent or delayed.
 - `ReviewStatus` is the shared browsing leaf for list and history status labels.
 
 ## Curation integration

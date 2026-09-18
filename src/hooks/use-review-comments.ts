@@ -11,7 +11,7 @@ import {
   reviewCommentsQueryOptions,
   reviewPublishMutationOptions,
 } from '../lib/api/review-comments';
-import { useAgents } from './use-agents';
+import { useAgentStatus, useTargetAgentRunIds } from './use-agents';
 import { useWorkspace } from './use-workspace';
 
 export function useReviewComments(id: string) {
@@ -20,20 +20,15 @@ export function useReviewComments(id: string) {
 
 export function useReviewProposals(reviewId: string) {
   const workspace = useWorkspace();
-  const agents = useAgents();
-  const ids = [
-    ...new Set(
-      agents.data?.identities.flatMap((agent) =>
-        agent.runs.filter((run) => run.target === reviewId).map((run) => run.id),
-      ) ?? [],
-    ),
-  ];
+  const runs = useTargetAgentRunIds(reviewId);
+  const agentHealth = useAgentStatus();
+  const ids = runs.data ?? [];
   const replies = useQueries({
     queries: ids.map((id) => agentReplyQueryOptions(workspace, id)),
   });
   return {
     replies: replies.flatMap((query) => (query.data ? [query.data] : [])),
-    error: agents.error ?? replies.find((query) => query.error)?.error ?? null,
+    error: agentHealth.error ?? replies.find((query) => query.error)?.error ?? null,
   };
 }
 
