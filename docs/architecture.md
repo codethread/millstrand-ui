@@ -118,6 +118,18 @@ mount/focus/reconnect defaults. Poll intervals do not imply background-tab polli
 No placeholder snapshot crosses workspace keys. Review proposals deduplicate all
 runs targeting the review and poll each reply, preserving late terminal results.
 
+### Isolated log-activity POC
+
+Only `pnpm log:dashboard` enables these experimental readers (`docs/log-lab.md`).
+`['log-activity', w]` reads `/log-lab/activity` every 5s, owned by
+`OverviewLogPolls` or `WorkspaceResourcePolls`, never inline badges. It contains
+exact native-session bindings and latest-event summaries for up to 60 running
+identities. `useLogBinding` is a disabled projection reader. The visible compact
+log or expanded overlay owns `/log-lab/stream` and writes validated bounded
+snapshots to `['log-lab', 'snapshot', provider, session]`; the compact subscription
+pauses while the overlay is open. `log-ui-store.ts` holds presentation state only.
+These POC routes are not exposed by the normal production server.
+
 ## Checked mutation inventory
 
 JSON content type and payloads are unchanged; mutations use Query's no-retry default

@@ -18,12 +18,14 @@ import { AutoRunDetails } from './auto-run';
 import { Notes, TaskRow } from './issue-tasks';
 import { LabelsEditor } from './issue-labels';
 import { IssueProperties } from './issue-properties';
+import { CardAgentLog } from './card-agent-log';
 
 function DetailOverview({ detail }: { detail: CardDetail }) {
   const { exploreGraph } = useDashboardActions();
   const completed = detail.tasks.filter((task) => task.status === 'closed').length;
   return (
     <>
+      <CardAgentLog owner={detail.card.owner} target={detail.card.id} />
       <section className="detail-section">
         <h3 className="detail-section-title">Description</h3>
         {detail.body ? (
@@ -234,6 +236,7 @@ export function IssueDetail({ id }: { id: string }) {
                 <DetailOverview detail={detail} />
               </TabsContent>
               <TabsContent value="activity" className="detail-body">
+                <CardAgentLog owner={detail.card.owner} target={detail.card.id} />
                 <Notes notes={detail.notes} />
               </TabsContent>
               <TabsContent value="attributes" className="detail-body">

@@ -1,7 +1,35 @@
 # Agent log lab (POC)
 
-Three isolated viewers for real dialogue logs. No Harnesses integration, lifecycle
-inference, mutations, or token streaming. The normal dashboard is unchanged.
+Three isolated viewers plus an integrated dashboard preview for real dialogue logs.
+This is deliberately a visual POC, not a production logging feature. The normal
+running dashboard is unchanged; nothing is landed.
+
+## Integrated preview (4314)
+
+```nu
+pnpm log:dashboard
+```
+
+Open `http://localhost:4314/?mode=overview`. This uses a private API process on 4315
+and enables the experiment only in this preview's Vite build. Overview agent tiles
+and running issue badges get a one-line latest-recorded-event hint. Card Overview
+and Activity panels have a six-line console tail with Pause and Expand. Agent
+panels also have a compact tail. Expand opens a full-screen Conversation,
+Inspector, or Console dialog; Escape returns to the same card/overview.
+
+The preview joins logs only through persisted `identity/native-session-id` plus
+provider, never a guessed workspace/model match. The stream is the entire native
+session, not exclusively a card or run; owner-only associations say so explicitly.
+Recently completed targeted sessions stay selectable in the card preview.
+
+`OverviewLogPolls` owns five-second overview summaries; `WorkspaceResourcePolls`
+owns selected-workspace summaries. Inline hints are disabled cache readers.
+Visible compact tails own SSE until the expanded dialog takes over. This small
+POC reuses the original log-lab viewers and keeps its interactions in Zustand.
+
+Browser-checked with real Luna activity: overview hint, card tail, expansion,
+Conversation/Inspector switching, Escape back to the same card, and 390px layout.
+The existing test suite/quality gate passes; no production hardening is claimed.
 
 | Port | Concept            | Optimizes for                                                          |
 | ---- | ------------------ | ---------------------------------------------------------------------- |

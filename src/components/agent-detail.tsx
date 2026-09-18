@@ -1,6 +1,7 @@
 import { useSelectedAgentActivity, useAgentStatus } from '../hooks/use-agents';
 import { formatDate } from '../lib/board';
 import { useDashboardActions } from '../lib/navigation';
+import { AgentSessionLog } from './card-agent-log';
 import { AgentRunHistory } from './agent-run-history';
 import { AgentRunReply } from './agent-run-reply';
 import { AgentRunStatus } from './agent-status';
@@ -78,6 +79,7 @@ export function AgentDetail({
                 <AgentRunReply id={runId} />
               </div>
             )}
+            <AgentSessionLog identity={activity.identity.id} />
             <AgentRunHistory
               identity={activity.identity}
               selectedRunId={activity.selectedRun?.id ?? null}

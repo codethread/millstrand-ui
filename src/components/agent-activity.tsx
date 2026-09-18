@@ -2,12 +2,15 @@ import { useRelevantAgentActivity, useAgentStatus } from '../hooks/use-agents';
 import { useDashboardActions } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { Avatar } from './issue-parts';
+import { useWorkspace } from '../hooks/use-workspace';
+import { AgentLogHint } from './agent-log-hint';
 
 /** Shared issue/task badge. Ownership is not proof of execution on the item:
  * only an explicit direct/root run target earns “Working”. */
 export function IssueAgents({ owner, target }: { owner: string | null; target: string }) {
   const activity = useRelevantAgentActivity(owner, target);
   const health = useAgentStatus();
+  const workspace = useWorkspace();
   const { openAgent } = useDashboardActions();
   const agents = activity.data ?? [];
   return (
@@ -34,6 +37,13 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
             </span>
           </span>
           <span className="truncate text-[10px] text-muted-foreground">{identity.id}</span>
+          {run?.status === 'running' && (
+            <AgentLogHint
+              workspace={workspace}
+              identity={identity.id}
+              stale={health.error !== null}
+            />
+          )}
         </button>
       ))}
       {!agents.some(({ identity }) => identity.id === owner) && owner && (

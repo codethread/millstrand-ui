@@ -1,4 +1,8 @@
 import { readFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { promisify } from 'node:util';
+import { z } from 'zod';
 import { createServer, type ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
@@ -11,15 +15,18 @@ import {
   type LogProvider,
 } from '../shared/log-lab.ts';
 import { LogLabReader } from './log-lab-reader.ts';
+import { WorkspaceDirectory } from './workspaces.ts';
+import { WorkspaceDatabase } from './workspace-database.ts';
+import { readLogActivity } from './log-activity.ts';
 
 interface Options {
-  concept: Concept;
+  concept: Concept | 'dashboard';
   host: string;
   port: number;
 }
 
 function options(args: string[]): Options {
-  let concept: Concept = 'console';
+  let concept: Concept | 'dashboard' = 'console';
   let host = '127.0.0.1';
   let port: number | undefined;
   for (let index = 0; index < args.length; index += 1) {
@@ -35,7 +42,7 @@ function options(args: string[]): Options {
     const value = args[index + 1];
     if (value === undefined || value.startsWith('--')) throw new Error(`${flag} requires a value.`);
     index += 1;
-    if (flag === '--concept') concept = conceptSchema.parse(value);
+    if (flag === '--concept') concept = conceptSchema.or(z.literal('dashboard')).parse(value);
     if (flag === '--host') host = value;
     if (flag === '--port') {
       const parsed = Number(value);
@@ -45,7 +52,7 @@ function options(args: string[]): Options {
     }
   }
   if (host.trim() === '') throw new Error('Host must not be empty.');
-  const defaults: Record<Concept, number> = { console: 4311, conversation: 4312, inspector: 4313 };
+  const defaults = { console: 4311, conversation: 4312, inspector: 4313, dashboard: 4314 };
   return { concept, host, port: port ?? defaults[concept] };
 }
 
@@ -72,6 +79,12 @@ function sse(response: ServerResponse, event: string, value: unknown): void {
 async function main(): Promise<void> {
   const config = options(process.argv.slice(2));
   const reader = new LogLabReader();
+  const { stdout } = await promisify(execFile)('git', [
+    'rev-parse',
+    '--path-format=absolute',
+    '--git-common-dir',
+  ]);
+  const workspaces = new WorkspaceDirectory(resolve(dirname(stdout.trim()), '.millstrand'));
   const server = createServer((request, response) => {
     void (async () => {
       const url = new URL(request.url ?? '/', 'http://log-lab.local');
@@ -81,6 +94,12 @@ async function main(): Promise<void> {
       }
       if (url.pathname === '/api/log-lab/config' && request.method === 'GET') {
         json(response, 200, { concept: config.concept });
+        return;
+      }
+      if (url.pathname === '/api/log-lab/activity' && request.method === 'GET') {
+        const workspace = await workspaces.select(url.searchParams.get('workspace'));
+        const rows = await new WorkspaceDatabase(workspace.path).readAgentStrands();
+        json(response, 200, await readLogActivity(rows, reader));
         return;
       }
       if (url.pathname === '/api/log-lab/sessions' && request.method === 'GET') {
@@ -127,14 +146,22 @@ async function main(): Promise<void> {
         void poll();
         return;
       }
-      if (url.pathname.startsWith('/api/')) {
+      if (url.pathname.startsWith('/api/') && config.concept !== 'dashboard') {
         json(response, 404, { error: 'API route not found.' });
         return;
       }
       if (url.pathname === '/' || url.pathname === '/log-lab.html') {
         const html = await vite.transformIndexHtml(
           url.pathname,
-          await readFile(fileURLToPath(new URL('../log-lab.html', import.meta.url)), 'utf8'),
+          await readFile(
+            fileURLToPath(
+              new URL(
+                config.concept === 'dashboard' ? '../index.html' : '../log-lab.html',
+                import.meta.url,
+              ),
+            ),
+            'utf8',
+          ),
         );
         response.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
@@ -156,7 +183,16 @@ async function main(): Promise<void> {
     configFile: false,
     cacheDir: `node_modules/.vite-log-lab-${config.port}`,
     appType: 'custom',
-    server: { middlewareMode: true, ws: { server, clientPort: config.port } },
+    define: {
+      'import.meta.env.VITE_LOG_LAB': JSON.stringify(
+        config.concept === 'dashboard' ? 'true' : 'false',
+      ),
+    },
+    server: {
+      middlewareMode: true,
+      ws: { server, clientPort: config.port },
+      proxy: config.concept === 'dashboard' ? { '/api': 'http://127.0.0.1:4315' } : {},
+    },
     plugins: [react(), tailwindcss()],
     resolve: { alias: { '@': fileURLToPath(new URL('../src', import.meta.url)) } },
   });
