@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Card, LabelTerm, SavedView, ViewFilter } from '../shared/api';
+import type { LabelTerm, SavedView, ViewFilter } from '../shared/api';
 
 export const shortcutActions = ['search', 'board', 'outline', 'graph', 'refresh', 'help'] as const;
 export type ShortcutAction = (typeof shortcutActions)[number];
@@ -20,10 +20,15 @@ export const shortcutLabels: Record<ShortcutAction, string> = {
   refresh: 'Refresh workspace',
   help: 'Keyboard shortcuts',
 };
+export interface DeleteCardTarget {
+  id: string;
+  title: string;
+}
+
 export type Overlay =
   | { kind: 'closed' }
   | { kind: 'shortcuts' }
-  | { kind: 'delete-card'; card: Card }
+  | { kind: 'delete-card'; target: DeleteCardTarget }
   | { kind: 'view'; id: string | null; name: string; filter: ViewFilter };
 
 interface DashboardState {
@@ -37,7 +42,7 @@ interface DashboardState {
   renameDraft: (name: string) => void;
   setDraftTerm: (label: string, term: LabelTerm | null) => void;
   setDraftMode: (mode: 'and' | 'or') => void;
-  confirmDeleteCard: (card: Card) => void;
+  confirmDeleteCard: (target: DeleteCardTarget) => void;
   closeOverlay: () => void;
   openShortcuts: () => void;
   setShortcut: (action: ShortcutAction, key: string) => void;
@@ -80,7 +85,7 @@ export const useDashboardStore = create<DashboardState>()(
             ? { overlay: { ...s.overlay, filter: { ...s.overlay.filter, mode } } }
             : {},
         ),
-      confirmDeleteCard: (card) => set({ overlay: { kind: 'delete-card', card } }),
+      confirmDeleteCard: (target) => set({ overlay: { kind: 'delete-card', target } }),
       closeOverlay: () => set({ overlay: { kind: 'closed' } }),
       openShortcuts: () => set({ overlay: { kind: 'shortcuts' }, sidebarOpen: false }),
       setShortcut: (action, key) => set((s) => ({ shortcuts: { ...s.shortcuts, [action]: key } })),

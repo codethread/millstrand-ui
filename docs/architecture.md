@@ -1,7 +1,31 @@
 # App architecture and data contract
 
-This is the implemented foundation for epic 2648y, not a second state framework.
-Import concrete modules below; there is no `src/lib/api.ts` facade.
+This is the implemented architecture, not a second state framework. Import concrete
+modules below; there is no `src/lib/api.ts` facade.
+
+## Cold-start change path
+
+For a query-backed workspace surface, follow one complete example before adding code:
+
+1. Define the key, request and cache settlement in `src/lib/api/cards.ts`.
+2. Resolve workspace/Router interaction and expose concrete projections in
+   `src/hooks/use-cards.ts`.
+3. Keep domain transforms in `src/lib/board.ts`; compose the page in
+   `src/components/issue-surface.tsx` and render explicit models in the views.
+4. Verify rules in `src/lib/board.test.ts`, composition in
+   `src/components/issue-surface.test.tsx`, and the running paths listed in
+   `docs/issue-surfaces.md`.
+
+For a keyed browser draft, follow `src/review-comment-store.ts`: the full key includes
+workspace and resource revision, components subscribe to one key, and canonical data
+and mutation feedback stay in Query. `docs/reviews.md` maps that store to its
+controllers, pure rules, views and focused verification.
+
+These are examples, not mandatory component shapes. Focused graph, selected detail,
+review comments/replies and task notes deliberately own resource-lifetime polls;
+overview owns per-workspace board/agent polls only while the selected-workspace shell
+is unmounted. Tiny leaves need no controller. The inventories below are authoritative
+for those exceptions.
 
 ## Module map
 
@@ -181,7 +205,8 @@ wrappers/arrays in derived-model dependencies or copy snapshots to Zustand.
 Keep content and health subscriptions distinct, without hiding refresh errors or
 safety-relevant fetching locks. No blanket memoization or global notification filter.
 Zustand consumers select a relevant action, preference or keyed draft, not the whole
-store. Existing broad surface subscriptions are subsequent feature work.
+store. Overlay commands store only their interaction payload (for example a card ID
+and title for delete confirmation), never a Query response snapshot.
 
 A controller/composition hook resolves URL/workspace and interaction state, invokes
 concrete domain options, and delegates ordinary pure transforms. Views render named

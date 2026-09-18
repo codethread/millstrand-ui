@@ -46,6 +46,12 @@ areas allow targeted edits.
   Preserve awaited settlement versus background invalidation (see
   `src/lib/api/cards.ts` and `src/hooks/use-cards.ts`). Keep the single QueryClient
   setup in `src/lib/api/query-client.ts`; do not mirror its cache in another store.
+- Start a query-backed surface from the issue example (`src/lib/api/cards.ts` →
+  `src/hooks/use-cards.ts` → `src/components/issue-surface.tsx`) and its checks in
+  `src/lib/board.test.ts` / `src/components/issue-surface.test.tsx`. Start keyed
+  browser drafts from `src/review-comment-store.ts` and `docs/reviews.md`. The
+  [architecture map](docs/architecture.md) records all public homes and deliberate
+  poll-owner exceptions.
 
 ## Product and verification
 
