@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "concurrently --kill-others --names api,web \"tsx watch server/index.ts\" \"vite\"",
     "dev:api": "tsx watch server/index.ts",
+    "log:lab": "tsx server/log-lab-server.ts",
     "dev:web": "vite",
     "build": "tsc --noEmit && vite build",
     "start": "node --experimental-transform-types server/index.ts",

@@ -1,0 +1,5 @@
+@layer base {
+  .log-lab * {
+    border-color: var(--color-border);
+  }
+}
