@@ -50,7 +50,7 @@ agent URLs and returns null for offline weavers. Offline rendering contains no
 workspace/card/agent anchors. Alias preferences remain owned by the agent store and
 public setting component. Refresh does not replace browser drafts or preferences.
 
-## Verification (25k06)
+## Verification
 
 `pnpm quality`: formatting, zero-warning Oxlint, strict TypeScript, 292 Vitest tests
 and production build. Existing board and destination tests protect production lane
