@@ -92,9 +92,14 @@ For an auto-run assignment, drive the exact delivery workflow run supplied in
 its guidance; see [automatic delivery](docs/auto-run.md). `auto-human-review`
 explicitly overrides generic instructions to land: prepare the passing PR and
 review package, stop at its human checkpoint, and leave the feature/worktree
-open. Never choose that checkpoint yourself. `auto-full-land` explicitly
-permits driving shared `land` through completion. Do not spawn a coordinator
-agent or keep a session alive polling for human approval.
+open. Never choose that checkpoint yourself. `auto-full-land` authorises shared
+`land`, but the assigned worker stops **before sign-off** and launches the bounded
+canonical-root `grunt` described in the delivery step. That finisher waits for the
+worker to settle, then owns merge, cleanup and final card completion. Do not remove
+your own session's worktree, close the card early, spawn a coordinator, or keep a
+session alive polling for human approval. On an observed autonomous delivery or
+handoff failure, add `auto-run-failure`, record evidence, and stop for manual
+intervention without retrying gates or withdrawing the merge reservation.
 
 ## Working here
 

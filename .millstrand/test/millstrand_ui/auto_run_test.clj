@@ -1,7 +1,8 @@
 (ns millstrand-ui.auto-run-test
   "Exercise real workspace activation in disposable, unlabelled Weaver worlds."
   (:require [clojure.edn :as edn]
-            [clojure.test :refer [deftest is run-tests]]
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is run-tests testing]]
             [ct.spools.codethread.auto-run :as auto-run]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
@@ -36,10 +37,40 @@
             (is (= ["Implement and verify the assigned feature"] (mapv :title (:ready result))))
             (is (contains? gates "shell"))
             (is (contains? gates "code"))
-            (is (not (contains? gates "agent")) "One assigned worker, not a second agent coordinator")
+            (is (not (contains? gates "agent")) "The finisher is an explicit handoff, not an eager agent gate")
             (if (= name :auto-human-review)
-              (is (some #(= "human" (:checkpoint-kind %)) views))
-              (is (some #(= "Drive shared land through completion" (:title %)) views)))))))))
+              (testing "Human review still stops without any landing delegation"
+                (let [checkpoint (first (filter #(= "human" (:checkpoint-kind %)) views))]
+                  (is (= ["reviewed"] (:choices checkpoint)))
+                  (is (str/includes? (:instruction checkpoint) "Do not choose this checkpoint"))
+                  (is (not-any? #(str/includes? (or (:instruction %) "") "auto-land-finisher/") views))
+                  (is (every? #(str/includes? (:instruction %) "clear gate/error to retry")
+                              (filter #(= "shell" (:gate %)) views)))))
+              (testing "The rendered worker contract delegates before irreversible signoff"
+                (let [handoff (first (filter #(= "Review then hand landing to a canonical-root grunt"
+                                                (:title %)) views))
+                      instruction (:instruction handoff)]
+                  (is (= "step" (:role handoff)))
+                  (is (= "active" (:state handoff)))
+                  (is (not (:done result)))
+                  ;; Instructions are the executable policy boundary, not prose documentation.
+                  (doseq [required ["land-auto-fixture-card"
+                                    "STOP at land's signoff checkpoint BEFORE choosing approved"
+                                    "--target with THIS HANDOFF STEP ID (not card fixture-card"
+                                    "--request-id `auto-land-finisher/HANDOFF_STEP_ID`"
+                                    "auto-run/finisher-run-id"
+                                    "Return immediately. Do not wait for the grunt"
+                                    "--query agent-run-settled"
+                                    "--param run-id=ORIGINAL_WORKER_RUN_ID --min-count 1"
+                                    "require settled=true, completed"
+                                    "Do not finish the card early"
+                                    "Verify land is done and the card is closed with outcome done"]]
+                    (is (str/includes? instruction required) required))
+                  (testing "Failed autonomous gates preserve work for manual intervention"
+                    (doseq [view (cons handoff (filter :gate views))]
+                      (is (str/includes? (:instruction view) "`auto-run-failure` to card fixture-card"))
+                      (is (str/includes? (:instruction view) "Stop and leave the card open"))
+                      (is (str/includes? (:instruction view) "withdraw the merge turn")))))))))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."
