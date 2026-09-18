@@ -41,6 +41,7 @@ const agentAttributeKeys = [
   'identity/session',
   'identity/id',
   'identity/harness',
+  'identity/native-session-id',
   'identity/model',
   'identity/thinking-level',
   'harness/run',

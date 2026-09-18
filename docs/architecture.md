@@ -39,31 +39,35 @@ for those exceptions.
 | `src/lib/api/views.ts`                                                                                                  | `viewsQueryOptions`, `saveViewsMutationOptions`                                                                                                                                               |
 | `src/lib/api/reviews.ts`                                                                                                | `reviewsQueryOptions`, `reviewQueryOptions`                                                                                                                                                   |
 | `src/lib/api/review-comments.ts`                                                                                        | `reviewCommentsQueryOptions`, `curateReviewMutationOptions`, `reviewPublishMutationOptions`                                                                                                   |
+| `src/lib/api/log-activity.ts`, `session-logs.ts`                                                                        | `logActivityOptions`; `sessionLogOptions` and `sessionLogStreamUrl` for canonical agent dialogue activity and bounded session snapshots                                                       |
 | `src/hooks/use-workspace.ts`                                                                                            | Narrow Router workspace selector                                                                                                                                                              |
 | `src/hooks/use-agents.ts`                                                                                               | Agent composition: identity/summary/relevant-item/selected-run/run-owner/target-run readers, reply/options queries and launch mutation. `useAgentsPoll` is reserved for the owner below.      |
 | `src/hooks/use-cards.ts`, `use-views.ts`, `use-reviews.ts`, `use-review-comments.ts`                                    | React composition: workspace resolution, concrete disabled content/status projections, mutations, dependent queries and route reactions. `use*Poll` exports are reserved for the owner below. |
+| `src/hooks/use-log-activity.ts`, `use-session-log.ts`                                                                   | Log-activity poll/read projections and the visible compact-tail or expanded-view SSE lifecycle                                                                                                |
 | `src/Dashboard.tsx`                                                                                                     | Route-level overview/workspace composition, workspace pin/reset, and startup state                                                                                                            |
 | `src/components/dashboard-shell.tsx`, `dashboard-sidebar.tsx`, `dashboard-header.tsx`                                   | Stable workspace shell, status/sidebar/header consumers, selection panels, and page slot                                                                                                      |
 | `src/components/issue-surface.tsx`                                                                                      | Board/outline/graph page entry; owns issue filtering and delegates to existing surface views                                                                                                  |
 | `src/components/reviews-view.tsx`, `review-inbox.tsx`, `review-report.tsx`                                              | Review page composition, focused inbox rendering, and the read-only report plus prompt/comments slots; see `docs/reviews.md`                                                                  |
 | `src/components/overlays.tsx`, `saved-view-dialog.tsx`, `shortcut-dialog.tsx`                                           | Narrow overlay dispatch; Query-backed saved-view workflow and focused browser-preference editor                                                                                               |
-| `src/components/workspace-resource-polls.tsx`                                                                           | Single selected-workspace poll owner for board, agents, reviews, and saved views; mounted for every workspace mode                                                                            |
+| `src/components/workspace-resource-polls.tsx`                                                                           | Single selected-workspace poll owner for board, agents, reviews, saved views, and log activity; mounted for every workspace mode                                                              |
 | `src/components/workspace-discovery.tsx`                                                                                | Single app-lifetime discovery poll owner, mounted in `src/main.tsx`                                                                                                                           |
 | `src/components/workspace-switcher.tsx`                                                                                 | Working pilot: selected option and filtered options use `select`; separate discovery health reader; URL-owned switching                                                                       |
 | `src/lib/workspaces.ts`                                                                                                 | Pure `selectedWorkspace` and `matchingWorkspaces` projections                                                                                                                                 |
 | `src/components/markdown.tsx`                                                                                           | Shared page-independent Markdown leaf; no issue-detail dependency                                                                                                                             |
 | `src/components/agent-activity.tsx`, `agent-prompt.tsx`, `agent-status.tsx`                                             | Shared issue/task badge, prompt button/dialog and run-status leaves; consumers never import the Agents page                                                                                   |
 | `src/components/agent-directory.tsx`, `agent-detail.tsx`, `agent-run-history.tsx`, `agent-run-reply.tsx`                | Agent directory and selected identity/run presentation boundaries; `agents-view.tsx` is only the page entry                                                                                   |
+| `src/components/session-log-views.tsx`, `log-activity-overlay.tsx`, `card-agent-log.tsx`                                | Conversation/Inspector/Console leaves, shared expanded viewer, compact tails, and card roster presentation                                                                                    |
 | `src/lib/board.ts`, `agents.ts`, `reviews.ts`, `review-comments.ts`, `review-publication.ts`, `overview.ts`, `graph.ts` | Pure domain projections and rules; extend these homes for later surfaces, not API modules or another selector framework                                                                       |
 | `src/lib/navigation.ts`, `dashboard-search.ts`                                                                          | Router composition/actions and URL schemas/destination transforms respectively                                                                                                                |
-| `src/store.ts`, `agent-prompt-store.ts`, `review-comment-store.ts`                                                      | Shared interaction state, preferences/receipts, and keyed persisted drafts; never mirrored server snapshots                                                                                   |
+| `src/store.ts`, `agent-prompt-store.ts`, `review-comment-store.ts`, `log-ui-store.ts`                                   | Shared interaction state, preferences/receipts, keyed persisted drafts, and log-viewer interaction state; never mirrored server snapshots                                                     |
 
 ### Validation boundaries (unchanged)
 
-`shared/api.ts`, `shared/reviews.ts`, and `shared/review-comments.ts` define normalized
-UI contracts, **not client response schemas**. Named compiled Zod schemas remain in
-`server/parse.ts`, `agents.ts`, `agent-prompts.ts`, `reviews.ts`, `review-comments.ts`,
-`card-actions.ts`, and `workspaces.ts`. Server saved views pass through the schemas
+`shared/api.ts`, `shared/reviews.ts`, `shared/review-comments.ts`, and
+`shared/session-log.ts` define normalized UI contracts, **not client response
+schemas**. Named compiled Zod schemas remain in `server/parse.ts`, `agents.ts`,
+`agent-prompts.ts`, `reviews.ts`, `review-comments.ts`, `card-actions.ts`,
+`workspaces.ts`, and `session-logs.ts`. Server saved views pass through the schemas
 in `server/parse.ts` via `server/views.ts`. Preserve normalization, additive-field
 policy, and failures for malformed known fields when extending these boundaries.
 URL parsing belongs to `src/lib/dashboard-search.ts`; persisted review-draft
@@ -112,11 +116,51 @@ parameters are URI-encoded. The only global key is discovery. No key was renamed
 | `['reviews', w]`             | `/reviews`                           | 5s              | Workspace consumers (including sidebar)                                                         |
 | `['review', w, id]`          | `/reviews/:id`                       | 5s              | Selected detail mounted                                                                         |
 | `['review-comments', w, id]` | `/reviews/:id/comments`              | 5s              | Selected comments mounted                                                                       |
+| `['log-activity', w]`        | `/log-activity`                      | 5s              | Overview or selected-workspace poll owner; bindings and latest-event summaries                  |
+| `['session-log', p, s]`      | `/session-logs/snapshot`             | none            | Disabled cache entry; the visible compact tail or expanded viewer writes SSE snapshots          |
 
 Unless listed, queries inherit retry 1, stale time 3s, structural sharing and Query's
 mount/focus/reconnect defaults. Poll intervals do not imply background-tab polling.
 No placeholder snapshot crosses workspace keys. Review proposals deduplicate all
 runs targeting the review and poll each reply, preserving late terminal results.
+
+### Canonical agent session logs
+
+Standard `pnpm dev`, `pnpm build`, and `pnpm start` include log activity, compact
+tails, and the expanded Conversation/Inspector/Console viewer. `['log-activity', w]`
+reads `/log-activity` every five seconds, owned by `OverviewLogPolls` or
+`WorkspaceResourcePolls`; inline hints use disabled projection readers. It contains
+persisted native-session bindings and latest-event summaries. A visible compact tail
+or expanded overlay owns `/session-logs/stream`; it validates and writes bounded
+snapshots to `['session-log', provider, session]`. The compact subscription pauses
+while the overlay is open.
+
+`SessionLogReader` reads only the final 1 MiB of a regular JSONL file under
+`~/.local/state/{pi,codex,claude}-dialogue`, retaining at most 400 complete records.
+It reports truncation and malformed or unsupported complete records; incomplete final
+lines wait for their newline. Session association is the persisted
+`identity/native-session-id` plus provider, never a guessed workspace or model
+match. A native session is not task-exclusive and does not expose whole history,
+token output, reasoning, or full tool stdout/stderr.
+
+The visible card Agents tab owns a projected `['graph', w, id]` poll through
+`useCardLogAgents` to discover descendant task owners (the existing on-demand graph
+exception, not another workspace poll). `cardLogTasks` follows only `parent-of`
+edges; dependency neighbours do not qualify. The agent directory remains a disabled
+reader. `cardLogAgents` deduplicates feature ownership, descendant task ownership,
+and tracked direct/root-targeted runs by identity. Ownership alone never implies
+execution. Current owners/targeted runs precede past work; completed-task-only
+owners and terminal linked runs remain available under **Past work**. Desktop rows
+switch one shared log; narrow layouts use a selector, and task context is available
+in a popover. Query failures retain entries with explicit incomplete/last-known
+feedback. `log-ui-store.ts` owns viewer interaction state, including follow,
+inspected event, selection, and past-work visibility.
+
+The normal server binds to the LAN without authentication. This deliberately exposes
+private prompts, commands, and paths, including session-log source endpoints to any
+client that knows a provider and session ID. No new security model is claimed; use a
+trusted network, localhost binding, or SSH tunnel. See [session logs](session-logs.md)
+for the user-facing contract.
 
 ## Checked mutation inventory
 
@@ -146,7 +190,8 @@ Infinity`, `subscribed: false`, or a new key as a substitute.
   switcher (including desktop/mobile copies), default-workspace pinning and overview
   are readers. Opening a menu does not create another polling authority.
 - `WorkspaceResourcePolls` is the selected-workspace owner for board, agents,
-  reviews, and saved views. It remains mounted across issue, agent, and review modes,
+  reviews, saved views, and log activity. It remains mounted across issue, agent, and
+  review modes,
   so sidebar counts and prompt notifications stay fresh in the background.
   `useSavedViews` reads the saved-view array directly (that response has no refresh
   timestamp). Shell code uses the concrete projection readers

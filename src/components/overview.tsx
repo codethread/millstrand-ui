@@ -3,6 +3,7 @@ import { useOverview } from '../hooks/use-overview';
 import { cn } from '../lib/utils';
 import { ErrorNotice, Loading } from './issue-parts';
 import { Button } from './ui/button';
+import { OverviewLogPolls } from './overview-log-polls';
 import { WorkspaceActivity } from './workspace-activity';
 
 export function Overview() {
@@ -11,6 +12,7 @@ export function Overview() {
   const partial = activity.partial || discoveryHealth.kind !== 'live';
   return (
     <main className="h-dvh overflow-y-auto bg-background" aria-label="All weavers overview">
+      <OverviewLogPolls />
       <div className="mx-auto max-w-[1600px] p-4 sm:p-8">
         <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>

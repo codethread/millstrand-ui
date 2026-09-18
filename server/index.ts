@@ -10,6 +10,10 @@ import { parseCurateReview, parsePublishReview } from './review-comments.ts';
 import { WorkspaceDirectory } from './workspaces.ts';
 import { parseAgentPrompt } from './agent-prompts.ts';
 import { parseCardLane } from './card-actions.ts';
+import { WorkspaceDatabase } from './workspace-database.ts';
+import { readLogActivity } from './log-activity.ts';
+import { SessionLogReader } from './session-log-reader.ts';
+import { parseSessionLogSource, SessionLogStreams } from './session-logs.ts';
 
 const exec = promisify(execFile);
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
@@ -157,6 +161,8 @@ async function staticFile(
 
 const config = await options(process.argv.slice(2));
 const workspaces = new WorkspaceDirectory(config.workspace);
+const sessionLogs = new SessionLogReader();
+const logStreams = new SessionLogStreams(sessionLogs);
 
 const server = createServer((request, response) => {
   void (async () => {
@@ -225,6 +231,21 @@ const server = createServer((request, response) => {
     if (path === '/api/agents' && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
       json(response, 200, await strand.agents());
+      return;
+    }
+    if (path === '/api/log-activity' && method === 'GET') {
+      const workspace = await workspaces.select(url.searchParams.get('workspace'));
+      const rows = await new WorkspaceDatabase(workspace.path).readAgentStrands();
+      json(response, 200, await readLogActivity(rows, sessionLogs));
+      return;
+    }
+    if (path === '/api/session-logs/snapshot' && method === 'GET') {
+      const source = parseSessionLogSource(url);
+      json(response, 200, await sessionLogs.snapshot(source.provider, source.session));
+      return;
+    }
+    if (path === '/api/session-logs/stream' && method === 'GET') {
+      logStreams.open(response, parseSessionLogSource(url));
       return;
     }
     if (path === '/api/agent-options' && method === 'GET') {
@@ -319,6 +340,7 @@ server.on('error', (error) => {
 });
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
+    logStreams.close();
     server.close();
   });
 }

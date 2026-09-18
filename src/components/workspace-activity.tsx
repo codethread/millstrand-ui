@@ -7,6 +7,7 @@ import type { WorkspaceActivityModel } from '../lib/overview';
 import { cn } from '../lib/utils';
 import { Loading, StatusBadge } from './issue-parts';
 import { WeaverAgentSetting } from './agent-prompt';
+import { AgentLogHint, AgentLogButton } from './agent-log-hint';
 
 export function WorkspaceActivity({
   activity: { workspace, board, agents, status },
@@ -222,18 +223,25 @@ export function WorkspaceActivity({
                       Target · {run.target}
                     </span>
                   )}
+                  <AgentLogHint workspace={workspace.id} identity={agent.id} stale={staleAgents} />
                 </>
               );
               return destination ? (
-                <Link
-                  key={agent.id}
-                  to="/"
-                  search={destination}
-                  className="block rounded-lg border border-border p-3 transition-colors hover:border-primary/40 hover:bg-accent"
-                  aria-label={`View agent ${agent.id} in ${workspace.name}`}
-                >
-                  {content}
-                </Link>
+                <div key={agent.id} className="overflow-hidden rounded-lg border border-border">
+                  <Link
+                    to="/"
+                    search={destination}
+                    className="block p-3 transition-colors hover:bg-accent"
+                    aria-label={`View agent ${agent.id} in ${workspace.name}`}
+                  >
+                    {content}
+                  </Link>
+                  <AgentLogButton
+                    workspace={workspace.id}
+                    identity={agent.id}
+                    disabled={staleAgents}
+                  />
+                </div>
               ) : (
                 <div
                   key={agent.id}

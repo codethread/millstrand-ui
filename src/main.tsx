@@ -11,10 +11,19 @@ import {
 } from '@tanstack/react-router';
 import { TooltipProvider } from './components/ui/tooltip';
 import { Dashboard } from './Dashboard';
+import { LogActivityOverlay } from './components/log-activity-overlay';
 import { WorkspaceDiscovery } from './components/workspace-discovery';
 import { dashboardSearchDefaults, parseDashboardSearch } from './lib/dashboard-search';
 import './index.css';
 
+function DashboardPage() {
+  return (
+    <>
+      <Dashboard />
+      <LogActivityOverlay />
+    </>
+  );
+}
 const queryClient = createQueryClient();
 const rootRoute = createRootRoute();
 const indexRoute = createRoute({
@@ -22,7 +31,7 @@ const indexRoute = createRoute({
   path: '/',
   validateSearch: parseDashboardSearch,
   search: { middlewares: [stripSearchParams(dashboardSearchDefaults)] },
-  component: Dashboard,
+  component: DashboardPage,
 });
 export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) });
 declare module '@tanstack/react-router' {

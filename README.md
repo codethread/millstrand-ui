@@ -1,8 +1,9 @@
 # Millstrand UI
 
-A web interface for exploring Millstrand workspaces. Its first surface covers
-Kanban cards, tasks, dependencies, and activity through a local Node server.
-Card lanes, card labels, and saved dashboard views are editable; cards can also be deleted.
+A web interface for exploring Millstrand workspaces. It covers Kanban cards,
+tasks, dependencies, activity, agents, and their recorded dialogue through a local
+Node server. Card lanes, card labels, and saved dashboard views are editable; cards
+can also be deleted.
 
 |                                                                                                                         |                                                                                                           |
 | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -48,9 +49,10 @@ ssh -N -L 4173:127.0.0.1:4173 user@host
 ```
 
 Open `http://localhost:4173` locally. This MVP has no login: any client able to
-reach the server can browse discovered local weavers, move or delete cards, and edit
-card labels and saved views. Bind to
-localhost when using a tunnel or when the network is not trusted.
+reach the server can browse discovered local weavers, move or delete cards, edit
+card labels and saved views, and read private recorded prompts, commands, and paths.
+That includes the session-log source endpoints when a client knows a provider and
+session ID. Bind to localhost when using a tunnel or when the network is not trusted.
 
 ## All-weaver overview
 
@@ -168,6 +170,24 @@ is shown explicitly. Prompts are passed as command arguments, never shell code;
 the API validates the selected card/graph target and alias and owns the execution
 directory, using the card’s recorded worktree when it is registered in the same
 repository (otherwise a card without a worktree uses the weaver root). Retries of an unchanged submission reuse the CLI request ID.
+
+### Session logs
+
+Standard `pnpm dev`, `pnpm build`, and `pnpm start` include agent session logs; there
+are no enable flags or separate log servers. Overview and agent surfaces show a
+compact latest-event hint, while cards and agent details provide compact tails and an
+expanded **Conversation**, **Inspector**, or **Console** viewer. Card log rosters
+combine current feature/task owners with linked runs, retain terminal work under
+**Past work**, use a mobile selector on narrow layouts, and expose related task
+context in a popover.
+
+Logs are linked only by persisted `identity/native-session-id` and provider. They
+read the final 1 MiB of the corresponding JSONL file in
+`~/.local/state/{pi,codex,claude}-dialogue`, retaining at most 400 complete records.
+A log is the native session, not a task-exclusive history, and it does not provide
+whole history, token output, reasoning, or full tool stdout/stderr. See
+[session logs](docs/session-logs.md) for endpoints, retained-data behavior, and the
+LAN exposure warning.
 
 The header's agent icon tracks prompts sent from this browser in the current
 weaver. It shows active runs and unread finished runs (including failures).

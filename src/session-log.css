@@ -1,0 +1,5 @@
+@layer base {
+  .session-log * {
+    border-color: var(--color-border);
+  }
+}
