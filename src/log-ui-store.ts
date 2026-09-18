@@ -7,7 +7,13 @@ interface LogUiState {
   view: 'conversation' | 'inspector' | 'console';
   paused: boolean;
   query: string;
+  follow: boolean;
+  inspected: string | null;
+  setFollow: (follow: boolean) => void;
+  setInspected: (inspected: string) => void;
   cardAgent: string | null;
+  showCardAgentHistory: boolean;
+  setShowCardAgentHistory: (show: boolean) => void;
   open: (identity: string, source: LogSource) => void;
   close: () => void;
   setView: (view: LogUiState['view']) => void;
@@ -20,9 +26,21 @@ export const useLogUiStore = create<LogUiState>((set) => ({
   view: 'inspector',
   paused: false,
   query: '',
+  follow: true,
+  inspected: null,
+  setFollow: (follow) => set({ follow }),
+  setInspected: (inspected) => set({ inspected }),
   cardAgent: null,
+  showCardAgentHistory: false,
+  setShowCardAgentHistory: (showCardAgentHistory) => set({ showCardAgentHistory }),
   open: (identity, source) =>
-    set({ overlay: { kind: 'open', identity, source }, paused: false, query: '' }),
+    set({
+      overlay: { kind: 'open', identity, source },
+      paused: false,
+      query: '',
+      follow: true,
+      inspected: null,
+    }),
   close: () => set({ overlay: { kind: 'closed' } }),
   setView: (view) => set({ view }),
   setPaused: (paused) => set({ paused }),

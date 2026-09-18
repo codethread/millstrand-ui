@@ -1,7 +1,7 @@
 import { Activity, ArrowUpRight } from 'lucide-react';
 import { useLogBinding } from '../hooks/use-log-activity';
-import { briefEvent, logLabEnabled } from '../lib/agent-logs';
-import { clock } from '../lib/log-lab';
+import { briefEvent } from '../lib/agent-logs';
+import { clock } from '../lib/session-log';
 import { useLogUiStore } from '../log-ui-store';
 
 interface HintProps {
@@ -9,10 +9,7 @@ interface HintProps {
   identity: string;
   stale?: boolean;
 }
-export function AgentLogHint(props: HintProps) {
-  return logLabEnabled ? <EnabledHint {...props} /> : null;
-}
-function EnabledHint({ workspace, identity, stale = false }: HintProps) {
+export function AgentLogHint({ workspace, identity, stale = false }: HintProps) {
   const binding = useLogBinding(workspace, identity);
   const activity = binding.data?.activity;
   return (
@@ -45,10 +42,7 @@ interface ButtonProps {
   identity: string;
   disabled?: boolean;
 }
-export function AgentLogButton(props: ButtonProps) {
-  return logLabEnabled ? <EnabledButton {...props} /> : null;
-}
-function EnabledButton({ workspace, identity, disabled = false }: ButtonProps) {
+export function AgentLogButton({ workspace, identity, disabled = false }: ButtonProps) {
   const binding = useLogBinding(workspace, identity);
   const open = useLogUiStore((state) => state.open);
   const source = binding.data?.source;

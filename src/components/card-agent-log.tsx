@@ -1,24 +1,15 @@
 import { Maximize2, Pause, Play, Terminal } from 'lucide-react';
 import type { LogSource } from '../../shared/log-activity';
 import { useCardLogAgents, useLogBinding } from '../hooks/use-log-activity';
-import { useLogStream } from '../hooks/use-log-lab';
+import { useLogStream } from '../hooks/use-session-log';
 import { useWorkspace } from '../hooks/use-workspace';
-import { logLabEnabled } from '../lib/agent-logs';
-import { runLabel } from '../lib/agents';
-import { clock, eventLabel, eventText } from '../lib/log-lab';
-import { cn } from '../lib/utils';
+import { cardLogAgentStatus, cardLogRoster } from '../lib/agent-logs';
+import { CardAgentRoster } from './card-agent-roster';
+import { clock, eventLabel, eventText } from '../lib/session-log';
 import { useLogUiStore } from '../log-ui-store';
 import { Button } from './ui/button';
 
-export function CardAgentLog({ owner, target }: { owner: string | null; target: string }) {
-  if (!logLabEnabled) return null;
-  return <CardLogPanel owner={owner} target={target} />;
-}
 export function AgentSessionLog({ identity }: { identity: string }) {
-  if (!logLabEnabled) return null;
-  return <LinkedAgentLog identity={identity} />;
-}
-function LinkedAgentLog({ identity }: { identity: string }) {
   const binding = useLogBinding(useWorkspace(), identity);
   const source = binding.data?.source;
   return source ? (
@@ -26,64 +17,73 @@ function LinkedAgentLog({ identity }: { identity: string }) {
       className="mb-6 overflow-hidden rounded-lg border border-border"
       aria-label="Agent session log"
     >
-      <CompactLog identity={identity} source={source} height="compact" status={null} />
+      <CompactLog identity={identity} source={source} status={null} />
     </section>
   ) : null;
 }
-function CardLogPanel({ owner, target }: { owner: string | null; target: string }) {
-  const candidates = useCardLogAgents(owner, target).data ?? [];
+export function CardAgentLog({ owner, target }: { owner: string | null; target: string }) {
+  const query = useCardLogAgents(owner, target);
+  const candidates = query.data ?? [];
   const chosen = useLogUiStore((state) => state.cardAgent);
   const choose = useLogUiStore((state) => state.setCardAgent);
-  const agent = candidates.find((candidate) => candidate.identity.id === chosen) ?? candidates[0];
+  const showHistory = useLogUiStore((state) => state.showCardAgentHistory);
+  const setShowHistory = useLogUiStore((state) => state.setShowCardAgentHistory);
+  const {
+    agents: visible,
+    selected: agent,
+    historyCount,
+  } = cardLogRoster(candidates, chosen, showHistory);
   const binding = useLogBinding(useWorkspace(), agent?.identity.id ?? '');
-  if (!agent) return null;
   return (
     <section
-      className="mb-6 overflow-hidden rounded-lg border border-border"
+      className="mb-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border"
       aria-label="Agent activity log"
     >
-      <div className="flex flex-wrap items-center gap-2 bg-muted/40 px-3 py-2 text-[10px] text-muted-foreground">
-        {candidates.length > 1 ? (
-          <select
-            aria-label="Activity agent"
-            className="min-w-0 max-w-full rounded border border-border bg-background p-1 text-foreground"
-            value={agent.identity.id}
-            onChange={(event) => choose(event.target.value)}
-          >
-            {candidates.map((item) => (
-              <option key={item.identity.id} value={item.identity.id}>
-                {item.run?.alias ?? item.identity.harness} · {item.identity.id}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <strong className="break-all text-primary">
-            {agent.run?.alias ?? agent.identity.harness} · {agent.identity.id}
-          </strong>
-        )}
-        <span>
-          {agent.relation === 'owner'
-            ? 'Owner session · work on this card not confirmed'
-            : 'Session linked to this card'}
-        </span>
-      </div>
-      {binding.data?.source ? (
-        <CompactLog
-          key={`${binding.data.source.provider}/${binding.data.source.session}`}
-          identity={agent.identity.id}
-          source={binding.data.source}
-          height="roomy"
-          status={runLabel(agent.run)}
+      {(query.error || query.tasksError) && (
+        <output className="shrink-0 px-3 py-2 text-xs text-destructive">
+          {query.error ? 'Agent directory unavailable. ' : ''}
+          {query.tasksError ? 'Task ownership unavailable. ' : ''}
+          Available entries may be incomplete or last-known.
+        </output>
+      )}
+      {query.tasksPending && (
+        <p className="shrink-0 px-3 py-2 text-xs text-muted-foreground">Loading task owners…</p>
+      )}
+      {agent ? (
+        <CardAgentRoster
+          agents={visible}
+          selected={agent}
+          choose={choose}
+          historyCount={historyCount}
+          showHistory={showHistory}
+          setShowHistory={setShowHistory}
         />
       ) : (
-        <p className="border-t border-border px-3 py-4 text-xs text-muted-foreground">
-          {binding.error
-            ? 'Local log lookup unavailable.'
-            : binding.isPending
-              ? 'Looking for a linked session…'
-              : 'No local dialogue session is linked to this agent.'}
+        <p className="px-3 py-4 text-xs text-muted-foreground">
+          {query.isPending
+            ? 'Loading agents…'
+            : query.error || query.tasksError || query.tasksPending
+              ? 'Waiting for the full agent list.'
+              : 'No feature owner, task owners, or linked runs found.'}
         </p>
       )}
+      {agent &&
+        (binding.data?.source ? (
+          <CompactLog
+            key={`${binding.data.source.provider}/${binding.data.source.session}`}
+            identity={agent.identity.id}
+            source={binding.data.source}
+            status={cardLogAgentStatus(agent)}
+          />
+        ) : (
+          <p className="border-t border-border px-3 py-4 text-xs text-muted-foreground">
+            {binding.error
+              ? 'Local log lookup unavailable.'
+              : binding.isPending
+                ? 'Looking for a linked session…'
+                : 'No local dialogue session is linked to this agent.'}
+          </p>
+        ))}
     </section>
   );
 }
@@ -91,12 +91,10 @@ function CardLogPanel({ owner, target }: { owner: string | null; target: string 
 export function CompactLog({
   identity,
   source,
-  height,
   status,
 }: {
   identity: string;
   source: LogSource;
-  height: 'compact' | 'roomy';
   status: string | null;
 }) {
   const paused = useLogUiStore((state) => state.paused);
@@ -111,7 +109,7 @@ export function CompactLog({
   const events = snapshot?.events.slice(-6) ?? [];
   return (
     <>
-      <div className="flex items-center justify-between gap-2 border-t border-border bg-[#111820] px-3 py-2 text-[#96a6b8]">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-[#111820] px-3 py-2 text-[#96a6b8]">
         <span className="flex items-center gap-1.5 font-mono text-[9px]">
           <Terminal className="size-3" />
           {paused
@@ -141,12 +139,7 @@ export function CompactLog({
           </Button>
         </div>
       </div>
-      <div
-        className={cn(
-          'overflow-auto bg-[#111820] px-3 pb-3 font-mono text-[10px] leading-relaxed text-[#c3cfdc]',
-          height === 'roomy' ? 'min-h-[28.5rem] max-h-[34rem]' : 'max-h-56',
-        )}
-      >
+      <div className="min-h-0 flex-1 overflow-auto bg-[#111820] px-3 pb-3 font-mono text-[10px] leading-relaxed text-[#c3cfdc]">
         {events.length ? (
           events.map((event) => (
             <div
@@ -169,7 +162,7 @@ export function CompactLog({
           </p>
         )}
       </div>
-      <div className="flex justify-between gap-2 bg-muted/30 px-3 py-1.5 text-[9px] text-muted-foreground">
+      <div className="flex shrink-0 justify-between gap-2 bg-muted/30 px-3 py-1.5 text-[9px] text-muted-foreground">
         <span>Last 6 events · {source.provider} · session log, not token output</span>
         {status && <span className="whitespace-nowrap">{status}</span>}
       </div>

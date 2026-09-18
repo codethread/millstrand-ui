@@ -13,8 +13,6 @@
   "scripts": {
     "dev": "concurrently --kill-others --names api,web \"tsx watch server/index.ts\" \"vite\"",
     "dev:api": "tsx watch server/index.ts",
-    "log:lab": "tsx server/log-lab-server.ts",
-    "log:dashboard": "concurrently --kill-others --names api,preview \"tsx server/index.ts --host 127.0.0.1 --port 4315\" \"tsx server/log-lab-server.ts --concept dashboard\"",
     "dev:web": "vite",
     "build": "tsc --noEmit && vite build",
     "start": "node --experimental-transform-types server/index.ts",

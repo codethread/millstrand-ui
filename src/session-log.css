@@ -1,5 +1,5 @@
 @layer base {
-  .log-lab * {
+  .session-log * {
     border-color: var(--color-border);
   }
 }

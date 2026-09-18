@@ -6,7 +6,7 @@ export function logActivityOptions(workspace: string | null) {
   return queryOptions({
     queryKey: ['log-activity', workspace],
     queryFn: async () =>
-      logActivitySchema.parse(await request<unknown>('/log-lab/activity', workspace)),
+      logActivitySchema.parse(await request<unknown>('/log-activity', workspace)),
     refetchInterval: 5000,
   });
 }

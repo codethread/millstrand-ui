@@ -8,10 +8,10 @@ import {
   Terminal,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import type { LogEvent } from '../../shared/log-lab';
+import type { LogEvent } from '../../shared/session-log';
 import { reversed } from '../../shared/array';
-import { clock, conversationBlocks, eventLabel, eventText } from '../lib/log-lab';
-import { useLabStore } from '../log-lab-store';
+import { clock, conversationBlocks, eventLabel, eventText } from '../lib/session-log';
+import { useLogUiStore } from '../log-ui-store';
 import { cn } from '../lib/utils';
 function Icon({ event }: { event: LogEvent }) {
   if (event.record.event === 'file') return <FileText size={15} />;
@@ -129,8 +129,8 @@ export function ConversationView({ events }: { events: LogEvent[] }) {
   );
 }
 export function InspectorView({ events }: { events: LogEvent[] }) {
-  const inspected = useLabStore((s) => s.inspected);
-  const setInspected = useLabStore((s) => s.setInspected);
+  const inspected = useLogUiStore((s) => s.inspected);
+  const setInspected = useLogUiStore((s) => s.setInspected);
   const selected = events.find((e) => e.id === inspected) ?? events.at(-1);
   const counts = [
     {

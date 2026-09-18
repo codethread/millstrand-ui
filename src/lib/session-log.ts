@@ -1,4 +1,4 @@
-import type { DialogueRecord, LogEvent } from '../../shared/log-lab';
+import type { DialogueRecord, LogEvent } from '../../shared/session-log';
 
 export function eventText(record: DialogueRecord): string {
   return (

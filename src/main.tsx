@@ -16,7 +16,7 @@ import { WorkspaceDiscovery } from './components/workspace-discovery';
 import { dashboardSearchDefaults, parseDashboardSearch } from './lib/dashboard-search';
 import './index.css';
 
-function DashboardPreview() {
+function DashboardPage() {
   return (
     <>
       <Dashboard />
@@ -31,7 +31,7 @@ const indexRoute = createRoute({
   path: '/',
   validateSearch: parseDashboardSearch,
   search: { middlewares: [stripSearchParams(dashboardSearchDefaults)] },
-  component: DashboardPreview,
+  component: DashboardPage,
 });
 export const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) });
 declare module '@tanstack/react-router' {

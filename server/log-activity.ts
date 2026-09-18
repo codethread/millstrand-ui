@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { providerSchema } from '../shared/log-lab.ts';
+import { providerSchema } from '../shared/session-log.ts';
 import type { LogActivity, LogBinding } from '../shared/log-activity.ts';
 import { parseAgents } from './agents.ts';
-import { LogLabReader } from './log-lab-reader.ts';
+import { SessionLogReader } from './session-log-reader.ts';
 
 const identityRowsSchema = z.array(
   z.object({
@@ -29,7 +29,10 @@ export function logBindings(rows: unknown): LogBinding[] {
     ];
   });
 }
-export async function readLogActivity(rows: unknown, reader: LogLabReader): Promise<LogActivity> {
+export async function readLogActivity(
+  rows: unknown,
+  reader: SessionLogReader,
+): Promise<LogActivity> {
   const active = new Set(
     parseAgents(rows)
       .filter((identity) => identity.runs.some((run) => run.status === 'running'))

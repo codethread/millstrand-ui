@@ -243,7 +243,7 @@ export function IssueDetail({ id }: { id: string }) {
               <TabsContent value="notes" className="detail-body">
                 <Notes notes={detail.notes} />
               </TabsContent>
-              <TabsContent value="agents" className="detail-body">
+              <TabsContent value="agents" className="detail-body flex-col data-[state=active]:flex">
                 <CardAgentLog owner={detail.card.owner} target={detail.card.id} />
               </TabsContent>
               <TabsContent value="attributes" className="detail-body">

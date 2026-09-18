@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { logEventSchema, providerSchema } from './log-lab';
+import { logEventSchema, providerSchema } from './session-log.ts';
 
 export const logSourceSchema = z.object({ provider: providerSchema, session: z.string() });
 export type LogSource = z.infer<typeof logSourceSchema>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LogEvent } from '../../shared/log-lab';
-import { conversationBlocks, filterEvents } from './log-lab';
+import type { LogEvent } from '../../shared/session-log';
+import { conversationBlocks, filterEvents } from './session-log';
 
 const events: LogEvent[] = [
   {

@@ -1,23 +1,21 @@
 import { Activity, ArrowDown, ListTree, MessageSquare, Pause, Play, Terminal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import type { LogSource } from '../../shared/log-activity';
-import { useLogStream } from '../hooks/use-log-lab';
-import { logLabEnabled } from '../lib/agent-logs';
-import { filterEvents } from '../lib/log-lab';
+import { useLogStream } from '../hooks/use-session-log';
+import { filterEvents } from '../lib/session-log';
 import { useLogUiStore } from '../log-ui-store';
-import { useLabStore } from '../log-lab-store';
 import { cn } from '../lib/utils';
-import { ConsoleView, ConversationView, InspectorView } from './log-lab-views';
+import { ConsoleView, ConversationView, InspectorView } from './session-log-views';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
-import '../log-lab.css';
+import '../session-log.css';
 
 export function LogActivityOverlay() {
   const overlay = useLogUiStore((state) => state.overlay);
   const close = useLogUiStore((state) => state.close);
-  if (!logLabEnabled || overlay.kind === 'closed') return null;
+  if (overlay.kind === 'closed') return null;
   return (
     <Dialog
       open
@@ -25,7 +23,7 @@ export function LogActivityOverlay() {
         if (!open) close();
       }}
     >
-      <DialogContent className="log-lab flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 rounded-none border-0 p-0 sm:max-w-none">
+      <DialogContent className="session-log flex h-dvh max-h-dvh w-screen max-w-none flex-col gap-0 rounded-none border-0 p-0 sm:max-w-none">
         <ExpandedLog
           key={`${overlay.source.provider}/${overlay.source.session}`}
           identity={overlay.identity}
@@ -43,8 +41,8 @@ function ExpandedLog({ identity, source }: { identity: string; source: LogSource
   const setPaused = useLogUiStore((state) => state.setPaused);
   const query = useLogUiStore((state) => state.query);
   const setQuery = useLogUiStore((state) => state.setQuery);
-  const follow = useLabStore((state) => state.follow);
-  const setFollow = useLabStore((state) => state.setFollow);
+  const follow = useLogUiStore((state) => state.follow);
+  const setFollow = useLogUiStore((state) => state.setFollow);
   const { snapshot, connection } = useLogStream(source.provider, source.session, paused);
   const events = filterEvents(snapshot?.events ?? [], query, 'all');
   const end = useRef<HTMLDivElement>(null);
@@ -57,7 +55,7 @@ function ExpandedLog({ identity, source }: { identity: string; source: LogSource
       <header className="border-b border-border px-5 py-5 pr-12 sm:px-8">
         <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
           <Activity className="size-3.5" />
-          Session activity <span className="rounded border border-border px-1">POC</span>
+          Session activity
         </div>
         <DialogTitle className="break-all text-xl">{identity}</DialogTitle>
         <DialogDescription className="mt-2 text-xs">
