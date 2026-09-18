@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { Card } from '../../shared/api';
 import { useCardMenu, useDeleteCard, useCardActionFeedback } from '../hooks/use-cards';
 import { lanes } from '../lib/board';
-import { useDashboardStore } from '../store';
+import { useDashboardStore, type DeleteCardTarget } from '../store';
 
 import { ErrorNotice } from './issue-parts';
 import { Button } from './ui/button';
@@ -110,8 +110,8 @@ export function CardActionFeedback() {
   return null;
 }
 
-export function DeleteCardDialog({ card }: { card: Card }) {
-  const { pending, error, close, remove } = useDeleteCard(card.id);
+export function DeleteCardDialog({ target }: { target: DeleteCardTarget }) {
+  const { pending, error, close, remove } = useDeleteCard(target.id);
   return (
     <Dialog
       open
@@ -129,8 +129,8 @@ export function DeleteCardDialog({ card }: { card: Card }) {
         <DialogHeader>
           <DialogTitle>Delete card?</DialogTitle>
           <DialogDescription>
-            Permanently delete “{card.title}” ({card.id}) and its links. Child cards and tasks are
-            not deleted. This cannot be undone.
+            Permanently delete “{target.title}” ({target.id}) and its links. Child cards and tasks
+            are not deleted. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
         {error && <ErrorNotice error={error} />}

@@ -178,7 +178,7 @@ export function useCardMenu(card: Card) {
   return {
     pending,
     move: (lane: CardLane) => mutation.mutate({ id: card.id, action: { kind: 'move', lane } }),
-    confirmDelete: () => confirmDelete(card),
+    confirmDelete: () => confirmDelete({ id: card.id, title: card.title }),
   };
 }
 
