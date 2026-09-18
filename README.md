@@ -87,8 +87,9 @@ Right-click a Board card or Outline feature row, or use its **…** actions butt
 to move it to another lane or delete it. The current lane is disabled. The button
 also provides touch and keyboard access. Moves edit only that card's state/lane:
 Completed closes it with outcome `done`; other lanes reactivate it and clear closure
-metadata. These are board edits, not workflow transitions: they do not assign an
-owner, run landing, or change child cards/tasks. Filters remain unchanged, so a moved
+metadata. The server uses `strand update` for these simple lane changes, not the
+removed Kanban promote/review/rework commands. These are board edits, not workflow
+transitions: they do not assign an owner, run landing, or change child cards/tasks. Filters remain unchanged, so a moved
 card may disappear from the current view. Deletion requires confirmation and permanently
 removes only that card and its incident links through `strand burn`; child cards and
 tasks remain. Failed actions are shown without automatically retrying them.
