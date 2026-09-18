@@ -1,4 +1,4 @@
-import { Activity, Maximize2, Pause, Play, Terminal } from 'lucide-react';
+import { Maximize2, Pause, Play, Terminal } from 'lucide-react';
 import type { LogSource } from '../../shared/log-activity';
 import { useCardLogAgents, useLogBinding } from '../hooks/use-log-activity';
 import { useLogStream } from '../hooks/use-log-lab';
@@ -6,6 +6,7 @@ import { useWorkspace } from '../hooks/use-workspace';
 import { logLabEnabled } from '../lib/agent-logs';
 import { runLabel } from '../lib/agents';
 import { clock, eventLabel, eventText } from '../lib/log-lab';
+import { cn } from '../lib/utils';
 import { useLogUiStore } from '../log-ui-store';
 import { Button } from './ui/button';
 
@@ -25,7 +26,7 @@ function LinkedAgentLog({ identity }: { identity: string }) {
       className="mb-6 overflow-hidden rounded-lg border border-border"
       aria-label="Agent session log"
     >
-      <CompactLog identity={identity} source={source} />
+      <CompactLog identity={identity} source={source} height="compact" status={null} />
     </section>
   ) : null;
 }
@@ -41,17 +42,7 @@ function CardLogPanel({ owner, target }: { owner: string | null; target: string 
       className="mb-6 overflow-hidden rounded-lg border border-border"
       aria-label="Agent activity log"
     >
-      <header className="flex flex-wrap items-center justify-between gap-2 bg-muted/40 px-3 py-2.5">
-        <strong className="flex items-center gap-2 text-xs">
-          <Activity className="size-3.5 text-primary" />
-          Agent activity{' '}
-          <span className="rounded border border-border px-1 text-[9px] font-normal text-muted-foreground">
-            POC
-          </span>
-        </strong>
-        <span className="text-[10px] text-muted-foreground">{runLabel(agent.run)}</span>
-      </header>
-      <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 bg-muted/40 px-3 py-2 text-[10px] text-muted-foreground">
         {candidates.length > 1 ? (
           <select
             aria-label="Activity agent"
@@ -81,6 +72,8 @@ function CardLogPanel({ owner, target }: { owner: string | null; target: string 
           key={`${binding.data.source.provider}/${binding.data.source.session}`}
           identity={agent.identity.id}
           source={binding.data.source}
+          height="roomy"
+          status={runLabel(agent.run)}
         />
       ) : (
         <p className="border-t border-border px-3 py-4 text-xs text-muted-foreground">
@@ -95,7 +88,17 @@ function CardLogPanel({ owner, target }: { owner: string | null; target: string 
   );
 }
 /** Owns this visible compact tail; the fullscreen overlay takes over its SSE subscription. */
-export function CompactLog({ identity, source }: { identity: string; source: LogSource }) {
+export function CompactLog({
+  identity,
+  source,
+  height,
+  status,
+}: {
+  identity: string;
+  source: LogSource;
+  height: 'compact' | 'roomy';
+  status: string | null;
+}) {
   const paused = useLogUiStore((state) => state.paused);
   const setPaused = useLogUiStore((state) => state.setPaused);
   const open = useLogUiStore((state) => state.open);
@@ -138,7 +141,12 @@ export function CompactLog({ identity, source }: { identity: string; source: Log
           </Button>
         </div>
       </div>
-      <div className="max-h-56 overflow-auto bg-[#111820] px-3 pb-3 font-mono text-[10px] leading-relaxed text-[#c3cfdc]">
+      <div
+        className={cn(
+          'overflow-auto bg-[#111820] px-3 pb-3 font-mono text-[10px] leading-relaxed text-[#c3cfdc]',
+          height === 'roomy' ? 'min-h-72 max-h-96' : 'max-h-56',
+        )}
+      >
         {events.length ? (
           events.map((event) => (
             <div
@@ -163,12 +171,7 @@ export function CompactLog({ identity, source }: { identity: string; source: Log
       </div>
       <div className="flex justify-between gap-2 bg-muted/30 px-3 py-1.5 text-[9px] text-muted-foreground">
         <span>Last 6 events · {source.provider} · session log, not token output</span>
-        <button
-          className="whitespace-nowrap text-primary hover:underline"
-          onClick={() => open(identity, source)}
-        >
-          View all →
-        </button>
+        {status && <span className="whitespace-nowrap">{status}</span>}
       </div>
     </>
   );
