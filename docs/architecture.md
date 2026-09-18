@@ -133,11 +133,14 @@ Infinity`, `subscribed: false`, or a new key as a substitute.
   `useReviews` remain disabled readers for surface internals; agent consumers use only
   the named projections above. Only the corresponding `use*Poll` calls in the owner
   establish timers.
-- Multi-workspace overview uses `useQueries` with board and agent factories per ID,
-  enabling only running weavers. It shares the same caches as workspace pages, not
-  an overview cache. Keep per-source errors and retained snapshots independent;
-  discovery failure is not a zero activity count. Offline snapshots remain visible
-  but overview links remain unavailable. Its broader projection rewrite is rwq4x.
+- `useOverview` in `src/hooks/use-overview.ts` is the overview-only board/agent
+  poll owner (mutually exclusive with `WorkspaceResourcePolls`). It selects active
+  cards/identities from the same domain keys and uses stable `useQueries` combines
+  to expose concrete activity/health models, never result wrappers. Only running
+  weavers enable activity polls; offline snapshots remain visible with links and
+  retries disabled. Discovery remains owned by `WorkspaceDiscovery`, with health
+  distinct from card/agent health. See [overview composition](overview.md) for
+  models, refresh semantics, examples and browser evidence.
 
 ## Shell and page seams
 
