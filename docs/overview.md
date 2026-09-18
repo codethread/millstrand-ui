@@ -76,5 +76,5 @@ Browser-local network boundaries (no Weaver shutdown or real writes):
 - Response fixtures show production work plus queued and stopping agents; totals
   and labels remain correct. Empty discovery fixture shows the explicit empty state.
 
-Screenshots: `docs/evidence/25k06/`. Fixtures existed only in browser request routing
-and were removed. No paid agents, external reviews, real card edits or weaver stops.
+Fixtures existed only in browser request routing and were removed. No paid agents,
+external reviews, real card edits or weaver stops.
