@@ -26,6 +26,7 @@ describe('shareable dashboard navigation', () => {
     });
     expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(state)))).toEqual(state);
     expect(parseDashboardSearch({ issue: 'card-a', agentRun: 'run-a' })).toMatchObject({
+      mode: 'agents',
       issue: null,
       agentRun: 'run-a',
     });
@@ -89,7 +90,7 @@ describe('shareable dashboard navigation', () => {
       },
     });
     expect(state).toMatchObject({
-      mode: 'board',
+      mode: 'agents',
       workspace: null,
       issue: null,
       agent: 'identity',

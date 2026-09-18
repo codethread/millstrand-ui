@@ -96,7 +96,7 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
   const issue = agent || agentRun ? null : text(search.issue);
   const mode = parseOptional(modeSchema, search.mode);
   return {
-    mode: mode ?? (workspace || issue || agent ? 'board' : 'overview'),
+    mode: mode ?? (agent || agentRun ? 'agents' : workspace || issue ? 'board' : 'overview'),
     workspace,
     review: text(search.review),
     reviewQuery: text(search.reviewQuery) ?? '',
