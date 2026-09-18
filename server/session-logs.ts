@@ -9,6 +9,7 @@ const sourceSchema = z.object({
   provider: providerSchema,
   session: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
 });
+const maxStreams = 32;
 
 export function parseSessionLogSource(url: URL): LogSource {
   const result = sourceSchema.safeParse({
@@ -27,6 +28,8 @@ export class SessionLogStreams {
   constructor(private readonly reader: SessionLogReader) {}
 
   open(response: ServerResponse, source: LogSource): void {
+    if (this.responses.size >= maxStreams)
+      throw new HttpError(503, 'Too many session log streams are open.');
     response.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
@@ -43,24 +46,38 @@ export class SessionLogStreams {
       this.responses.delete(response);
     };
     response.once('close', close);
+    const write = (payload: string): Promise<boolean> => {
+      if (response.write(payload)) return Promise.resolve(true);
+      return new Promise((resolve) => {
+        const drained = (): void => {
+          response.off('close', disconnected);
+          resolve(true);
+        };
+        const disconnected = (): void => {
+          response.off('drain', drained);
+          resolve(false);
+        };
+        response.once('drain', drained);
+        response.once('close', disconnected);
+      });
+    };
     const poll = async (): Promise<void> => {
+      let payload: string;
       try {
         const current = await this.reader.sourceModifiedAt(source.provider, source.session);
         if (closed) return;
         if (current !== modifiedAt) {
           const snapshot = await this.reader.snapshot(source.provider, source.session);
           if (closed) return;
-          response.write(`event: snapshot\ndata: ${JSON.stringify(snapshot)}\n\n`);
+          payload = `event: snapshot\ndata: ${JSON.stringify(snapshot)}\n\n`;
           modifiedAt = current;
-        } else response.write(': heartbeat\n\n');
+        } else payload = ': heartbeat\n\n';
       } catch {
         if (closed) return;
-        response.write(
-          `event: source-error\ndata: ${JSON.stringify({ message: 'Unable to read dialogue source.' })}\n\n`,
-        );
+        payload = `event: source-error\ndata: ${JSON.stringify({ message: 'Unable to read dialogue source.' })}\n\n`;
         modifiedAt = null;
       }
-      if (!closed) timer = setTimeout(() => void poll(), 1000);
+      if ((await write(payload)) && !closed) timer = setTimeout(() => void poll(), 1000);
     };
     void poll();
   }
