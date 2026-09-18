@@ -61,38 +61,49 @@ against the retained card, worktree and delivery workflow.
 This is delivery policy, not a dispatcher teardown feature. Shared `land` stays
 unchanged. Its sign-off starts an executor-owned chain that includes worktree
 removal, so the handoff must happen **before approval**, not just before cleanup.
-A per-command shell `cd` does not move the original agent session's persistent cwd.
+A per-command shell `cd` does not move the original agent session's persistent
+cwd.
 
-The assigned worker drives `land-auto-CARD` through PR resolution and mandatory
-review, adjudicates findings, and stops at sign-off. It records the exact PR/head,
-review disposition, land and delivery run IDs, ready delivery step ID, original
-Harnesses run ID, canonical root, branch/worktree, and owned resource inventory on
-the card. Stop owned servers/browser sessions before handoff where practical;
-identify remaining resources by exact PID/session name/path, or explicitly none.
+`auto-full-land` calls Millhouse's reusable `autonomous-land` composition. It
+pours two distinct delivery targets under the feature run:
 
-It then uses headless `strand agent run grunt` in the canonical root, with explicit
-`--workspace`, its own `--by-identity`, and the complete finisher prompt from the
-rendered delivery step. This must be an independent tracked agent, not a synchronous
-subagent: the parent must be able to exit while the finisher waits.
+1. the active `handoff-worker` step, which the assigned worker serves; and
+2. the dependent, initially blocked `finisher` step, which the canonical-root
+   `grunt` serves after the worker successfully settles.
 
-- `--target` is the **delivery handoff step ID**, not the card; the active worker
-  already reserves the card target. No second assignment or feature claim is needed.
-- `--request-id` is `auto-land-finisher/HANDOFF_STEP_ID`. An uncertain CLI response
-  is inspected with `agent show --request` using that key, not a fresh launch key.
-- The accepted run ID is recorded as `auto-run/finisher-run-id` on the handoff step
-  and in a card note. The worker then returns without completing that step or card.
-- The grunt awaits `agent-run-settled` for the **original worker**, with
-  `--min-count 1`. A terminal status alone is insufficient. Before sign-off it
-  requires successful settlement, its matching receipt, no failure label, and the
-  matching land run still at sign-off.
-- From the canonical root, the grunt approves sign-off and drives the existing land
-  run. It awaits executor-owned gates, tidies only recorded resources, and lets
-  land's final card gate close the card after cleanup. Only then does it complete
-  the outer delivery step. It must never close the card early to unblock dependents.
+The worker drives `land-auto-CARD` through PR resolution and mandatory review,
+adjudicates findings, and stops at sign-off. Before launching a finisher, it
+locates both role-tagged steps in the delivery graph and verifies that its own
+agent target is the worker step, never the finisher step. A previous combined
+single-step run without a separate finisher target requires explicit recovery;
+the worker must not invent or replace a target.
 
-The original worker's settlement frees its dispatcher slot. The finisher is outside
-that two-worker count; unrelated cards can start, while dependent cards still wait
-for card completion. Shared FIFO reservations continue to serialize merges.
+The worker records the exact PR/head, review disposition, land and delivery run
+IDs, **both** handoff step IDs, original worker run ID, canonical root,
+branch/worktree, and owned resource inventory on the card. It records
+`auto-run/worker-run-id` on the finisher step before launch.
+
+It then uses headless `strand agent run grunt` in the canonical root, with
+explicit `--workspace` and its own `--by-identity`. The launch uses:
+
+- `--target FINISHER_STEP_ID`, never the handoff-worker step or card;
+- `--request-id auto-land-finisher/FINISHER_STEP_ID`; and
+- the complete rendered finisher instruction as one `--prompt` argument.
+
+Acceptance of the blocked finisher target is intentional: it cannot launch
+until the worker step closes. An uncertain response is inspected with
+`agent show --request` using the same key, rather than a fresh launch key. The
+accepted run ID is recorded as `auto-run/finisher-run-id` on the finisher step
+and in the card handoff note. Only after both receipts are recorded does the
+worker complete the **handoff-worker** step and return; it never completes the
+finisher step or waits for the grunt.
+
+The grunt awaits `agent-run-settled` for the recorded worker run, with
+`--min-count 1`. A terminal status alone is insufficient. Before sign-off it
+requires successful settlement, the matching worker/finisher receipts, no
+failure label, and the matching land run at sign-off. It then drives the existing
+land run through FIFO merge, cleanup, and the land-owned card completion gate.
+Only after the card is closed does it complete the **finisher** step.
 
 ### Failure policy
 
@@ -102,9 +113,16 @@ For `auto-full-land`, an observed delivery-gate, handoff or landing failure mean
    retained resources and any held merge reservation on the feature.
 2. Stop with the card open. Do not clear a failed gate, spawn a replacement, retry
    landing or withdraw the queue entry. This overrides shared land's repair advice.
-3. Leave recovery to the user. A failed queue head may deliberately retain the merge
-   lock and block subsequent landings. An uncertain merge needs reconciliation,
-   not a blind retry. Normal queue waits and bounded-await timeouts are not failures.
+3. Leave recovery to the user. A failed queue head may deliberately retain the
+   merge lock and block subsequent landings. An uncertain merge needs
+   reconciliation, not a blind retry.
+
+A recovery worker may serve the card or handoff-worker step, never the finisher
+step; a finisher recovery serves only its existing finisher target and never
+launches another finisher. An accepted blocked finisher is retained rather than
+replaced. The disposable workspace test mechanically verifies that the role-tagged
+worker and finisher steps have distinct IDs and that the finisher is dependent on
+the worker.
 
 Failure to complete the outer delivery bookkeeping after land already closed the
 card is reported with the same label/note, but never reopens or re-merges landed
