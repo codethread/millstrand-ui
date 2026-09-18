@@ -5,19 +5,19 @@
    :deps/root "spools/batteries"}
   millhouse.spools/identity
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "e74fd518cc393bb42f4002c67b71f4f6d955844a"
+   :git/sha "349416b3dd94b7ee0f588d7551a682879e5cda47"
    :deps/root "spools/identity"}
   millhouse.spools/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "f80b80c8697e48a6ce56344372a32136d2bf279c"
+   :git/sha "349416b3dd94b7ee0f588d7551a682879e5cda47"
    :deps/root "spools/kanban"}
   millhouse.spools/land
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "f80b80c8697e48a6ce56344372a32136d2bf279c"
+   :git/sha "349416b3dd94b7ee0f588d7551a682879e5cda47"
    :deps/root "spools/land"}
   millhouse.spools/workflow
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "f80b80c8697e48a6ce56344372a32136d2bf279c"
+   :git/sha "349416b3dd94b7ee0f588d7551a682879e5cda47"
    :deps/root "spools/workflow"}
   codethread/config
   {:git/url "https://github.com/codethread/codethread.spool.git"
