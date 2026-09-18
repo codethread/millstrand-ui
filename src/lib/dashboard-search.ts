@@ -44,7 +44,7 @@ const reviewStageSchema = z.compile(z.enum(reviewStages), { strict: true });
 const detailTabSchema = z.compile(z.enum(['overview', 'activity', 'attributes']), {
   strict: true,
 });
-const trueSchema = z.compile(z.literal(true), { strict: true });
+const booleanSchema = z.compile(z.boolean(), { strict: true });
 
 function parseOptional<T>(schema: z.ZodType<T>, value: unknown): T | null {
   const parsed = schema.safeParse(value);
@@ -109,7 +109,7 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
     graphRoot: text(search.graphRoot),
     detailTab: parseOptional(detailTabSchema, search.detailTab) ?? 'overview',
     agentQuery: text(search.agentQuery) ?? '',
-    activeAgentsOnly: parseOptional(trueSchema, search.activeAgentsOnly) ?? false,
+    activeAgentsOnly: parseOptional(booleanSchema, search.activeAgentsOnly) ?? true,
   };
 }
 
@@ -127,7 +127,7 @@ export const dashboardSearchDefaults = {
   graphRoot: null,
   detailTab: 'overview',
   agentQuery: '',
-  activeAgentsOnly: false,
+  activeAgentsOnly: true,
 } satisfies Partial<DashboardSearch>;
 
 /** The unscoped default works without discovery; explicit IDs require a running weaver. */
