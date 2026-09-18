@@ -12,7 +12,7 @@ import type {
 import { emptyFilter, workspaceFilter, type WorkspaceView } from './board';
 
 export type Presentation = 'overview' | 'board' | 'outline' | 'graph' | 'agents' | 'reviews';
-export type DetailTab = 'overview' | 'activity' | 'attributes';
+export type DetailTab = 'overview' | 'notes' | 'agents' | 'attributes';
 export interface DashboardSearch {
   mode: Presentation;
   workspace: string | null;
@@ -41,7 +41,7 @@ const modeSchema = z.compile(
 );
 const reviewScopeSchema = z.compile(z.enum(['inbox', 'all']), { strict: true });
 const reviewStageSchema = z.compile(z.enum(reviewStages), { strict: true });
-const detailTabSchema = z.compile(z.enum(['overview', 'activity', 'attributes']), {
+const detailTabSchema = z.compile(z.enum(['overview', 'notes', 'agents', 'attributes']), {
   strict: true,
 });
 const trueSchema = z.compile(z.literal(true), { strict: true });

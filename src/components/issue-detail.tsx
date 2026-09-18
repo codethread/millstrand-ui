@@ -25,7 +25,6 @@ function DetailOverview({ detail }: { detail: CardDetail }) {
   const completed = detail.tasks.filter((task) => task.status === 'closed').length;
   return (
     <>
-      <CardAgentLog owner={detail.card.owner} target={detail.card.id} />
       <section className="detail-section">
         <h3 className="detail-section-title">Description</h3>
         {detail.body ? (
@@ -150,7 +149,8 @@ export function IssueDetail({ id }: { id: string }) {
   const detail = query.data;
   const tabs: { id: DetailTab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'activity', label: 'Activity' },
+    { id: 'notes', label: 'Notes' },
+    { id: 'agents', label: 'Agents' },
     { id: 'attributes', label: 'Attributes' },
   ];
   return (
@@ -201,7 +201,12 @@ export function IssueDetail({ id }: { id: string }) {
               value={tab}
               className="detail-tabs-root"
               onValueChange={(value) => {
-                if (value === 'overview' || value === 'activity' || value === 'attributes')
+                if (
+                  value === 'overview' ||
+                  value === 'notes' ||
+                  value === 'agents' ||
+                  value === 'attributes'
+                )
                   setTab(value);
               }}
             >
@@ -214,7 +219,7 @@ export function IssueDetail({ id }: { id: string }) {
                       className={cn(tab === item.id && 'selected')}
                     >
                       {item.label}
-                      {item.id === 'activity' && <span>{detail.notes.length}</span>}
+                      {item.id === 'notes' && <span>{detail.notes.length}</span>}
                     </TabsTrigger>
                   ))}
                 </TabsList>
@@ -235,9 +240,11 @@ export function IssueDetail({ id }: { id: string }) {
               <TabsContent value="overview" className="detail-body">
                 <DetailOverview detail={detail} />
               </TabsContent>
-              <TabsContent value="activity" className="detail-body">
-                <CardAgentLog owner={detail.card.owner} target={detail.card.id} />
+              <TabsContent value="notes" className="detail-body">
                 <Notes notes={detail.notes} />
+              </TabsContent>
+              <TabsContent value="agents" className="detail-body">
+                <CardAgentLog owner={detail.card.owner} target={detail.card.id} />
               </TabsContent>
               <TabsContent value="attributes" className="detail-body">
                 <p className="mb-4 text-sm text-muted-foreground">

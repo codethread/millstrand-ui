@@ -53,7 +53,7 @@ describe('shareable dashboard navigation', () => {
       mode: 'graph',
       workspace: 'weaver-a',
       issue: 'card-a',
-      detailTab: 'activity',
+      detailTab: 'agents',
       graphRoot: 'root-a',
       activeViewId: 'my-view',
       agentQuery: 'sol high',
