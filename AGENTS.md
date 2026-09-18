@@ -64,7 +64,15 @@ areas allow targeted edits.
 
 ## Millstrand / strand
 
-This repo uses Millstrand strands to track work. Start with `strand --help`. Run `mill prime millstrand` when building on this repo's `.millstrand/` config, or working with millstrand spools, weaver or REPL.
+This repo uses Millstrand strands to track work. Start with `strand --help`. Run `mill prime millstrand` when building on this repo's `.millstrand/` config, or working with millstrand spools or weaver.
+
+- Use direct, read-only SQL for fast, resilient persisted dashboard reads. Discover
+  the workspace's file-backed SQLite database through `mill weaver list`, keep reads
+  bounded and short-lived, and fail loudly when its storage or schema is unsupported.
+- Use `strand` operations for all mutations; never write directly to Millstrand's
+  database.
+- Use spool operations for domain-semantic actions when it makes sense to expose the
+  action from the spool itself, rather than reproducing its domain rules in the UI.
 
 Target other repos with direct `--workspace` flag:
 

@@ -143,14 +143,14 @@ These are Weaver’s recorded process states, not keystroke or model-token activ
 
 Agent data refreshes independently every five seconds; failed refreshes mark
 retained data as last-known rather than claiming it is live. Agents can be browsed
-even when a workspace does not publish Kanban. Inspection runs a fixed read-only
-program through `mill weaver repl --stdin`, using the public `list-lean` API to
-select identity sessions, identity-linked published runs, and owned work inside
-the weaver before attributes are assembled. Unrelated notes, events, and artifacts
-do not consume the 10,000 matching-row safety bound. All lifecycle states remain
-visible, including completed run history. Overflow fails rather than truncating.
-Only selected metadata reaches the browser—not provider environment variables,
-injected prompts, or credentials. No browser input becomes executable Clojure.
+even when a workspace does not publish Kanban. The server discovers the workspace's
+file-backed SQLite database through `mill weaver list`, then runs a short-lived,
+read-only SQL projection over committed persisted state. It selects identity sessions,
+identity-linked published runs, and owned work before assembling only the required
+attributes. Unrelated notes, events, artifacts, provider environment variables,
+injected prompts, and credentials are never selected. The query has a 10,000-row
+safety bound, retains every lifecycle state including completed history, and fails
+rather than truncating or accepting an unsupported storage/schema version.
 
 Use **Prompt agent** from a card's detail panel in Board, Outline, or Graph (or a
 focused graph's strand inspector). The small compose dialog starts a headless
