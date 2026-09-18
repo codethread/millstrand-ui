@@ -152,7 +152,7 @@ function SidebarContents() {
           className={cn('nav-item', mode === 'agents' && 'active')}
           aria-pressed={mode === 'agents'}
           onClick={() => {
-            actions.setMode('agents');
+            actions.openAgents();
             setSidebarOpen(false);
           }}
         >

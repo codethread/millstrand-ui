@@ -28,12 +28,8 @@ describe('shareable dashboard navigation', () => {
     expect(parseDashboardSearch({ issue: 'card-a', agentRun: 'run-a' }).agentRun).toBeNull();
     expect(workspaceDestination('weaver-b', { kind: 'card', id: 'card-b' }).agentRun).toBeNull();
   });
-  it('opens the overview with active agents only and a dashboard for workspace/item links', () => {
-    expect(parseDashboardSearch({})).toMatchObject({
-      mode: 'overview',
-      activeAgentsOnly: true,
-    });
-    expect(parseDashboardSearch({ activeAgentsOnly: false }).activeAgentsOnly).toBe(false);
+  it('opens the overview at home and a dashboard for workspace/item links', () => {
+    expect(parseDashboardSearch({}).mode).toBe('overview');
     expect(parseDashboardSearch({ workspace: 'weaver-a' }).mode).toBe('board');
     expect(parseDashboardSearch({ issue: 'card-a' }).mode).toBe('board');
   });
@@ -96,7 +92,7 @@ describe('shareable dashboard navigation', () => {
       agent: 'identity',
       detailTab: 'overview',
       graphRoot: null,
-      activeAgentsOnly: true,
+      activeAgentsOnly: false,
       filter: {
         query: '',
         mode: 'and',
