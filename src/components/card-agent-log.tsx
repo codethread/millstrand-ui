@@ -144,7 +144,7 @@ export function CompactLog({
       <div
         className={cn(
           'overflow-auto bg-[#111820] px-3 pb-3 font-mono text-[10px] leading-relaxed text-[#c3cfdc]',
-          height === 'roomy' ? 'min-h-72 max-h-96' : 'max-h-56',
+          height === 'roomy' ? 'min-h-[28.5rem] max-h-[34rem]' : 'max-h-56',
         )}
       >
         {events.length ? (
