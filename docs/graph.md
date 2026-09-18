@@ -74,6 +74,3 @@ Browser checks used real local workspace reads at 1440×1000 and 390×844:
   for smoke testing. No paid agent launch or external review publication occurred.
 - Narrow canvas/inspector controls remained usable with document width equal to the
   390px viewport. Browser reported no uncaught page errors.
-
-Screenshots: `docs/evidence/45mjy/` (desktop, narrow, prompt, loading, unavailable,
-retained error, empty, closed inclusion and too-large states).

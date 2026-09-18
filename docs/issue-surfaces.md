@@ -46,4 +46,3 @@ Browser-local request aborts verified retained detail/notes and label/move/delet
 errors without changing real work. Delete confirmation remains open on failure;
 label text remains in the editor. Menu lanes include production/completed and disable
 the current lane. No real card mutations, paid launches or external reviews occurred.
-Screenshots are in `docs/evidence/vl3cr/`.
