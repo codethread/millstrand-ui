@@ -237,12 +237,19 @@
                 (prepare rt {:card admitted}))
               (is (= "stop"
                      (attr-get (weaver/show rt (:id admitted)) :auto-run/effective-on-change)))
-              (is (= :frozen-after-admission
+              (doseq [attributes [{:auto-run/on-change "human-review"}
+                                  {:auto-run/effective-on-change nil}]]
+                (is (= :frozen-after-admission
+                       (try
+                         (weaver/update! rt (:id admitted) {:attributes attributes})
+                         :updated
+                         (catch clojure.lang.ExceptionInfo _ :frozen-after-admission)))))
+              (is (= :changed-after-admission
                      (try
-                       (weaver/update! rt (:id admitted)
-                                       {:attributes {:auto-run/on-change "human-review"}})
-                       :updated
-                       (catch clojure.lang.ExceptionInfo _ :frozen-after-admission)))))
+                       (callback rt {:card (weaver/show rt (:id admitted))
+                                     :settings {:workflow "auto-inspect"}})
+                       :accepted
+                       (catch clojure.lang.ExceptionInfo _ :changed-after-admission)))))
             (is (= {}
                    (callback rt {:card (weaver/add! rt {:title "unrelated policy"
                                                          :attributes {:auto-run/on-change "merge-now"}})

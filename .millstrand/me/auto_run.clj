@@ -27,14 +27,16 @@
   "Reject a policy edit after an inspection admission records its immutable policy."
   {:types #{:strand/update-before-commit}}
   [{:keys [strand/before strand/after]}]
-  (when (and (= "auto-inspect" (attr-get before :auto-run/effective-workflow))
-             (some? (attr-get before :auto-run/effective-on-change))
-             (not= (attr-get before :auto-run/on-change)
-                   (attr-get after :auto-run/on-change)))
-    (fail! "Auto-run on-change policy changed after admission"
-           {:card (:id before)
-            :admitted (attr-get before :auto-run/effective-on-change)
-            :value (attr-get after :auto-run/on-change)}))
+  (let [admitted (attr-get before :auto-run/effective-on-change)]
+    (when (and (= "auto-inspect" (attr-get before :auto-run/effective-workflow))
+               (some? admitted)
+               (or (not= admitted (attr-get after :auto-run/effective-on-change))
+                   (not= (attr-get before :auto-run/on-change)
+                         (attr-get after :auto-run/on-change))))
+      (fail! "Auto-run on-change policy changed after admission"
+             {:card (:id before)
+              :admitted admitted
+              :value (attr-get after :auto-run/on-change)})))
   nil)
 
 (defn prepare!
@@ -57,7 +59,7 @@
       (when (and admitted (not= admitted on-change))
         (fail! "Auto-run on-change policy changed after admission"
                {:card (:id card) :admitted admitted :value on-change}))
-      {:on-change on-change})
+      {:on-change (or admitted on-change)})
     {}))
 
 (defn open!
