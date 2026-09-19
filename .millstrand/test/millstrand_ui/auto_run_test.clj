@@ -331,12 +331,19 @@
 (deftest clean-inspection-gate-rejects-dirty-and-ahead-worktrees
   (let [dir (temporary-git-worktree!)
         argv ["sh" "-ceu"
-              "test -z \"$(git status --porcelain)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"]]
+              "test -z \"$(git status --porcelain --ignored --untracked-files=all)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"]]
     (try
       (is (zero? (command-exit dir argv)) "clean evidence-only work passes")
       (spit (io/file dir "dirty.txt") "dirty\n")
       (is (pos? (command-exit dir argv)) "dirty files reject a clean disposition")
       (io/delete-file (io/file dir "dirty.txt"))
+      (spit (io/file dir ".gitignore") "ignored.txt\n")
+      (git! dir "git" "add" ".gitignore")
+      (git! dir "git" "commit" "--quiet" "-m" "ignore")
+      (git! dir "git" "update-ref" "refs/remotes/origin/main" "HEAD")
+      (spit (io/file dir "ignored.txt") "ignored\n")
+      (is (pos? (command-exit dir argv)) "ignored files reject a clean disposition")
+      (io/delete-file (io/file dir "ignored.txt"))
       (spit (io/file dir "ahead.txt") "ahead\n")
       (git! dir "git" "add" "ahead.txt")
       (git! dir "git" "commit" "--quiet" "-m" "ahead")

@@ -142,7 +142,7 @@
 
 (defn- clean-worktree-argv []
   ["sh" "-ceu"
-   "test -z \"$(git status --porcelain)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"])
+   "test -z \"$(git status --porcelain --ignored --untracked-files=all)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"])
 
 (defn- clean-inspection-cleanup-gate [id dependencies]
   (workflow/gate
@@ -152,7 +152,7 @@
    {"shell/argv"
     (fn [{:keys [branch worktree]}]
       ["sh" "-ceu"
-       "branch=$1\nworktree=$2\nroot=$(dirname \"$(git -C \"$worktree\" rev-parse --path-format=absolute --git-common-dir)\")\ntest \"$branch\" != main\ntest \"$branch\" = \"$(git -C \"$worktree\" branch --show-current)\ntest -z \"$(git -C \"$worktree\" status --porcelain)\ntest \"$(git -C \"$worktree\" rev-list --count origin/main..HEAD)\" -eq 0\ngit -C \"$root\" worktree remove \"$worktree\"\ngit -C \"$root\" branch -d \"$branch\""
+       "branch=$1\nworktree=$2\nroot=$(dirname \"$(git -C \"$worktree\" rev-parse --path-format=absolute --git-common-dir)\")\ntest \"$branch\" != main\ntest \"$branch\" = \"$(git -C \"$worktree\" branch --show-current)\ntest -z \"$(git -C \"$worktree\" status --porcelain --ignored --untracked-files=all)\ntest \"$(git -C \"$worktree\" rev-list --count origin/main..HEAD)\" -eq 0\ngit -C \"$root\" worktree remove \"$worktree\"\ngit -C \"$root\" branch -d \"$branch\""
        "clean-inspection-cleanup" branch worktree])
     "shell/cwd" (fn [{:keys [worktree]}] worktree)
     "shell/timeout-secs" 120}
@@ -230,16 +230,16 @@
    (shell-gate :verify-clean "Verify no dirty files or commits ahead" []
                (fn [_] (clean-worktree-argv)) 120
                "The clean disposition is invalid while files are dirty or commits are ahead. Leave the card open and record the actual finding; do not manufacture a PR or label this ordinary result auto-run-failure.")
+   (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
    (workflow/gate
     :reserve-clean-finish "Reserve the claimed card for clean completion" :code
-    :depends-on [:verify-clean]
+    :depends-on [:cleanup-clean]
     :attributes {"code/fn" "millstrand-ui.auto-run/mark-clean-finishing!"
                  "code/params" (fn [{:keys [card]}] {:card card})}
-    "This atomically reserves the claimed card before cleanup. A concurrent review transition leaves the card open rather than completing a clean inspection.")
-   (clean-inspection-cleanup-gate :cleanup-clean [:reserve-clean-finish])
+    "This atomically reserves the still-claimed card after cleanup. A concurrent review transition leaves the card open rather than completing a clean inspection.")
    (workflow/gate
     :finish-card "Finish the clean evidence-only card" :code
-    :depends-on [:cleanup-clean]
+    :depends-on [:reserve-clean-finish]
     :attributes {"code/fn" "millhouse.spools.land.card-actions/finish-card!"
                  "code/params" (fn [{:keys [card]}] {:card card})}
     "This closes only the clean, evidenced card after its disposable worktree and branch are removed. It does not create, push, or review a PR.")))
