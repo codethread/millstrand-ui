@@ -15,10 +15,13 @@ timeline, and **Console** provides a dense event tail. The viewer can pause its
 stream, filter the retained window, follow new records, and keep one inspected event
 selected.
 
-Session associations use persisted `identity/native-session-id` and provider only;
-they are never inferred from a workspace or model. A session stream is the native
-session's dialogue, not work exclusively for the selected card, task, or run. The UI
-labels ownership-only associations accordingly.
+Session associations use exact persisted session IDs and providers. A running
+published run's `harness/session-id` makes its dialogue available before native
+attachment updates the identity; otherwise the identity's `identity/native-session-id`
+is used, followed by the newest published run session for history. Associations are
+never inferred from a workspace, model, or file timestamp. A session stream is the
+native session's dialogue, not work exclusively for the selected card, task, or run.
+The UI labels ownership-only associations accordingly.
 
 A card's roster combines its current feature/task owners and linked runs. Current
 owners and directly/root-targeted running work appear first; completed task owners

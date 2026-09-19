@@ -189,8 +189,10 @@ combine current feature/task owners with linked runs, retain terminal work under
 **Past work**, use a mobile selector on narrow layouts, and expose related task
 context in a popover.
 
-Logs are linked only by persisted `identity/native-session-id` and provider. They
-read the final 1 MiB of the corresponding JSONL file in
+Logs are linked only by persisted session IDs and providers. A running published
+run's `harness/session-id` is available before native identity attachment; otherwise
+the identity's `identity/native-session-id` or newest published run session is used.
+They read the final 1 MiB of the corresponding JSONL file in
 `~/.local/state/{pi,codex,claude}-dialogue`, retaining at most 400 complete records.
 A log is the native session, not a task-exclusive history, and it does not provide
 whole history, token output, reasoning, or full tool stdout/stderr. See
