@@ -192,3 +192,22 @@ describe('shareable dashboard navigation', () => {
     expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(agent)))).toEqual(agent);
   });
 });
+
+it('round trips completed prototypes, selected day, search and issue independently of board filters', () => {
+  const state = parseDashboardSearch({
+    mode: 'completed',
+    historyLayout: 'recap',
+    historyDay: '2026-09-18',
+    historyQuery: 'web',
+    issue: 'done-card',
+    filter: { lanes: ['claimed'] },
+  });
+  expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(state)))).toEqual(state);
+  expect(parseDashboardSearch({ historyDay: '2026-02-30', historyLayout: 'bad' })).toMatchObject({
+    historyDay: null,
+    historyLayout: 'timeline',
+  });
+  expect(workspaceViewSearch(state, 'all').mode).toBe('board');
+  expect(workspaceViewSearch(state, 'completed')).toMatchObject({ mode: 'completed', issue: null });
+  expect(savedViewSearch(state, null).mode).toBe('board');
+});

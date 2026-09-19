@@ -100,7 +100,7 @@ function SidebarContents() {
     all: active?.active ?? null,
     progress: active?.inProgress ?? null,
     review: active?.review ?? null,
-    completed: active?.closed ?? null,
+    completed: active?.done ?? null,
   };
   return (
     <>
@@ -132,10 +132,13 @@ function SidebarContents() {
         </p>
         {workspaceViews.map(({ id, label, icon: Icon }) => {
           const selected =
-            mode !== 'agents' &&
-            mode !== 'reviews' &&
-            activeViewId === null &&
-            matchesWorkspaceView(filter, id);
+            id === 'completed'
+              ? mode === 'completed'
+              : mode !== 'completed' &&
+                mode !== 'agents' &&
+                mode !== 'reviews' &&
+                activeViewId === null &&
+                matchesWorkspaceView(filter, id);
           return (
             <button
               key={id}
@@ -191,6 +194,7 @@ function SidebarContents() {
                       'nav-item flex-1',
                       mode !== 'agents' &&
                         mode !== 'reviews' &&
+                        mode !== 'completed' &&
                         activeViewId === view.id &&
                         'active',
                     )}
