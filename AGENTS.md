@@ -53,6 +53,23 @@ areas allow targeted edits.
   [architecture map](docs/architecture.md) records all public homes and deliberate
   poll-owner exceptions.
 
+## Design language
+
+- Content is prime and center: this is a productivity dashboard, not a splash page.
+  Put real work high in the viewport and use the available width. Keep titles in
+  compact headers, search and filters close to results, and summaries inline.
+  Avoid hero sections, oversized metric tiles, promotional copy and POC framing.
+- Stay information-focused without becoming utilitarian. Preserve the current
+  warmth: clear typographic hierarchy, comfortable spacing, softly rounded cards,
+  subtle borders and surfaces, restrained violet accents, and quiet label/status
+  colour. Density should improve scanning, not shrink text or crowd controls.
+- Keep routine explanations and caveats brief, with accessible detail on demand
+  (including touch and keyboard). Important uncertainty, stale data and failures
+  must remain visible; compact must not mean misleading or hidden.
+- On narrow screens, wrap controls and stack content without losing hierarchy,
+  readable labels or usable hit targets. Prioritise useful work above the fold
+  in both light and dark themes.
+
 ## Product and verification
 
 - Use real workspace data. Show loading, empty, and disconnected states clearly;
