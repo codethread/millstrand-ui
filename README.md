@@ -258,16 +258,18 @@ Default shortcuts: `/` searches, `1`/`2`/`3` switch layouts, `r` refreshes, and 
 opens keyboard settings. Bindings are editable and saved per browser. A blank
 binding disables it; shortcuts pause in text fields and issue panels.
 
-### Completed work prototypes
+### Completed work
 
-Choose **Completed** in the sidebar to compare **Timeline**, **Day recap**, and
-**Ledger** using real done cards. Day recap defaults to yesterday; pick a date or
-step between days. All three support search, issue details and shareable URLs.
+Choose **Completed** in the sidebar for a full-width **Timeline** or **Day recap**
+of real done cards. Day recap defaults to yesterday; pick a date or step between
+days. Search above the results and use **Filters** to narrow by epic/feature,
+priority, and labels (match all or any). Both layouts share search and filters,
+open issue details, and support shareable URLs.
 Board’s **Include completed** still works as before.
 
 Dates are **estimates based on last update**, not exact completion times: upstream
 cards do not record a completion timestamp, and later edits can shift their day.
-Abandoned and unknown outcomes are excluded. See the [prototype guide and
+Abandoned and unknown outcomes are excluded. See the [completed-work guide and
 screenshots](docs/completed-work.md).
 
 ### Reviews

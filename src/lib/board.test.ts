@@ -298,7 +298,7 @@ it('shares filtered membership across columns, outline and graph while retaining
   expect(moved.columns.some(({ lane }) => lane.id === 'in_production')).toBe(false);
 });
 
-describe('completed history prototypes', () => {
+describe('completed history', () => {
   function done(id: string, updatedAt: string | null): Card {
     return { ...card(id), state: 'closed', lane: 'closed', outcome: 'done', updatedAt };
   }
@@ -315,14 +315,16 @@ describe('completed history prototypes', () => {
       { ...done('unknown-outcome', null), outcome: null },
       { ...done('reopened', null), state: 'active' },
     ];
-    expect(completedHistory(cards, '').map(({ card: item }) => item.id)).toEqual([
+    expect(completedHistory(cards, emptyFilter()).map(({ card: item }) => item.id)).toEqual([
       'newer',
       'older',
       'unknown',
     ]);
     expect(cards[0]).toBe(older);
     expect(
-      completedHistory([done('b', null), done('a', null)], '').map(({ card: item }) => item.id),
+      completedHistory([done('b', null), done('a', null)], emptyFilter()).map(
+        ({ card: item }) => item.id,
+      ),
     ).toEqual(['a', 'b']);
   });
 
@@ -334,11 +336,13 @@ describe('completed history prototypes', () => {
       owner: 'falcon',
       labels: ['ui'],
     };
-    const entries = completedHistory([parent, feature, done('unknown', null)], '');
+    const entries = completedHistory([parent, feature, done('unknown', null)], emptyFilter());
     const day = historyDateKey(new Date('2026-09-18T10:00:00Z'));
     expect(entries[0]?.parent).toEqual(parent);
     expect(
-      completedHistory([parent, feature], 'UI falcon').map(({ card: item }) => item.id),
+      completedHistory([parent, feature], { ...emptyFilter(), query: 'UI falcon' }).map(
+        ({ card: item }) => item.id,
+      ),
     ).toEqual(['feature']);
     expect(completedRecap(entries, day)).toMatchObject({ features: 1, epics: 1, owners: 1 });
     expect(completedRecap(entries, '2025-01-01').entries).toEqual([]);
@@ -348,13 +352,51 @@ describe('completed history prototypes', () => {
     ]);
   });
 
+  it('intersects search, type, priority and label filters without inheriting active-only lanes', () => {
+    const feature = {
+      ...done('match', '2026-09-18 11:00:00'),
+      title: 'Dashboard search',
+      labels: ['ui', 'web'],
+      priority: 'p1' as const,
+    };
+    const entries = [
+      feature,
+      { ...feature, id: 'epic', type: 'epic' as const },
+      { ...feature, id: 'wrong-priority', priority: 'p2' as const },
+      { ...feature, id: 'wrong-label', labels: ['ui'] },
+      { ...feature, id: 'active', state: 'active' },
+    ];
+    const filter: ViewFilter = {
+      ...emptyFilter(),
+      query: 'DASHBOARD',
+      types: ['feature'],
+      priorities: ['p1'],
+      terms: { ui: 'include', web: 'include' },
+      lanes: ['claimed'],
+    };
+    const filtered = completedHistory(entries, filter);
+    expect(filtered.map((entry) => entry.card.id)).toEqual(['match']);
+    expect(completedDays(filtered).flatMap((group) => group.entries)).toEqual(filtered);
+    expect(
+      completedRecap(filtered, historyDateKey(new Date('2026-09-18T11:00:00Z'))).features,
+    ).toBe(1);
+    expect(
+      completedHistory(entries, { ...filter, mode: 'or' }).map((entry) => entry.card.id),
+    ).toEqual(['match', 'wrong-label']);
+    expect(
+      completedHistory(entries, { ...filter, terms: { ui: 'include', web: 'exclude' } }).map(
+        (entry) => entry.card.id,
+      ),
+    ).toEqual(['wrong-label']);
+  });
+
   it('interprets SQLite timestamps as UTC and preserves zoned instants', () => {
     const instant = Date.parse('2026-09-18T23:30:00Z');
     expect(historyTimestamp('2026-09-18 23:30:00')).toBe(instant);
     expect(historyTimestamp('2026-09-19T01:30:00+02:00')).toBe(instant);
     expect(historyTimestamp(null)).toBeNull();
     expect(historyTimestamp('invalid')).toBeNull();
-    const entries = completedHistory([done('midnight', '2026-09-18 23:30:00')], '');
+    const entries = completedHistory([done('midnight', '2026-09-18 23:30:00')], emptyFilter());
     expect(entries[0]?.day).toBe(historyDateKey(new Date(instant)));
   });
 

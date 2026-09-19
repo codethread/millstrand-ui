@@ -13,7 +13,7 @@ import { emptyFilter, workspaceFilter, type WorkspaceView } from './board';
 
 export type Presentation =
   'overview' | 'board' | 'outline' | 'graph' | 'agents' | 'reviews' | 'completed';
-export type HistoryLayout = 'timeline' | 'recap' | 'ledger';
+export type HistoryLayout = 'timeline' | 'recap';
 export type DetailTab = 'overview' | 'notes' | 'agents' | 'attributes';
 export interface DashboardSearch {
   mode: Presentation;
@@ -44,7 +44,7 @@ const modeSchema = z.compile(
   z.enum(['overview', 'board', 'outline', 'graph', 'agents', 'reviews', 'completed']),
   { strict: true },
 );
-const historyLayoutSchema = z.compile(z.enum(['timeline', 'recap', 'ledger']), { strict: true });
+const historyLayoutSchema = z.compile(z.enum(['timeline', 'recap']), { strict: true });
 const historyDaySchema = z.compile(z.iso.date(), { strict: true });
 const reviewScopeSchema = z.compile(z.enum(['inbox', 'all']), { strict: true });
 const reviewStageSchema = z.compile(z.enum(reviewStages), { strict: true });
@@ -164,10 +164,7 @@ export function manualFilterSearch(
     filter,
     activeViewId: null,
     graphRoot: null,
-    mode:
-      search.mode === 'agents' || search.mode === 'reviews' || search.mode === 'completed'
-        ? 'board'
-        : search.mode,
+    mode: search.mode === 'agents' || search.mode === 'reviews' ? 'board' : search.mode,
   };
 }
 

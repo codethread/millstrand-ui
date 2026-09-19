@@ -1,62 +1,70 @@
-# Completed work: three prototypes
+# Completed work
 
-Open **Completed** in the workspace sidebar. The three tabs use the same real
-workspace board snapshot; none adds requests, endpoints or poll owners.
+Open **Completed** in the workspace sidebar. Both layouts use the available screen
+width and the same real board snapshot, without extra endpoints or poll owners.
 
-1. **Timeline** — newest-first cards grouped by day, with a link into that day’s recap.
-2. **Day recap** — defaults to yesterday, with previous/next day, a date picker,
-   Today/Yesterday shortcuts, and separate feature, epic and recorded-owner totals.
-3. **Ledger** — dense, newest-first rows for comparing dates, work, owners and labels.
-   The table scrolls horizontally on narrow screens without widening the page.
+- **Timeline** — newest-first cards grouped by day, linking into each day’s recap.
+- **Day recap** — defaults to yesterday, with previous/next day, a date picker,
+  Today/Yesterday shortcuts, and separate feature, epic and recorded-owner totals.
+  Cards use up to three columns on wide screens and a single column on phones.
 
-All three support search by title, ID, owner, branch and labels, and open the existing
-issue detail panel. Search, prototype, selected date and selected card are shareable
-URL state and restore with Back/reload. Search is separate from board filters;
-selecting another workspace starts clean. Board’s **Include completed** remains
-unchanged. Saved views and sidebar label filters return to the board.
+Search is prominently labelled above the results. It matches title, ID, owner,
+branch and labels. **Filters** narrows by epic/feature type, priority and labels;
+label rules can match all or any selected labels. Selected filters appear as
+removable chips. Clear search and Clear filters work independently. The sidebar’s
+label shortcuts also filter Completed without leaving it. Status is fixed to done
+cards rather than exposing incompatible active-work lanes.
 
-## Important data limitation
+Search and filters apply to both layouts, including day totals. The result count
+above the layouts covers matching cards across all days; the recap covers only its
+selected day. Search, layout, filters, date and selected card live in the URL and
+restore with Back/reload. A selected card opens the existing issue details. Board’s
+**Include completed** remains unchanged; selecting a saved view returns to Board.
+
+## Date limitation
 
 The persisted card model has `created_at` and `updated_at`, but no immutable
-completion timestamp or transition event history. **These prototypes use last update
-as an explicitly labelled completion estimate.** An edit after completion can move a
-card to another day. Do not use these dates as an exact delivery audit. A production
-completion-history design needs an upstream recorded closure timestamp/history.
+completion timestamp or transition event history. **Dates use last update as an
+explicitly labelled completion estimate.** A later edit can move a card to another
+day. Do not use these dates as an exact delivery audit; that requires upstream
+closure timestamps/history.
 
 Only cards with state `closed` and outcome `done` appear. Abandoned, unactioned and
-unknown outcomes are excluded. Features and epics both appear, with separate recap
-counts; tasks are not counted. Cards without usable timestamps are kept at the end
-under Date unavailable, not assigned a fabricated date. SQLite’s timezone-less UTC
-timestamps are converted to browser-local dates, including calendar-day navigation
-across DST. Each prototype displays the limitation before its results.
+unknown outcomes are excluded. Features and epics have separate recap counts;
+tasks are not counted. Unknown dates appear at the end of Timeline rather than
+being assigned a fabricated date. SQLite’s UTC timestamps are converted to local
+dates, with calendar-day navigation across DST.
 
 ## Implementation
 
-- `src/components/completed-view.tsx`: prototype controls and the three renderers.
-- `src/lib/board.ts`: done-card selection, ordering, day grouping and recap projection.
-- `src/hooks/use-cards.ts`: `useCompletedHistory`, a disabled reader of `board.cards`,
-  memoized on the cards and search. Health remains a separate `useBoardStatus` reader.
+- `src/components/completed-view.tsx`: layout, search, active chips and renderers.
+- `src/components/dashboard-filters.tsx`: shared type/priority controls; Completed
+  hides status and adds label matching controls.
+- `src/lib/board.ts`: `completedHistory` applies `ViewFilter` with done-only
+  membership, then orders by last update; `completedDays` / `completedRecap` group it.
+- `src/hooks/use-cards.ts`: disabled `board.cards` and `board.labels` readers.
+  `useCompletedHistory` memoizes cards, search and filters; health stays separate.
 - `src/lib/dashboard-search.ts` / `navigation.ts`: `mode=completed`,
-  `historyLayout=timeline|recap|ledger`, `historyDay=YYYY-MM-DD`, and `historyQuery`.
-- `WorkspaceResourcePolls` remains the owner of board freshness in this mode.
-  Startup loading/disconnected handling and issue panels remain in the existing shell;
-  failed refreshes retain and explicitly label last-known work.
+  `historyLayout=timeline|recap`, `historyDay=YYYY-MM-DD`, `historyQuery`, and `filter`.
+  Completed search overrides board search; active-only lane restrictions do not
+  affect history. Type/priority/label actions preserve the Completed route.
+- `WorkspaceResourcePolls` still owns freshness; the existing shell handles startup
+  loading/disconnection and issue panels. Refresh failures retain last-known work.
 
 ## Verification
 
-`pnpm quality` passes (329 tests). Focused board/navigation checks also pass with
-`TZ=America/New_York` and board checks with `TZ=Asia/Tokyo`. Tests cover done-only
-membership, reopened/abandoned/unknown exclusions, deterministic chronological
-ordering, unknown dates, parent context, search, recap counts, UTC interpretation,
-local grouping, calendar boundaries, and URL restoration/validation.
+`pnpm quality`: formatting, strict types, zero-warning lint, 331 tests and build.
+Focused tests cover intersecting search/type/priority/label rules, all/any/exclusions,
+fixed done-only scope despite active-only filters, recap/timeline membership, URL
+round trips, keeping filter edits on Completed, and rejecting the removed layout.
+Existing coverage retains chronological ordering, unknown dates and timezone rules.
 
-Browser-checked against the real millstrand-ui workspace: all three prototypes,
-search and empty results, selected-card details/label controls, yesterday and date
-navigation, empty day, timeline-to-recap links, Back/reload, sidebar return to Board,
-existing Include completed, and narrow 390px layout. Screenshots:
+Browser-checked with real workspace data at 1920px and 390px: wide layouts, search,
+epic/feature/priority/label filters, active chips, independent resets, day navigation,
+Back/reload, empty results and issue selection. Ledger was removed after the initial
+three-way comparison. Updated screenshots:
 
-- [Timeline](evidence/f3tnr/timeline.png)
-- [Day recap](evidence/f3tnr/recap.png)
-- [Ledger](evidence/f3tnr/ledger.png)
-- [Narrow recap](evidence/f3tnr/mobile-recap.png)
-- [Narrow ledger](evidence/f3tnr/mobile-ledger.png)
+- [Wide timeline](evidence/k7oo5/timeline-wide.png)
+- [Wide recap](evidence/k7oo5/recap-wide.png)
+- [Filters on mobile](evidence/k7oo5/filters.png)
+- [Narrow layout](evidence/k7oo5/mobile.png)

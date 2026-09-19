@@ -1,5 +1,4 @@
 import {
-  ArrowDown,
   ArrowUpRight,
   CalendarDays,
   Check,
@@ -8,7 +7,6 @@ import {
   Clock3,
   List,
   Search,
-  Table2,
   X,
 } from 'lucide-react';
 import { useBoardStatus, useCompletedHistory } from '../hooks/use-cards';
@@ -25,30 +23,96 @@ import {
   useHistoryDay,
   useHistoryLayout,
   useHistoryQuery,
+  useIssueFilter,
 } from '../lib/navigation';
+import { DashboardFilters } from './dashboard-filters';
 import { LabelPill } from './issue-parts';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
-export function CompletedSearchControls() {
+function CompletedSearchControls() {
   const query = useHistoryQuery();
   const actions = useDashboardActions();
   return (
-    <div className="search-field ml-auto">
-      <Search />
-      <Input
-        id="issue-search"
-        aria-label="Search completed work"
-        placeholder="Search completed work…"
-        value={query}
-        onChange={(event) => actions.setHistoryQuery(event.target.value)}
-      />
-      {query && (
-        <button aria-label="Clear completed search" onClick={() => actions.setHistoryQuery('')}>
-          <X className="size-3" />
-        </button>
-      )}
+    <div className="w-full min-w-0 md:max-w-xl">
+      <label htmlFor="issue-search" className="mb-2 block text-xs font-medium">
+        Search completed work
+      </label>
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-3 left-3 size-4 text-muted-foreground" />
+        <Input
+          id="issue-search"
+          className="h-10 bg-background pr-10 pl-10"
+          type="search"
+          placeholder="Title, ID, owner, branch or label…"
+          value={query}
+          onChange={(event) => actions.setHistoryQuery(event.target.value)}
+        />
+        {query && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="absolute top-1 right-1"
+            aria-label="Clear completed search"
+            onClick={() => actions.setHistoryQuery('')}
+          >
+            <X />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CompletedFilterSummary() {
+  const filter = useIssueFilter();
+  const actions = useDashboardActions();
+  const hasFilters =
+    filter.types.length + filter.priorities.length + Object.keys(filter.terms).length > 0;
+  if (!hasFilters) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2" aria-label="Active completed filters">
+      {filter.types.map((type) => (
+        <Button
+          key={type}
+          variant="secondary"
+          size="sm"
+          aria-label={`Remove type ${type}`}
+          onClick={() => actions.toggleType(type)}
+        >
+          <span className="capitalize">{type}</span>
+          <X />
+        </Button>
+      ))}
+      {filter.priorities.map((priority) => (
+        <Button
+          key={priority}
+          variant="secondary"
+          size="sm"
+          aria-label={`Remove priority ${priority}`}
+          onClick={() => actions.togglePriority(priority)}
+        >
+          <span className="uppercase">{priority}</span>
+          <X />
+        </Button>
+      ))}
+      {Object.entries(filter.terms).map(([label, term]) => (
+        <Button
+          key={label}
+          variant="secondary"
+          size="sm"
+          aria-label={`Remove label ${label}`}
+          onClick={() => actions.toggleLabel(label)}
+        >
+          {term === 'exclude' ? '−' : '#'}
+          {label}
+          <X />
+        </Button>
+      ))}
+      <Button variant="ghost" size="sm" onClick={actions.resetFilters}>
+        Clear filters
+      </Button>
     </div>
   );
 }
@@ -86,8 +150,8 @@ function EmptyHistory({ daily = false }: { daily?: boolean }) {
       </h3>
       <p className="mt-2 text-sm text-muted-foreground">
         {daily
-          ? 'Try the previous day, another date, or the timeline.'
-          : 'Try a different search. Only cards closed with a done outcome appear here.'}
+          ? 'Try another date, clear your search, or adjust the filters.'
+          : 'Try a different search or clear the filters. Only cards closed with a done outcome appear here.'}
       </p>
     </div>
   );
@@ -224,7 +288,7 @@ function DailyRecap({
       {daily.length === 0 ? (
         <EmptyHistory daily />
       ) : (
-        <div className="grid gap-3 xl:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {daily.map((entry) => (
             <article key={entry.card.id} className="rounded-xl border border-border bg-card p-5">
               <EntryLink entry={entry} />
@@ -239,66 +303,9 @@ function DailyRecap({
         </div>
       )}
       <p className="text-xs text-muted-foreground">
-        Day totals follow your search. Epics and features are counted separately; tasks are not
-        included.
+        Day totals follow your search and filters. Epics and features are counted separately; tasks
+        are not included.
       </p>
-    </div>
-  );
-}
-
-function HistoryLedger({ entries }: { entries: CompletedEntry[] }) {
-  if (entries.length === 0) return <EmptyHistory />;
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full min-w-[650px] text-left text-sm">
-        <caption className="sr-only">Completed cards, newest last update first</caption>
-        <thead className="bg-muted/60 text-xs text-muted-foreground">
-          <tr>
-            <th scope="col" className="p-4">
-              <span className="inline-flex items-center gap-1">
-                Last updated <ArrowDown className="size-3" />
-              </span>
-            </th>
-            <th scope="col" className="p-4">
-              Completed work
-            </th>
-            <th scope="col" className="p-4">
-              Owner
-            </th>
-            <th scope="col" className="p-4">
-              Labels
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((entry) => (
-            <tr key={entry.card.id} className="border-t border-border align-top hover:bg-muted/30">
-              <td className="w-36 p-4 text-xs whitespace-nowrap text-muted-foreground">
-                {entry.updatedAt === null
-                  ? 'Unknown date'
-                  : new Date(entry.updatedAt).toLocaleDateString('en', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}
-              </td>
-              <td className="min-w-72 p-4">
-                <EntryLink entry={entry} />
-              </td>
-              <td className="max-w-44 p-4 text-xs break-words text-muted-foreground">
-                {entry.card.owner ?? '—'}
-              </td>
-              <td className="p-4">
-                <div className="flex flex-wrap gap-1">
-                  {entry.card.labels.map((label) => (
-                    <LabelPill key={label} label={label} />
-                  ))}
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -308,29 +315,30 @@ export function CompletedView() {
   const selectedDay = useHistoryDay();
   const query = useHistoryQuery();
   const actions = useDashboardActions();
-  const history = useCompletedHistory(query);
+  const filter = useIssueFilter();
+  const history = useCompletedHistory(query, filter);
   const health = useBoardStatus();
   const entries = history.data ?? [];
   const today = historyDateKey(new Date());
   const day = selectedDay ?? shiftHistoryDay(today, -1);
   return (
     <div className="h-full overflow-y-auto p-4 sm:p-7">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="w-full space-y-6">
         <div className="pr-8">
           <p className="text-xs font-semibold tracking-widest text-primary uppercase">
-            Completed / Design lab
+            Completed work
           </p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight">
             Look back at what got done.
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Three ways to explore the same work. Pick a card to see the details.
+            Browse recent completions or revisit a day. Pick a card to see the details.
           </p>
         </div>
         <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
           <Clock3 className="mt-0.5 size-4 shrink-0" />
           <p>
-            <strong className="font-medium text-foreground">Prototype date estimate.</strong> Exact
+            <strong className="font-medium text-foreground">Completion date estimate.</strong> Exact
             completion dates aren’t recorded. These views use each done card’s last update, which
             can change after completion. Dates are in your local timezone. Abandoned, unactioned and
             unknown outcomes are excluded.
@@ -344,29 +352,31 @@ export function CompletedView() {
         <Tabs
           value={layout}
           onValueChange={(value) => {
-            if (value === 'timeline' || value === 'recap' || value === 'ledger')
-              actions.setHistoryLayout(value);
+            if (value === 'timeline' || value === 'recap') actions.setHistoryLayout(value);
           }}
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <TabsList aria-label="Completed work prototypes" className="h-auto flex-wrap">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <TabsList aria-label="Completed work layouts" className="h-10">
               <TabsTrigger value="timeline">
                 <List />
-                1. Timeline
+                Timeline
               </TabsTrigger>
               <TabsTrigger value="recap">
                 <CalendarDays />
-                2. Day recap
-              </TabsTrigger>
-              <TabsTrigger value="ledger">
-                <Table2 />
-                3. Ledger
+                Day recap
               </TabsTrigger>
             </TabsList>
-            <span className="text-xs text-muted-foreground">
-              {entries.length} done cards · newest first
-            </span>
+            <div className="flex w-full min-w-0 items-end gap-2 md:max-w-xl">
+              <CompletedSearchControls />
+              <div className="pb-1">
+                <DashboardFilters />
+              </div>
+            </div>
           </div>
+          <CompletedFilterSummary />
+          <output className="mt-2 block text-xs text-muted-foreground">
+            {entries.length} matching done cards across all days · newest first
+          </output>
           <TabsContent value="timeline" className="mt-5">
             <p className="mb-5 text-sm text-muted-foreground">
               A running history, grouped by day. Best for catching up after time away.
@@ -378,12 +388,6 @@ export function CompletedView() {
               “What did we do yesterday?” One day, one focused recap.
             </p>
             <DailyRecap entries={entries} day={day} today={today} />
-          </TabsContent>
-          <TabsContent value="ledger" className="mt-5">
-            <p className="mb-5 text-sm text-muted-foreground">
-              A compact archive. Best for scanning titles, owners and labels across days.
-            </p>
-            <HistoryLedger entries={entries} />
           </TabsContent>
         </Tabs>
       </div>
