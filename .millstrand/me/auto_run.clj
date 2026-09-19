@@ -14,13 +14,28 @@
 (def ^:private default-on-change "stop")
 
 (defn- on-change! [card]
-  (let [on-change (or (attr-get card :auto-run/on-change) default-on-change)]
+  (let [configured (attr-get card :auto-run/on-change)
+        on-change (if (nil? configured) default-on-change configured)]
     (when-not (contains? on-change-policies on-change)
       (fail! "Invalid auto-run on-change policy"
              {:card (:id card)
               :value on-change
               :allowed (sort on-change-policies)}))
     on-change))
+
+(millstrand/defhook! freeze-admitted-inspection-policy!
+  "Reject a policy edit after an inspection admission records its immutable policy."
+  {:types #{:strand/update-before-commit}}
+  [{:keys [strand/before strand/after]}]
+  (when (and (= "auto-inspect" (attr-get before :auto-run/effective-workflow))
+             (some? (attr-get before :auto-run/effective-on-change))
+             (not= (attr-get before :auto-run/on-change)
+                   (attr-get after :auto-run/on-change)))
+    (fail! "Auto-run on-change policy changed after admission"
+           {:card (:id before)
+            :admitted (attr-get before :auto-run/effective-on-change)
+            :value (attr-get after :auto-run/on-change)}))
+  nil)
 
 (defn prepare!
   "Snapshot the dispatcher's original admitted inspection policy before preparation."

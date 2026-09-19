@@ -210,13 +210,14 @@
             (is (= {:on-change "stop"}
                    (callback rt {:card (weaver/add! rt {:title "default policy"})
                                  :settings {:workflow "auto-inspect"}})))
-            (is (= :invalid-policy
-                   (try
-                     (callback rt {:card (weaver/add! rt {:title "invalid policy"
-                                                           :attributes {:auto-run/on-change "merge-now"}})
-                                   :settings {:workflow "auto-inspect"}})
-                     :accepted
-                     (catch clojure.lang.ExceptionInfo _ :invalid-policy))))
+            (doseq [value ["merge-now" false]]
+              (is (= :invalid-policy
+                     (try
+                       (callback rt {:card (weaver/add! rt {:title "invalid policy"
+                                                             :attributes {:auto-run/on-change value}})
+                                     :settings {:workflow "auto-inspect"}})
+                       :accepted
+                       (catch clojure.lang.ExceptionInfo _ :invalid-policy)))))
             (is (= :changed-after-admission
                    (try
                      (callback rt {:card (weaver/add! rt {:title "changed after admission"
@@ -228,13 +229,20 @@
             (let [prepare (requiring-resolve 'millstrand-ui.auto-run/prepare!)
                   admitted (weaver/add! rt {:title "admitted inspection"
                                              :attributes {:auto-run/workflow "auto-inspect"
+                                                          :auto-run/effective-workflow "auto-inspect"
                                                           :auto-run/on-change "stop"}})]
               (weaver/update! rt (:id admitted)
                               {:attributes {:auto-run/on-change "full-land"}})
               (with-redefs [auto-run-worktree/prepare! (fn [_ _] {:cwd "fixture" :branch "auto/fixture"})]
                 (prepare rt {:card admitted}))
               (is (= "stop"
-                     (attr-get (weaver/show rt (:id admitted)) :auto-run/effective-on-change))))
+                     (attr-get (weaver/show rt (:id admitted)) :auto-run/effective-on-change)))
+              (is (= :frozen-after-admission
+                     (try
+                       (weaver/update! rt (:id admitted)
+                                       {:attributes {:auto-run/on-change "human-review"}})
+                       :updated
+                       (catch clojure.lang.ExceptionInfo _ :frozen-after-admission)))))
             (is (= {}
                    (callback rt {:card (weaver/add! rt {:title "unrelated policy"
                                                          :attributes {:auto-run/on-change "merge-now"}})
@@ -250,6 +258,11 @@
             (is (str/includes? (nth argv 2) "git status --porcelain"))
             (is (str/includes? (nth argv 2) "origin/main..HEAD"))
             (is (some #(= "Finish the clean evidence-only card" (:title %)) views))
+            (let [root (workflow/current-root "inspect-clean")
+                  finish-step (first (filter #(= "Finish the clean evidence-only card" (:title %))
+                                             (:strands (graph/subgraph rt [(:id root)]))))]
+              (is (= "millstrand-ui.auto-run-workflows/finish-clean-card!"
+                     (attr-get finish-step :code/fn))))
             (is (not-any? #(= "Publish the exact change with its review package" (:title %)) views))))
         (testing "fixed work follows each admitted delivery policy"
           (doseq [[on-change expected forbidden]
@@ -301,6 +314,35 @@
       (is (pos? (command-exit dir argv)) "commits ahead reject a clean disposition")
       (finally
         (shell/sh "rm" "-rf" (.getAbsolutePath dir))))))
+
+(deftest clean-card-finish-rechecks-the-worktree
+  (t/with-weaver-world
+    [ctx {:storage :sqlite-memory
+          :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
+          :init-clj (slurp "init.clj")
+          :files (into {} (for [path ["me/reviewers.clj" "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+                            [path (slurp path)]))}]
+    (let [rt (:runtime ctx)
+          dir (temporary-git-worktree!)]
+      (try
+        (current/with-runtime rt
+          (let [card (weaver/add! rt {:title "Clean inspection"
+                                      :attributes {:kanban/card "true"
+                                                   :kanban/type "feature"
+                                                   :kanban/lane "claimed"}})
+                finish-clean! (requiring-resolve 'millstrand-ui.auto-run-workflows/finish-clean-card!)]
+            (spit (io/file dir "late-change.txt") "dirty\n")
+            (is (= :changed-work-rejected
+                   (try
+                     (finish-clean! {:card (:id card) :worktree (.getAbsolutePath dir)})
+                     :finished
+                     (catch clojure.lang.ExceptionInfo _ :changed-work-rejected))))
+            (is (= "active" (:state (weaver/show rt (:id card)))))
+            (io/delete-file (io/file dir "late-change.txt"))
+            (finish-clean! {:card (:id card) :worktree (.getAbsolutePath dir)})
+            (is (= "closed" (:state (weaver/show rt (:id card)))))))
+        (finally
+          (shell/sh "rm" "-rf" (.getAbsolutePath dir)))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."

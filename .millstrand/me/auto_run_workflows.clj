@@ -1,10 +1,14 @@
 (ns millstrand-ui.auto-run-workflows
   "Repository-owned delivery contracts for automatically assigned UI features."
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.java.shell :as shell]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millhouse.spools.land.autonomous :as autonomous]
+            [millhouse.spools.land.card-actions :as card-actions]
             [millhouse.spools.workflow :as workflow]
-            [millstrand.api.format.alpha :as format]))
+            [millstrand.api.current.alpha :as current]
+            [millstrand.api.format.alpha :as format]
+            [millstrand.api.spool.alpha :refer [fail!]]))
 
 (s/def ::text (s/and string? (complement str/blank?)))
 (s/def ::card ::text)
@@ -144,6 +148,19 @@
   ["sh" "-ceu"
    "test -z \"$(git status --porcelain)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"])
 
+(defn- verify-clean-worktree! [worktree]
+  (let [[_ _ script] (clean-worktree-argv)
+        {:keys [exit out err]} (shell/sh "sh" "-ceu" script :dir worktree)]
+    (when-not (zero? exit)
+      (fail! "Clean inspection cannot finish changed work"
+             {:worktree worktree :out out :err err}))))
+
+(defn finish-clean-card!
+  "Recheck the worktree immediately before closing a clean inspection card."
+  [{:keys [card worktree]}]
+  (verify-clean-worktree! worktree)
+  (card-actions/finish! (current/runtime) {:card card}))
+
 (defn- inspect-introduction [{:keys [card on-change]}]
   (format/prose
    "
@@ -219,9 +236,10 @@
    (workflow/gate
     :finish-card "Finish the clean evidence-only card" :code
     :depends-on [:verify-clean]
-    :attributes {"code/fn" "millhouse.spools.land.card-actions/finish-card!"
-                 "code/params" (fn [{:keys [card]}] {:card card})}
-    "This closes only the clean, evidenced card. It does not create, push, or review a PR.")))
+    :attributes {"code/fn" "millstrand-ui.auto-run-workflows/finish-clean-card!"
+                 "code/params" (fn [{:keys [card worktree]}]
+                                 {:card card :worktree worktree})}
+    "This rechecks only the clean, evidenced worktree immediately before closing its card. It does not create, push, or review a PR.")))
 
 (workflow/defworkflow! auto-inspect-fixed
   "Select the admitted changed-work delivery policy after recording fixed evidence."
