@@ -1,14 +1,10 @@
 (ns millstrand-ui.auto-run-workflows
   "Repository-owned delivery contracts for automatically assigned UI features."
-  (:require [clojure.java.shell :as shell]
-            [clojure.spec.alpha :as s]
+  (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millhouse.spools.land.autonomous :as autonomous]
-            [millhouse.spools.land.card-actions :as card-actions]
             [millhouse.spools.workflow :as workflow]
-            [millstrand.api.current.alpha :as current]
-            [millstrand.api.format.alpha :as format]
-            [millstrand.api.spool.alpha :refer [fail!]]))
+            [millstrand.api.format.alpha :as format]))
 
 (s/def ::text (s/and string? (complement str/blank?)))
 (s/def ::card ::text)
@@ -148,18 +144,19 @@
   ["sh" "-ceu"
    "test -z \"$(git status --porcelain)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"])
 
-(defn- verify-clean-worktree! [worktree]
-  (let [[_ _ script] (clean-worktree-argv)
-        {:keys [exit out err]} (shell/sh "sh" "-ceu" script :dir worktree)]
-    (when-not (zero? exit)
-      (fail! "Clean inspection cannot finish changed work"
-             {:worktree worktree :out out :err err}))))
-
-(defn finish-clean-card!
-  "Recheck the worktree immediately before closing a clean inspection card."
-  [{:keys [card worktree]}]
-  (verify-clean-worktree! worktree)
-  (card-actions/finish! (current/runtime) {:card card}))
+(defn- clean-inspection-cleanup-gate [id dependencies]
+  (workflow/gate
+   id "Remove the clean inspection worktree and branch" :shell
+   :depends-on dependencies
+   :attributes
+   {"shell/argv"
+    (fn [{:keys [branch worktree]}]
+      ["sh" "-ceu"
+       "branch=$1\nworktree=$2\nroot=$(dirname \"$(git -C \"$worktree\" rev-parse --path-format=absolute --git-common-dir)\")\ntest \"$branch\" != main\ntest \"$branch\" = \"$(git -C \"$worktree\" branch --show-current)\ntest -z \"$(git -C \"$worktree\" status --porcelain)\ntest \"$(git -C \"$worktree\" rev-list --count origin/main..HEAD)\" -eq 0\ngit -C \"$root\" worktree remove \"$worktree\"\ngit -C \"$root\" branch -d \"$branch\""
+       "clean-inspection-cleanup" branch worktree])
+    "shell/cwd" (fn [{:keys [worktree]}] worktree)
+    "shell/timeout-secs" 120}
+   "Evidence-only inspection worktrees are disposable only while clean and not ahead. Leave the card open and record the actual finding if cleanup refuses to remove them."))
 
 (defn- inspect-introduction [{:keys [card on-change]}]
   (format/prose
@@ -233,13 +230,13 @@
    (shell-gate :verify-clean "Verify no dirty files or commits ahead" []
                (fn [_] (clean-worktree-argv)) 120
                "The clean disposition is invalid while files are dirty or commits are ahead. Leave the card open and record the actual finding; do not manufacture a PR or label this ordinary result auto-run-failure.")
+   (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
    (workflow/gate
     :finish-card "Finish the clean evidence-only card" :code
-    :depends-on [:verify-clean]
-    :attributes {"code/fn" "millstrand-ui.auto-run-workflows/finish-clean-card!"
-                 "code/params" (fn [{:keys [card worktree]}]
-                                 {:card card :worktree worktree})}
-    "This rechecks only the clean, evidenced worktree immediately before closing its card. It does not create, push, or review a PR.")))
+    :depends-on [:cleanup-clean]
+    :attributes {"code/fn" "millhouse.spools.land.card-actions/finish-card!"
+                 "code/params" (fn [{:keys [card]}] {:card card})}
+    "This closes only the clean, evidenced card after its disposable worktree and branch are removed. It does not create, push, or review a PR.")))
 
 (workflow/defworkflow! auto-inspect-fixed
   "Select the admitted changed-work delivery policy after recording fixed evidence."
@@ -306,9 +303,10 @@
    (shell-gate :verify-clean "Verify findings left no dirty files or commits ahead" []
                (fn [_] (clean-worktree-argv)) 120
                "Code changes cannot use needs-review to bypass quality and ordinary delivery. Record the actual fix as fixed, or clean the worktree before returning an evidence-only finding.")
+   (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
    (workflow/gate
     :review-card "Move the finding card into review" :code
-    :depends-on [:verify-clean]
+    :depends-on [:cleanup-clean]
     :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
                  "code/params" (fn [{:keys [card]}] {:card card})}
     "Move this evidence-backed finding to review. This is not a PR or landing transition.")
@@ -332,9 +330,10 @@
    (shell-gate :verify-clean "Verify blocker evidence left no dirty files or commits ahead" []
                (fn [_] (clean-worktree-argv)) 120
                "Code changes cannot use blocked to bypass quality and ordinary delivery. Record the actual fix as fixed, or clean the worktree before leaving a blocker open.")
+   (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
    (workflow/step
     :stop "Leave the blocked card open with trustworthy evidence" :self
-    :depends-on [:verify-clean]
+    :depends-on [:cleanup-clean]
     (fn [{:keys [card]}]
       (format/prose
        "

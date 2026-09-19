@@ -266,9 +266,11 @@
             (is (str/includes? (nth argv 2) "origin/main..HEAD"))
             (is (some #(= "Finish the clean evidence-only card" (:title %)) views))
             (let [root (workflow/current-root "inspect-clean")
+                  strands (:strands (graph/subgraph rt [(:id root)]))
                   finish-step (first (filter #(= "Finish the clean evidence-only card" (:title %))
-                                             (:strands (graph/subgraph rt [(:id root)]))))]
-              (is (= "millstrand-ui.auto-run-workflows/finish-clean-card!"
+                                             strands))]
+              (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) strands))
+              (is (= "millhouse.spools.land.card-actions/finish-card!"
                      (attr-get finish-step :code/fn))))
             (is (not-any? #(= "Publish the exact change with its review package" (:title %)) views))))
         (testing "fixed work follows each admitted delivery policy"
@@ -295,6 +297,7 @@
           (let [views (run-views rt "inspect-review")]
             (is (some #(and (= "Verify findings left no dirty files or commits ahead" (:title %))
                             (= "shell" (:gate %))) views))
+            (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) views))
             (is (some #(and (= "Move the finding card into review" (:title %))
                             (= "code" (:gate %))) views))
             (is (some #(= "Stop with findings and a recommended next action" (:title %)) views))
@@ -304,6 +307,7 @@
           (let [views (run-views rt "inspect-blocked")]
             (is (some #(and (= "Verify blocker evidence left no dirty files or commits ahead" (:title %))
                             (= "shell" (:gate %))) views))
+            (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) views))
             (is (some #(= "Leave the blocked card open with trustworthy evidence" (:title %)) views))))))))
 
 (deftest clean-inspection-gate-rejects-dirty-and-ahead-worktrees
@@ -321,35 +325,6 @@
       (is (pos? (command-exit dir argv)) "commits ahead reject a clean disposition")
       (finally
         (shell/sh "rm" "-rf" (.getAbsolutePath dir))))))
-
-(deftest clean-card-finish-rechecks-the-worktree
-  (t/with-weaver-world
-    [ctx {:storage :sqlite-memory
-          :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
-          :init-clj (slurp "init.clj")
-          :files (into {} (for [path ["me/reviewers.clj" "me/auto_run_workflows.clj" "me/auto_run.clj"]]
-                            [path (slurp path)]))}]
-    (let [rt (:runtime ctx)
-          dir (temporary-git-worktree!)]
-      (try
-        (current/with-runtime rt
-          (let [card (weaver/add! rt {:title "Clean inspection"
-                                      :attributes {:kanban/card "true"
-                                                   :kanban/type "feature"
-                                                   :kanban/lane "claimed"}})
-                finish-clean! (requiring-resolve 'millstrand-ui.auto-run-workflows/finish-clean-card!)]
-            (spit (io/file dir "late-change.txt") "dirty\n")
-            (is (= :changed-work-rejected
-                   (try
-                     (finish-clean! {:card (:id card) :worktree (.getAbsolutePath dir)})
-                     :finished
-                     (catch clojure.lang.ExceptionInfo _ :changed-work-rejected))))
-            (is (= "active" (:state (weaver/show rt (:id card)))))
-            (io/delete-file (io/file dir "late-change.txt"))
-            (finish-clean! {:card (:id card) :worktree (.getAbsolutePath dir)})
-            (is (= "closed" (:state (weaver/show rt (:id card)))))))
-        (finally
-          (shell/sh "rm" "-rf" (.getAbsolutePath dir)))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."
