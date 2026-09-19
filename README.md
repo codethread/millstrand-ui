@@ -124,10 +124,18 @@ with a C4-level walkthrough, browser evidence and screenshots where applicable,
 then stops for human review. An explicitly selected full-land workflow hands shared
 landing to a canonical-root grunt after review but before sign-off. The grunt waits
 for the implementation worker to settle before merging and removing its worktree;
-card completion follows cleanup. Observed autonomous delivery failures are labeled
-`auto-run-failure` and left for manual intervention. Configuration lives in
-version-controlled `.millstrand` modules; see [automatic delivery](docs/auto-run.md)
-for setup and operation.
+card completion follows cleanup.
+
+Select `auto-inspect` for investigations, audits, exploratory reviews, and bounded
+regression checks whose primary output is card evidence. It records a structured
+summary and routes clean work to a no-PR completion, ambiguous findings to review,
+and blockers to an open card. If inspection produces a bounded fix, its
+`auto-run/on-change` policy is `human-review`, `full-land`, or conservative `stop`
+by default; quality always runs before a changed path proceeds. Observed autonomous
+delivery failures—not ordinary product findings—are labeled `auto-run-failure` and
+left for manual intervention. Configuration lives in version-controlled
+`.millstrand` modules; see [automatic delivery](docs/auto-run.md) for setup and
+operation.
 
 ## Agents and identities
 

@@ -13,7 +13,7 @@ worker. The default delivery workflow is `auto-human-review`. Disable new
 admission by setting `:enabled? false` and refreshing workspace modules;
 accepted runs remain under normal Harnesses control.
 
-`.millstrand/me/auto_run_workflows.clj` owns both delivery workflows:
+`.millstrand/me/auto_run_workflows.clj` owns three delivery workflows:
 
 - **auto-human-review:** implement and browser-test; pass `pnpm quality`; publish
   a non-draft PR and review package; wait for CI; mechanically verify the PR
@@ -22,6 +22,11 @@ accepted runs remain under normal Harnesses control.
   then hand the existing run to a canonical-root `grunt` before sign-off. Once the
   original worker settles, the grunt drives FIFO merge, cleanup and card completion.
   Selecting this workflow is explicit authorisation to land, not just to implement.
+- **auto-inspect:** perform the card-defined investigation, audit, exploratory
+  review, or bounded regression check. The worker records a structured summary,
+  evidence, findings, and recommended next action, then selects clean, fixed,
+  needs-review, or blocked. It is evidence-first work, not a shortcut around code
+  delivery.
 
 The worker drives the exact workflow run created by the dispatcher. Ordinary
 steps contain maintainer-authored instructions; shell/code gates enforce
@@ -37,10 +42,16 @@ attributes override repository defaults:
 ```clojure
 {:auto-run/seat "astra"
  :auto-run/effort "low"
- :auto-run/workflow "auto-human-review"}
+ :auto-run/workflow "auto-inspect"
+ :auto-run/on-change "stop"}
 ```
 
-Only the two repo-registered delivery workflows are allowed. Plan uncertainty
+The three repo-registered delivery workflows are allowed. `auto-run/on-change`
+matters only to `auto-inspect` when its result is **fixed**. Its accepted values
+are `human-review`, `full-land`, and `stop`; omitted means `stop`, the
+conservative default. Admission validates the value and passes it from the live
+admitted card into the workflow, so a worker cannot silently choose another
+changed-work policy. Plan uncertainty
 into small cards and dependencies: a UI-direction card can stop for human
 acceptance before dependent implementation becomes eligible.
 
@@ -55,6 +66,33 @@ a card is not cancellation of admitted work. Disable admission and inspect/stop
 the exact Harnesses run when withdrawing work. Failures remain visible and are
 not automatically retried; an operator can explicitly continue a settled worker
 against the retained card, worktree and delivery workflow.
+
+## Inspection dispositions
+
+Use `auto-inspect` when the useful result is evidence on the card, not necessarily
+a change. The card body names the scope; the workflow requires the worker to record
+one structured summary containing the conclusion, evidence, findings, and recommended
+next action before it can select a disposition.
+
+- **clean** — a shell gate verifies both an empty `git status --porcelain` and no
+  commits ahead of `origin/main`. The evidence remains in the workflow/card, then
+  the feature finishes as done without a branch push or PR.
+- **fixed** — bounded worktree changes exist. Quality runs first and the admitted
+  `auto-run/on-change` policy controls the ordinary path: `human-review` uses the
+  existing PR/verification/review checkpoint; `full-land` uses that same path and
+  the existing autonomous landing handoff; `stop` runs quality and leaves the card
+  open with the exact commit and a human delivery decision still required.
+- **needs-review** — the workflow first proves the worktree is clean, moves the
+  card to review, and stops with the findings and recommended next action. It
+  creates no code change or PR.
+- **blocked** — the workflow first proves the worktree is clean, then stops with
+  trustworthy blocker evidence and leaves the claimed card open. It does not claim
+  success or manufacture a PR.
+
+Ordinary findings, uncertainty, failed regression expectations, and a blocked
+inspection are not `auto-run-failure`. That label remains reserved for observed
+delivery machinery, handoff, or landing failures under the autonomous delivery
+policy.
 
 ## Autonomous landing handoff
 
