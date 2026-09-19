@@ -15,6 +15,7 @@ import {
   workspaceViewSearch,
   type DashboardSearch,
   type DetailTab,
+  type HistoryLayout,
   type Presentation,
 } from './dashboard-search';
 
@@ -33,6 +34,20 @@ const selectGraphRoot = (search: DashboardSearch) => search.graphRoot;
 const selectDetailTab = (search: DashboardSearch) => search.detailTab;
 const selectAgentQuery = (search: DashboardSearch) => search.agentQuery;
 const selectActiveAgentsOnly = (search: DashboardSearch) => search.activeAgentsOnly;
+
+const selectHistoryLayout = (search: DashboardSearch) => search.historyLayout;
+const selectHistoryDay = (search: DashboardSearch) => search.historyDay;
+const selectHistoryQuery = (search: DashboardSearch) => search.historyQuery;
+
+export function useHistoryLayout() {
+  return useSearch({ from: '/', select: selectHistoryLayout });
+}
+export function useHistoryDay() {
+  return useSearch({ from: '/', select: selectHistoryDay });
+}
+export function useHistoryQuery() {
+  return useSearch({ from: '/', select: selectHistoryQuery });
+}
 
 export function useDashboardMode() {
   return useSearch({ from: '/', select: selectMode });
@@ -107,6 +122,10 @@ export function useDashboardActions() {
     updateCurrent((current) => manualFilterSearch(current, change(current.filter)), replace);
   }
   return {
+    openHistoryRecap: (historyDay: string | null) => update({ historyDay, historyLayout: 'recap' }),
+    setHistoryLayout: (historyLayout: HistoryLayout) => update({ historyLayout }),
+    setHistoryDay: (historyDay: string) => update({ historyDay }),
+    setHistoryQuery: (historyQuery: string) => update({ historyQuery }, true),
     openReview: (review: string) =>
       update({ mode: 'reviews', review, issue: null, agent: null, agentRun: null }),
     closeReview: () => update({ review: null }),

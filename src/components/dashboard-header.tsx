@@ -25,6 +25,7 @@ import { useDashboardStore } from '../store';
 import { AgentNotifications } from './agent-notifications';
 import { AgentSearchControls } from './agent-directory';
 import { DashboardFilters } from './dashboard-filters';
+import { CompletedSearchControls } from './completed-view';
 import { ReviewSearchControls } from './review-inbox';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -58,7 +59,12 @@ export function DashboardHeader() {
         >
           <Menu />
         </Button>
-        {mode === 'reviews' ? (
+        {mode === 'completed' ? (
+          <h1 className="flex h-[38px] items-center gap-2 text-sm! tracking-normal!">
+            <Check className="size-4 text-primary" />
+            Completed work
+          </h1>
+        ) : mode === 'reviews' ? (
           <h1 className="flex h-[38px] items-center gap-2 text-sm! tracking-normal!">
             <GitPullRequest className="size-4 text-primary" />
             Reviews
@@ -84,7 +90,9 @@ export function DashboardHeader() {
           </div>
         )}
         <AgentNotifications />
-        {mode === 'reviews' ? (
+        {mode === 'completed' ? (
+          <CompletedSearchControls />
+        ) : mode === 'reviews' ? (
           <ReviewSearchControls />
         ) : mode === 'agents' ? (
           <AgentSearchControls />
@@ -119,7 +127,7 @@ export function DashboardHeader() {
           </div>
         )}
       </div>
-      {mode !== 'agents' && mode !== 'reviews' && (
+      {mode !== 'agents' && mode !== 'reviews' && mode !== 'completed' && (
         <div className="view-context">
           <span>
             {cardCount.data ?? 0} {cardCount.data === 1 ? 'issue' : 'issues'}

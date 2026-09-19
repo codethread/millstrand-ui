@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Bot, GitBranch, LayoutGrid } from 'lucide-react';
 import { useAgentPromptStore } from './agent-prompt-store';
+import { CompletedView } from './components/completed-view';
 import { AgentsView } from './components/agents-view';
 import { DashboardOverlays } from './components/overlays';
 import { DashboardShell } from './components/dashboard-shell';
@@ -115,7 +116,15 @@ function WorkspacePage() {
     );
   return (
     <DashboardShell>
-      {mode === 'reviews' ? <ReviewsView /> : mode === 'agents' ? <AgentsView /> : <IssueSurface />}
+      {mode === 'completed' ? (
+        <CompletedView />
+      ) : mode === 'reviews' ? (
+        <ReviewsView />
+      ) : mode === 'agents' ? (
+        <AgentsView />
+      ) : (
+        <IssueSurface />
+      )}
     </DashboardShell>
   );
 }

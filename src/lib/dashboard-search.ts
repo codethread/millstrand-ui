@@ -11,10 +11,15 @@ import type {
 } from '../../shared/api';
 import { emptyFilter, workspaceFilter, type WorkspaceView } from './board';
 
-export type Presentation = 'overview' | 'board' | 'outline' | 'graph' | 'agents' | 'reviews';
+export type Presentation =
+  'overview' | 'board' | 'outline' | 'graph' | 'agents' | 'reviews' | 'completed';
+export type HistoryLayout = 'timeline' | 'recap' | 'ledger';
 export type DetailTab = 'overview' | 'notes' | 'agents' | 'attributes';
 export interface DashboardSearch {
   mode: Presentation;
+  historyLayout: HistoryLayout;
+  historyDay: string | null;
+  historyQuery: string;
   workspace: string | null;
   issue: string | null;
   agent: string | null;
@@ -36,9 +41,11 @@ const textSchema = z.compile(z.string().min(1), { strict: true });
 const stringArraySchema = z.compile(z.array(z.string()), { strict: true });
 const labelTermSchema = z.compile(z.enum(['include', 'exclude']), { strict: true });
 const modeSchema = z.compile(
-  z.enum(['overview', 'board', 'outline', 'graph', 'agents', 'reviews']),
+  z.enum(['overview', 'board', 'outline', 'graph', 'agents', 'reviews', 'completed']),
   { strict: true },
 );
+const historyLayoutSchema = z.compile(z.enum(['timeline', 'recap', 'ledger']), { strict: true });
+const historyDaySchema = z.compile(z.iso.date(), { strict: true });
 const reviewScopeSchema = z.compile(z.enum(['inbox', 'all']), { strict: true });
 const reviewStageSchema = z.compile(z.enum(reviewStages), { strict: true });
 const detailTabSchema = z.compile(z.enum(['overview', 'notes', 'agents', 'attributes']), {
@@ -98,6 +105,9 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
   return {
     mode: mode ?? (agent || agentRun ? 'agents' : workspace || issue ? 'board' : 'overview'),
     workspace,
+    historyLayout: parseOptional(historyLayoutSchema, search.historyLayout) ?? 'timeline',
+    historyDay: parseOptional(historyDaySchema, search.historyDay),
+    historyQuery: text(search.historyQuery) ?? '',
     review: text(search.review),
     reviewQuery: text(search.reviewQuery) ?? '',
     reviewScope: parseOptional(reviewScopeSchema, search.reviewScope) ?? 'inbox',
@@ -115,6 +125,9 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
 }
 
 export const dashboardSearchDefaults = {
+  historyLayout: 'timeline',
+  historyDay: null,
+  historyQuery: '',
   review: null,
   reviewQuery: '',
   reviewScope: 'inbox',
@@ -151,7 +164,10 @@ export function manualFilterSearch(
     filter,
     activeViewId: null,
     graphRoot: null,
-    mode: search.mode === 'agents' || search.mode === 'reviews' ? 'board' : search.mode,
+    mode:
+      search.mode === 'agents' || search.mode === 'reviews' || search.mode === 'completed'
+        ? 'board'
+        : search.mode,
   };
 }
 
@@ -168,22 +184,33 @@ export function savedViewSearch(
     activeViewId: view?.id ?? null,
     graphRoot: null,
     mode:
-      search.mode === 'agents' || search.mode === 'reviews' || search.mode === 'overview'
+      search.mode === 'agents' ||
+      search.mode === 'reviews' ||
+      search.mode === 'completed' ||
+      search.mode === 'overview'
         ? 'board'
         : search.mode,
   };
 }
 
-/** Built-in workspace views are filter snapshots, not persisted saved views. */
+/** Completed opens its dedicated history surface; other built-ins install board filters. */
 export function workspaceViewSearch(
   search: DashboardSearch,
   view: WorkspaceView,
 ): Partial<DashboardSearch> {
   return {
     filter: workspaceFilter(view),
+    issue: null,
+    agent: null,
+    agentRun: null,
     activeViewId: null,
     graphRoot: null,
-    mode: search.mode === 'agents' || search.mode === 'reviews' ? 'board' : search.mode,
+    mode:
+      view === 'completed'
+        ? 'completed'
+        : search.mode === 'agents' || search.mode === 'reviews' || search.mode === 'completed'
+          ? 'board'
+          : search.mode,
   };
 }
 

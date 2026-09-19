@@ -75,6 +75,18 @@ schemas belong to `src/review-comment-store.ts`. Browser preference/receipt pars
 is in `src/lib/agent-preferences.ts`. Do not add assertions or repeated parsers in
 components to compensate for a boundary change.
 
+### Completed work prototypes
+
+`completed-view.tsx` is the workspace `completed` page entry and renders Timeline,
+Day recap and Ledger. `useCompletedHistory` in `use-cards.ts` is a disabled reader
+of `board.cards`, memoizing the pure `completedHistory` projection from `board.ts`;
+`completedDays` and `completedRecap` provide the remaining domain transforms.
+`useBoardStatus` supplies health separately. There are no new query keys, endpoints,
+mutations or poll owners. Router owns `historyLayout`, `historyDay` and `historyQuery`;
+board filters remain independent. The existing shell owns startup and issue details.
+See [completed work](completed-work.md) for the explicit last-update date-estimate
+limitation and done-only outcome semantics.
+
 ### Auto-run card properties
 
 `Card.autoRun` is a nullable, normalized configuration/dispatcher snapshot parsed in

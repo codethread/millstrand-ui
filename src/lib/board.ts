@@ -193,6 +193,7 @@ export function boardSummary(board: Board) {
     ready: active.filter((card) => card.lane === 'pending').length,
     review: active.filter((card) => card.lane === 'in_review').length,
     closed: board.cards.length - active.length,
+    done: board.cards.filter((card) => card.state === 'closed' && card.outcome === 'done').length,
   };
 }
 
@@ -225,4 +226,88 @@ export function relativeTime(value: string): string {
 export function labelColor(label: string): string {
   const hash = Array.from(label).reduce((value, char) => value + char.charCodeAt(0), 0);
   return ['violet', 'blue', 'amber', 'green', 'rose'][hash % 5] ?? 'violet';
+}
+
+/** SQLite's unzoned timestamps are UTC, not browser-local wall-clock times. */
+export function historyTimestamp(value: string | null): number | null {
+  if (!value) return null;
+  const iso = value.replace(' ', 'T');
+  const timestamp = Date.parse(/[zZ]|[+-]\d{2}:\d{2}$/.test(iso) ? iso : `${iso}Z`);
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+export function historyDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+export function shiftHistoryDay(day: string, offset: number): string {
+  const date = new Date(`${day}T12:00:00`);
+  date.setDate(date.getDate() + offset);
+  return historyDateKey(date);
+}
+
+export function historyDayLabel(day: string): string {
+  return new Intl.DateTimeFormat('en', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(`${day}T12:00:00`));
+}
+
+export interface CompletedEntry {
+  card: Card;
+  parent: Card | null;
+  updatedAt: number | null;
+  day: string | null;
+}
+export interface CompletedDay {
+  day: string | null;
+  entries: CompletedEntry[];
+}
+
+/** Last update is an explicitly labelled proxy, never an asserted completion time.
+ * Only done outcomes count: abandoned, unactioned and unknown closures are not wins. */
+export function completedHistory(cards: Card[], query: string): CompletedEntry[] {
+  const parents = new Map(cards.map((card) => [card.id, card]));
+  const filter = { ...emptyFilter(), includeClosed: true, query };
+  const entries = cards
+    .filter(
+      (card) => card.state === 'closed' && card.outcome === 'done' && matchesCard(card, filter),
+    )
+    .map((card) => {
+      const updatedAt = historyTimestamp(card.updatedAt);
+      return {
+        card,
+        parent: card.epicId === null ? null : (parents.get(card.epicId) ?? null),
+        updatedAt,
+        day: updatedAt === null ? null : historyDateKey(new Date(updatedAt)),
+      };
+    });
+  return sorted(
+    entries,
+    (a, b) =>
+      (b.updatedAt ?? -Infinity) - (a.updatedAt ?? -Infinity) || a.card.id.localeCompare(b.card.id),
+  );
+}
+
+export function completedRecap(entries: CompletedEntry[], day: string) {
+  const daily = entries.filter((entry) => entry.day === day);
+  return {
+    entries: daily,
+    features: daily.filter((entry) => entry.card.type === 'feature').length,
+    epics: daily.filter((entry) => entry.card.type === 'epic').length,
+    owners: new Set(daily.flatMap((entry) => (entry.card.owner === null ? [] : [entry.card.owner])))
+      .size,
+  };
+}
+
+export function completedDays(entries: CompletedEntry[]): CompletedDay[] {
+  const groups = new Map<string | null, CompletedEntry[]>();
+  for (const entry of entries) {
+    const group = groups.get(entry.day) ?? [];
+    group.push(entry);
+    groups.set(entry.day, group);
+  }
+  return [...groups].map(([day, items]) => ({ day, entries: items }));
 }

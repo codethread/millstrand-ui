@@ -3,6 +3,12 @@ import type { Board, Card, ViewFilter } from '../../shared/api';
 import { overviewCards } from './overview';
 import {
   boardSidebarContent,
+  completedHistory,
+  completedDays,
+  completedRecap,
+  historyTimestamp,
+  historyDateKey,
+  shiftHistoryDay,
   emptyFilter,
   issueSurfaceContent,
   matchesWorkspaceView,
@@ -52,7 +58,7 @@ describe('board content projections', () => {
       workspace: board.workspace,
       cards,
       labels,
-      summary: { active: 1, inProgress: 0, ready: 1, review: 0, closed: 1 },
+      summary: { active: 1, inProgress: 0, ready: 1, review: 0, closed: 1, done: 0 },
     });
     expect(issueSurfaceContent(board.cards, filter)).toMatchObject({
       allCards: cards,
@@ -290,4 +296,74 @@ it('shares filtered membership across columns, outline and graph while retaining
   });
   expect(moved.cards).toEqual([]);
   expect(moved.columns.some(({ lane }) => lane.id === 'in_production')).toBe(false);
+});
+
+describe('completed history prototypes', () => {
+  function done(id: string, updatedAt: string | null): Card {
+    return { ...card(id), state: 'closed', lane: 'closed', outcome: 'done', updatedAt };
+  }
+
+  it('sorts done cards by update, not creation or priority, and leaves unknown dates last', () => {
+    const older = { ...done('older', '2026-09-18 10:00:00'), priority: 'p1' as const };
+    const newer = { ...done('newer', '2026-09-19 10:00:00'), priority: 'p4' as const };
+    const cards = [
+      older,
+      done('unknown', null),
+      newer,
+      { ...done('abandoned', null), outcome: 'abandoned' },
+      { ...done('unactioned', null), outcome: 'unactioned' },
+      { ...done('unknown-outcome', null), outcome: null },
+      { ...done('reopened', null), state: 'active' },
+    ];
+    expect(completedHistory(cards, '').map(({ card: item }) => item.id)).toEqual([
+      'newer',
+      'older',
+      'unknown',
+    ]);
+    expect(cards[0]).toBe(older);
+    expect(
+      completedHistory([done('b', null), done('a', null)], '').map(({ card: item }) => item.id),
+    ).toEqual(['a', 'b']);
+  });
+
+  it('keeps parent context, filters by search, and separates feature and epic recap totals', () => {
+    const parent = { ...done('epic', '2026-09-18 10:00:00'), type: 'epic' as const };
+    const feature = {
+      ...done('feature', '2026-09-18 11:00:00'),
+      epicId: 'epic',
+      owner: 'falcon',
+      labels: ['ui'],
+    };
+    const entries = completedHistory([parent, feature, done('unknown', null)], '');
+    const day = historyDateKey(new Date('2026-09-18T10:00:00Z'));
+    expect(entries[0]?.parent).toEqual(parent);
+    expect(
+      completedHistory([parent, feature], 'UI falcon').map(({ card: item }) => item.id),
+    ).toEqual(['feature']);
+    expect(completedRecap(entries, day)).toMatchObject({ features: 1, epics: 1, owners: 1 });
+    expect(completedRecap(entries, '2025-01-01').entries).toEqual([]);
+    expect(completedDays(entries).map((group) => [group.day, group.entries.length])).toEqual([
+      [day, 2],
+      [null, 1],
+    ]);
+  });
+
+  it('interprets SQLite timestamps as UTC and preserves zoned instants', () => {
+    const instant = Date.parse('2026-09-18T23:30:00Z');
+    expect(historyTimestamp('2026-09-18 23:30:00')).toBe(instant);
+    expect(historyTimestamp('2026-09-19T01:30:00+02:00')).toBe(instant);
+    expect(historyTimestamp(null)).toBeNull();
+    expect(historyTimestamp('invalid')).toBeNull();
+    const entries = completedHistory([done('midnight', '2026-09-18 23:30:00')], '');
+    expect(entries[0]?.day).toBe(historyDateKey(new Date(instant)));
+  });
+
+  it.each([
+    ['2026-01-01', -1, '2025-12-31'],
+    ['2024-03-01', -1, '2024-02-29'],
+    ['2026-03-08', 1, '2026-03-09'],
+    ['2026-11-01', 1, '2026-11-02'],
+  ])('moves calendar days across boundaries: %s', (day, offset, expected) => {
+    expect(shiftHistoryDay(day, offset)).toBe(expected);
+  });
 });

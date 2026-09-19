@@ -18,6 +18,7 @@ import {
 } from '../lib/api/cards';
 import {
   boardSidebarContent,
+  completedHistory,
   filteredCardCount,
   issueSurfaceContent,
   savedViewBoardContent,
@@ -93,6 +94,21 @@ export function useIssueBoard(filter: ViewFilter) {
   const data = useMemo(
     () => (cards === undefined ? undefined : issueSurfaceContent(cards, filter)),
     [cards, filter],
+  );
+  return { data };
+}
+
+export function useCompletedHistory(search: string) {
+  const query = useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select: selectBoardCards,
+  });
+  const cards = query.data;
+  const data = useMemo(
+    () => (cards === undefined ? undefined : completedHistory(cards, search)),
+    [cards, search],
   );
   return { data };
 }
