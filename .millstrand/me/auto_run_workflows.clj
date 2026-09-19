@@ -152,11 +152,11 @@
    {"shell/argv"
     (fn [{:keys [branch worktree]}]
       ["sh" "-ceu"
-       "branch=$1\nworktree=$2\nroot=$(dirname \"$(git -C \"$worktree\" rev-parse --path-format=absolute --git-common-dir)\")\ntest \"$branch\" != main\ntest \"$branch\" = \"$(git -C \"$worktree\" branch --show-current)\ntest -z \"$(git -C \"$worktree\" status --porcelain)\"\ntest \"$(git -C \"$worktree\" rev-list --count origin/main..HEAD)\" -eq 0\ngit -C \"$root\" worktree remove \"$worktree\"\ngit -C \"$root\" branch -d \"$branch\""
+       "branch=$1\nworktree=$2\nroot=$(dirname \"$(git -C \"$worktree\" rev-parse --path-format=absolute --git-common-dir)\")\ntest \"$branch\" != main\ntest \"$branch\" = \"$(git -C \"$worktree\" branch --show-current)\"\nrm -rf \"$worktree/node_modules\" \"$worktree/dist\" \"$worktree/coverage\"\nfind \"$worktree\" -type f \\( -name '*.tsbuildinfo' -o -name '.DS_Store' \\) -delete\ntest -z \"$(git -C \"$worktree\" status --porcelain --ignored --untracked-files=all)\"\ntest \"$(git -C \"$worktree\" rev-list --count origin/main..HEAD)\" -eq 0\ngit -C \"$root\" worktree remove \"$worktree\"\ngit -C \"$root\" branch -d \"$branch\""
        "clean-inspection-cleanup" branch worktree])
     "shell/cwd" (fn [{:keys [worktree]}] worktree)
     "shell/timeout-secs" 120}
-   "Evidence-only inspection worktrees are disposable only while clean and not ahead. Leave the card open and record the actual finding if cleanup refuses to remove them."))
+   "Cleanup discards known build artifacts, but refuses to remove a worktree containing any other ignored files so local configuration is not deleted. Leave the card open and record the retained paths if cleanup refuses to remove it."))
 
 (defn- inspect-introduction [{:keys [card on-change]}]
   (format/prose

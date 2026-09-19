@@ -76,8 +76,10 @@ next action before it can select a disposition.
 
 - **clean** — a shell gate verifies both an empty `git status --porcelain` (so
   ignored build, dependency, and browser artifacts do not count as changes) and no
-  commits ahead of `origin/main`. The evidence remains in the workflow/card, then
-  the feature finishes as done without a branch push or PR.
+  commits ahead of `origin/main`. Cleanup discards known generated artifacts but
+  refuses to remove a worktree containing other ignored files, including local
+  configuration. The evidence remains in the workflow/card, then the feature
+  finishes as done without a branch push or PR.
 - **fixed** — bounded worktree changes exist. Quality runs first and the admitted
   `auto-run/on-change` policy controls the ordinary path: `human-review` uses the
   existing PR/verification/review checkpoint; `full-land` uses that same path and

@@ -292,8 +292,8 @@
                   cleanup-argv (attr-get cleanup-step :shell/argv)]
               (is (some #(= "Reserve the claimed card for clean completion" (:title %)) strands))
               (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) strands))
-              (is (str/includes? (nth cleanup-argv 2) "git -C \"$worktree\" status --porcelain"))
-              (is (not (str/includes? (nth cleanup-argv 2) "--ignored")))
+              (is (str/includes? (nth cleanup-argv 2) "rm -rf \"$worktree/node_modules\""))
+              (is (str/includes? (nth cleanup-argv 2) "git -C \"$worktree\" status --porcelain --ignored --untracked-files=all"))
               (is (= "millhouse.spools.land.card-actions/finish-card!"
                      (attr-get finish-step :code/fn))))
             (is (not-any? #(= "Publish the exact change with its review package" (:title %)) views))))
@@ -356,6 +356,23 @@
       (git! dir "git" "add" "ahead.txt")
       (git! dir "git" "commit" "--quiet" "-m" "ahead")
       (is (pos? (command-exit dir argv)) "commits ahead reject a clean disposition")
+      (finally
+        (shell/sh "rm" "-rf" (.getAbsolutePath dir))))))
+
+(deftest clean-inspection-cleanup-removes-disposable-artifacts-and-refuses-local-files
+  (let [dir (temporary-git-worktree!)
+        argv ["sh" "-ceu"
+              "rm -rf node_modules dist coverage\nfind . -type f \\( -name '*.tsbuildinfo' -o -name '.DS_Store' \\) -delete\ntest -z \"$(git status --porcelain --ignored --untracked-files=all)\""]]
+    (try
+      (spit (io/file dir ".gitignore") "dist/\n.env\n")
+      (git! dir "git" "add" ".gitignore")
+      (git! dir "git" "commit" "--quiet" "-m" "ignore cleanup inputs")
+      (git! dir "git" "update-ref" "refs/remotes/origin/main" "HEAD")
+      (.mkdirs (io/file dir "dist"))
+      (spit (io/file dir "dist" "bundle.js") "generated\n")
+      (is (zero? (command-exit dir argv)) "disposable build artifacts are removed before cleanup")
+      (spit (io/file dir ".env") "SECRET=fixture\n")
+      (is (pos? (command-exit dir argv)) "local ignored configuration prevents destructive cleanup")
       (finally
         (shell/sh "rm" "-rf" (.getAbsolutePath dir))))))
 
