@@ -29,6 +29,7 @@ import { DashboardFilters } from './dashboard-filters';
 import { LabelPill } from './issue-parts';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 function CompletedSearchControls() {
@@ -36,16 +37,16 @@ function CompletedSearchControls() {
   const actions = useDashboardActions();
   return (
     <div className="w-full min-w-0 md:max-w-xl">
-      <label htmlFor="issue-search" className="mb-2 block text-xs font-medium">
+      <label htmlFor="issue-search" className="sr-only">
         Search completed work
       </label>
       <div className="relative">
-        <Search className="pointer-events-none absolute top-3 left-3 size-4 text-muted-foreground" />
+        <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
         <Input
           id="issue-search"
-          className="h-10 bg-background pr-10 pl-10"
+          className="bg-background pr-10 pl-10"
           type="search"
-          placeholder="Title, ID, owner, branch or label…"
+          placeholder="Search completed work…"
           value={query}
           onChange={(event) => actions.setHistoryQuery(event.target.value)}
         />
@@ -53,7 +54,7 @@ function CompletedSearchControls() {
           <Button
             variant="ghost"
             size="icon-sm"
-            className="absolute top-1 right-1"
+            className="absolute top-0.5 right-0.5"
             aria-label="Clear completed search"
             onClick={() => actions.setHistoryQuery('')}
           >
@@ -168,9 +169,9 @@ function Timeline({ entries }: { entries: CompletedEntry[] }) {
           className="grid gap-3 lg:grid-cols-[185px_minmax(0,1fr)]"
         >
           <div className="pt-2">
-            <h3 className="text-sm font-semibold">
+            <h2 className="text-sm font-semibold">
               {group.day === null ? 'Date unavailable' : historyDayLabel(group.day)}
-            </h3>
+            </h2>
             <p className="mt-1 text-xs text-muted-foreground">
               {group.entries.length} completed {group.entries.length === 1 ? 'card' : 'cards'}
             </p>
@@ -228,62 +229,53 @@ function DailyRecap({
   const actions = useDashboardActions();
   const { entries: daily, features, epics, owners } = completedRecap(entries, day);
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          size="icon-sm"
-          aria-label="Previous day"
-          onClick={() => actions.setHistoryDay(shiftHistoryDay(day, -1))}
-        >
-          <ChevronLeft />
-        </Button>
-        <Input
-          className="w-auto"
-          type="date"
-          aria-label="Recap date"
-          value={day}
-          onChange={(event) => {
-            if (event.target.value) actions.setHistoryDay(event.target.value);
-          }}
-        />
-        <Button
-          variant="outline"
-          size="icon-sm"
-          aria-label="Next day"
-          onClick={() => actions.setHistoryDay(shiftHistoryDay(day, 1))}
-        >
-          <ChevronRight />
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => actions.setHistoryDay(shiftHistoryDay(today, -1))}
-        >
-          Yesterday
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => actions.setHistoryDay(today)}>
-          Today
-        </Button>
-      </div>
-      <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5 sm:p-8">
-        <p className="text-xs font-semibold tracking-widest text-primary uppercase">
-          The daily wrap
-        </p>
-        <h3 className="mt-3 text-2xl font-semibold tracking-tight">{historyDayLabel(day)}</h3>
-        <p className="mt-2 text-muted-foreground">A little space to see what moved forward.</p>
-        <div className="mt-7 grid grid-cols-3 gap-3 border-t border-primary/15 pt-5">
-          {[
-            { count: features, label: 'Features' },
-            { count: epics, label: 'Epics' },
-            { count: owners, label: 'Owners' },
-          ].map(({ count, label }) => (
-            <div key={label}>
-              <p className="text-3xl font-semibold text-primary">{count}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-            </div>
-          ))}
+    <div className="space-y-3">
+      <h2 className="sr-only">{historyDayLabel(day)}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Previous day"
+            onClick={() => actions.setHistoryDay(shiftHistoryDay(day, -1))}
+          >
+            <ChevronLeft />
+          </Button>
+          <Input
+            className="w-auto"
+            type="date"
+            aria-label="Recap date"
+            value={day}
+            onChange={(event) => {
+              if (event.target.value) actions.setHistoryDay(event.target.value);
+            }}
+          />
+          <Button
+            variant="outline"
+            size="icon-sm"
+            aria-label="Next day"
+            onClick={() => actions.setHistoryDay(shiftHistoryDay(day, 1))}
+          >
+            <ChevronRight />
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => actions.setHistoryDay(shiftHistoryDay(today, -1))}
+          >
+            Yesterday
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => actions.setHistoryDay(today)}>
+            Today
+          </Button>
         </div>
+        <p className="text-xs text-muted-foreground" aria-label="Filtered day totals">
+          <span className="font-medium text-foreground">{features}</span> features
+          {' · '}
+          <span className="font-medium text-foreground">{epics}</span> epics
+          {' · '}
+          <span className="font-medium text-foreground">{owners}</span> owners
+        </p>
       </div>
       {daily.length === 0 ? (
         <EmptyHistory daily />
@@ -302,11 +294,40 @@ function DailyRecap({
           ))}
         </div>
       )}
-      <p className="text-xs text-muted-foreground">
-        Day totals follow your search and filters. Epics and features are counted separately; tasks
-        are not included.
-      </p>
     </div>
+  );
+}
+
+function CompletionDateHint() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-1 text-xs text-muted-foreground"
+          aria-label="About estimated completion dates"
+        >
+          <Clock3 />
+          Dates estimated
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        collisionPadding={12}
+        className="text-xs leading-relaxed"
+        aria-label="Completion date information"
+      >
+        <p>
+          <strong>Based on last update, not exact completion.</strong> Later edits can change a
+          card’s day. Dates use your local timezone.
+        </p>
+        <p className="mt-2 text-muted-foreground">
+          Only done cards are shown. Counts follow search and filters; features and epics are
+          separate, and tasks are excluded.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -322,75 +343,46 @@ export function CompletedView() {
   const today = historyDateKey(new Date());
   const day = selectedDay ?? shiftHistoryDay(today, -1);
   return (
-    <div className="h-full overflow-y-auto p-4 sm:p-7">
-      <div className="w-full space-y-6">
-        <div className="pr-8">
-          <p className="text-xs font-semibold tracking-widest text-primary uppercase">
-            Completed work
-          </p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-            Look back at what got done.
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Browse recent completions or revisit a day. Pick a card to see the details.
-          </p>
-        </div>
-        <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
-          <Clock3 className="mt-0.5 size-4 shrink-0" />
-          <p>
-            <strong className="font-medium text-foreground">Completion date estimate.</strong> Exact
-            completion dates aren’t recorded. These views use each done card’s last update, which
-            can change after completion. Dates are in your local timezone. Abandoned, unactioned and
-            unknown outcomes are excluded.
-            {health.error && (
-              <strong className="block text-destructive">
-                Refresh failed — showing last-known work.
-              </strong>
-            )}
-          </p>
-        </div>
-        <Tabs
-          value={layout}
-          onValueChange={(value) => {
-            if (value === 'timeline' || value === 'recap') actions.setHistoryLayout(value);
-          }}
-        >
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <TabsList aria-label="Completed work layouts" className="h-10">
-              <TabsTrigger value="timeline">
-                <List />
-                Timeline
-              </TabsTrigger>
-              <TabsTrigger value="recap">
-                <CalendarDays />
-                Day recap
-              </TabsTrigger>
-            </TabsList>
-            <div className="flex w-full min-w-0 items-end gap-2 md:max-w-xl">
-              <CompletedSearchControls />
-              <div className="pb-1">
-                <DashboardFilters />
-              </div>
-            </div>
+    <div className="h-full overflow-y-auto p-4 sm:px-6">
+      <Tabs
+        value={layout}
+        onValueChange={(value) => {
+          if (value === 'timeline' || value === 'recap') actions.setHistoryLayout(value);
+        }}
+      >
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:pr-10">
+          <TabsList aria-label="Completed work layouts" className="mr-10 md:mr-0">
+            <TabsTrigger value="timeline">
+              <List />
+              Timeline
+            </TabsTrigger>
+            <TabsTrigger value="recap">
+              <CalendarDays />
+              Day recap
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex w-full min-w-0 items-center gap-2 md:max-w-xl">
+            <CompletedSearchControls />
+            <DashboardFilters />
           </div>
-          <CompletedFilterSummary />
-          <output className="mt-2 block text-xs text-muted-foreground">
-            {entries.length} matching done cards across all days · newest first
-          </output>
-          <TabsContent value="timeline" className="mt-5">
-            <p className="mb-5 text-sm text-muted-foreground">
-              A running history, grouped by day. Best for catching up after time away.
-            </p>
-            <Timeline entries={entries} />
-          </TabsContent>
-          <TabsContent value="recap" className="mt-5">
-            <p className="mb-5 text-sm text-muted-foreground">
-              “What did we do yesterday?” One day, one focused recap.
-            </p>
-            <DailyRecap entries={entries} day={day} today={today} />
-          </TabsContent>
-        </Tabs>
-      </div>
+        </div>
+        <CompletedFilterSummary />
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <output>{entries.length} cards · all days · newest first</output>
+          <div className="flex flex-wrap items-center gap-x-3">
+            {health.error && (
+              <span className="text-destructive">Refresh failed · last-known work</span>
+            )}
+            <CompletionDateHint />
+          </div>
+        </div>
+        <TabsContent value="timeline" className="mt-1">
+          <Timeline entries={entries} />
+        </TabsContent>
+        <TabsContent value="recap" className="mt-1">
+          <DailyRecap entries={entries} day={day} today={today} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

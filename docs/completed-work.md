@@ -8,7 +8,12 @@ width and the same real board snapshot, without extra endpoints or poll owners.
   Today/Yesterday shortcuts, and separate feature, epic and recorded-owner totals.
   Cards use up to three columns on wide screens and a single column on phones.
 
-Search is prominently labelled above the results. It matches title, ID, owner,
+The title stays in the app header; compact layout/search/filter controls lead
+straight into the results. There is no introductory hero or large summary banner.
+Day totals sit beside date navigation. This follows the information-first, warm
+rather than utilitarian design language recorded in `AGENTS.md`.
+
+Search sits above the results with an accessible label. It matches title, ID, owner,
 branch and labels. **Filters** narrows by epic/feature type, priority and labels;
 label rules can match all or any selected labels. Selected filters appear as
 removable chips. Clear search and Clear filters work independently. The sidebar’s
@@ -27,7 +32,9 @@ The persisted card model has `created_at` and `updated_at`, but no immutable
 completion timestamp or transition event history. **Dates use last update as an
 explicitly labelled completion estimate.** A later edit can move a card to another
 day. Do not use these dates as an exact delivery audit; that requires upstream
-closure timestamps/history.
+closure timestamps/history. The compact **Dates estimated** control keeps this
+uncertainty visible and opens the explanation by click, touch or keyboard. Refresh
+failures remain visible beside it, not hidden in the explanation.
 
 Only cards with state `closed` and outcome `done` appear. Abandoned, unactioned and
 unknown outcomes are excluded. Features and epics have separate recap counts;
@@ -59,12 +66,13 @@ fixed done-only scope despite active-only filters, recap/timeline membership, UR
 round trips, keeping filter edits on Completed, and rejecting the removed layout.
 Existing coverage retains chronological ordering, unknown dates and timezone rules.
 
-Browser-checked with real workspace data at 1920px and 390px: wide layouts, search,
-epic/feature/priority/label filters, active chips, independent resets, day navigation,
-Back/reload, empty results and issue selection. Ledger was removed after the initial
-three-way comparison. Updated screenshots:
+Browser-checked with real workspace data at 1440px and 390px in dark and light
+modes: compact layouts, search, filters, date controls, date-explanation popover,
+keyboard access, selection, and refresh-failure retention. At 1440px, Timeline’s
+first card begins about 133px from the top and Day recap’s about 175px; the mobile
+recap starts showing cards at about 271px without horizontal page overflow.
 
-- [Wide timeline](evidence/k7oo5/timeline-wide.png)
-- [Wide recap](evidence/k7oo5/recap-wide.png)
-- [Filters on mobile](evidence/k7oo5/filters.png)
-- [Narrow layout](evidence/k7oo5/mobile.png)
+- [Timeline](evidence/1x7uc/timeline.png)
+- [Day recap](evidence/1x7uc/recap.png)
+- [Narrow layout](evidence/1x7uc/mobile.png)
+- [Date explanation](evidence/1x7uc/date-hint.png)
