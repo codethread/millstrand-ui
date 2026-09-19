@@ -230,7 +230,13 @@
    (shell-gate :verify-clean "Verify no dirty files or commits ahead" []
                (fn [_] (clean-worktree-argv)) 120
                "The clean disposition is invalid while files are dirty or commits are ahead. Leave the card open and record the actual finding; do not manufacture a PR or label this ordinary result auto-run-failure.")
-   (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
+   (workflow/gate
+    :reserve-clean-finish "Reserve the claimed card for clean completion" :code
+    :depends-on [:verify-clean]
+    :attributes {"code/fn" "millstrand-ui.auto-run/mark-clean-finishing!"
+                 "code/params" (fn [{:keys [card]}] {:card card})}
+    "This atomically reserves the claimed card before cleanup. A concurrent review transition leaves the card open rather than completing a clean inspection.")
+   (clean-inspection-cleanup-gate :cleanup-clean [:reserve-clean-finish])
    (workflow/gate
     :finish-card "Finish the clean evidence-only card" :code
     :depends-on [:cleanup-clean]

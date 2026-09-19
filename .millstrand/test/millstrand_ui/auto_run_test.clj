@@ -253,7 +253,24 @@
             (is (= {}
                    (callback rt {:card (weaver/add! rt {:title "unrelated policy"
                                                          :attributes {:auto-run/on-change "merge-now"}})
-                                 :settings {:workflow "auto-human-review"}})))))
+                                 :settings {:workflow "auto-human-review"}})))
+            (let [clean-card (weaver/add! rt {:title "reserved clean inspection"
+                                               :attributes {:kanban/card "true"
+                                                            :kanban/type "feature"
+                                                            :kanban/lane "claimed"}})]
+              (weaver/update! rt (:id clean-card)
+                              {:attributes {:auto-inspect/clean-finishing "true"}})
+              (is (= :lane-change-rejected
+                     (try
+                       (weaver/update! rt (:id clean-card)
+                                       {:attributes {:kanban/lane "in_review"}})
+                       :updated
+                       (catch clojure.lang.ExceptionInfo _ :lane-change-rejected))))
+              (is (= "closed"
+                     (:state (weaver/update! rt (:id clean-card)
+                                             {:state "closed"
+                                              :attributes {:kanban/lane nil
+                                                           :kanban/outcome "done"}})))))
         (testing "clean evidence-only work is mechanically gated and finished without a PR"
           (prepare-inspection! ctx "inspect-clean" "stop")
           (let [result (workflow/choose! "inspect-clean" :clean inspection-summary)
@@ -269,6 +286,7 @@
                   strands (:strands (graph/subgraph rt [(:id root)]))
                   finish-step (first (filter #(= "Finish the clean evidence-only card" (:title %))
                                              strands))]
+              (is (some #(= "Reserve the claimed card for clean completion" (:title %)) strands))
               (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) strands))
               (is (= "millhouse.spools.land.card-actions/finish-card!"
                      (attr-get finish-step :code/fn))))
@@ -308,7 +326,7 @@
             (is (some #(and (= "Verify blocker evidence left no dirty files or commits ahead" (:title %))
                             (= "shell" (:gate %))) views))
             (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) views))
-            (is (some #(= "Leave the blocked card open with trustworthy evidence" (:title %)) views))))))))
+            (is (some #(= "Leave the blocked card open with trustworthy evidence" (:title %)) views))))))))))
 
 (deftest clean-inspection-gate-rejects-dirty-and-ahead-worktrees
   (let [dir (temporary-git-worktree!)
