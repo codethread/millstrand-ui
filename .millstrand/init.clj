@@ -8,6 +8,11 @@
                  {:ns 'millstrand.spools.batteries
                   :required? true})
 
+(runtime/module! runtime :millstrand-ui/help
+                 {:file "me/help.clj"
+                  :after [:millstrand/spools-batteries]
+                  :required? true})
+
 (codethread/register! runtime)
 
 (runtime/module! runtime :millhouse/spools-workflow-providers
@@ -32,6 +37,7 @@
                   :required? true})
 
 (codethread/register-executor!
- runtime [:millhouse/spools-workflow-providers
+ runtime [:millstrand-ui/help
+          :millhouse/spools-workflow-providers
           :millstrand-ui/reviewers
           :millstrand-ui/auto-run])

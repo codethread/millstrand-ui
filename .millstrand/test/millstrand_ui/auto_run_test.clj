@@ -13,6 +13,7 @@
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
+            [millstrand.api.runtime.help-transform.alpha :as help-transform]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as t])
@@ -27,10 +28,13 @@
     [ctx {:storage :sqlite-memory
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
-          :files (into {} (for [path ["me/reviewers.clj" "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj"
+                                           "me/auto_run_workflows.clj" "me/auto_run.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)
           status (auto-run/status rt)]
+      (is (= 'millstrand.spools.batteries
+             (:owner (help-transform/default-help-transform rt))))
       (is (:enabled status))
       (is (= 2 (get-in status [:config :max-running])))
       (is (= "auto-human-review" (get-in status [:config :workflow])))
@@ -108,7 +112,8 @@
     [ctx {:storage :sqlite-memory
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
-          :files (into {} (for [path ["me/reviewers.clj" "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj"
+                                           "me/auto_run_workflows.clj" "me/auto_run.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)
           request {:harness :handoff-fixture :mode :interactive
@@ -196,7 +201,8 @@
     [ctx {:storage :sqlite-memory
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
-          :files (into {} (for [path ["me/reviewers.clj" "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj"
+                                           "me/auto_run_workflows.clj" "me/auto_run.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)]
       (current/with-runtime rt
