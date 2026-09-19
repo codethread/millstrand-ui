@@ -47,6 +47,7 @@ const agentAttributeKeys = [
   'harness/run',
   'harness/published',
   'harness/request-id',
+  'harness/session-id',
   'harness/alias',
   'harness/harness',
   'harness/status',

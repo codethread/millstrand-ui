@@ -153,9 +153,11 @@ while the overlay is open.
 `SessionLogReader` reads only the final 1 MiB of a regular JSONL file under
 `~/.local/state/{pi,codex,claude}-dialogue`, retaining at most 400 complete records.
 It reports truncation and malformed or unsupported complete records; incomplete final
-lines wait for their newline. Session association is the persisted
-`identity/native-session-id` plus provider, never a guessed workspace or model
-match. A native session is not task-exclusive and does not expose whole history,
+lines wait for their newline. Session association uses a running published run's
+persisted `harness/session-id` before native attachment, then the persisted
+`identity/native-session-id`, then the newest published run session for history. It
+never guesses from a workspace, model, or file timestamp. A native session is not
+task-exclusive and does not expose whole history,
 token output, reasoning, or full tool stdout/stderr.
 
 The visible card Agents tab owns a projected `['graph', w, id]` poll through
