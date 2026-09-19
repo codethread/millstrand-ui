@@ -83,6 +83,17 @@ export function useBoardSidebar() {
 
 const selectBoardCards = (board: Board) => board.cards;
 
+const selectBoardLabels = (board: Board) => board.labels;
+
+export function useBoardLabels() {
+  return useQuery({
+    ...boardQueryOptions(useWorkspace()),
+    enabled: false,
+    refetchInterval: false,
+    select: selectBoardLabels,
+  });
+}
+
 export function useIssueBoard(filter: ViewFilter) {
   const query = useQuery({
     ...boardQueryOptions(useWorkspace()),
@@ -98,7 +109,7 @@ export function useIssueBoard(filter: ViewFilter) {
   return { data };
 }
 
-export function useCompletedHistory(search: string) {
+export function useCompletedHistory(search: string, filter: ViewFilter) {
   const query = useQuery({
     ...boardQueryOptions(useWorkspace()),
     enabled: false,
@@ -107,8 +118,8 @@ export function useCompletedHistory(search: string) {
   });
   const cards = query.data;
   const data = useMemo(
-    () => (cards === undefined ? undefined : completedHistory(cards, search)),
-    [cards, search],
+    () => (cards === undefined ? undefined : completedHistory(cards, { ...filter, query: search })),
+    [cards, search, filter],
   );
   return { data };
 }

@@ -75,15 +75,18 @@ schemas belong to `src/review-comment-store.ts`. Browser preference/receipt pars
 is in `src/lib/agent-preferences.ts`. Do not add assertions or repeated parsers in
 components to compensate for a boundary change.
 
-### Completed work prototypes
+### Completed work
 
 `completed-view.tsx` is the workspace `completed` page entry and renders Timeline,
-Day recap and Ledger. `useCompletedHistory` in `use-cards.ts` is a disabled reader
+and Day recap. `useCompletedHistory` in `use-cards.ts` is a disabled reader
 of `board.cards`, memoizing the pure `completedHistory` projection from `board.ts`;
 `completedDays` and `completedRecap` provide the remaining domain transforms.
 `useBoardStatus` supplies health separately. There are no new query keys, endpoints,
 mutations or poll owners. Router owns `historyLayout`, `historyDay` and `historyQuery`;
-board filters remain independent. The existing shell owns startup and issue details.
+search remains separate from board search; type, priority and label filters use
+the existing URL `ViewFilter`. Completed projections override lane/closed visibility
+to remain done-only. `DashboardFilters` hides status and adds label rules in this mode;
+its label options use the disabled `useBoardLabels` reader. The existing shell owns startup and issue details.
 See [completed work](completed-work.md) for the explicit last-update date-estimate
 limitation and done-only outcome semantics.
 

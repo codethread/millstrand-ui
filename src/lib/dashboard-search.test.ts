@@ -193,7 +193,7 @@ describe('shareable dashboard navigation', () => {
   });
 });
 
-it('round trips completed prototypes, selected day, search and issue independently of board filters', () => {
+it('round trips completed layouts, selected day, search and issue independently of board filters', () => {
   const state = parseDashboardSearch({
     mode: 'completed',
     historyLayout: 'recap',
@@ -210,4 +210,33 @@ it('round trips completed prototypes, selected day, search and issue independent
   expect(workspaceViewSearch(state, 'all').mode).toBe('board');
   expect(workspaceViewSearch(state, 'completed')).toMatchObject({ mode: 'completed', issue: null });
   expect(savedViewSearch(state, null).mode).toBe('board');
+});
+
+it('keeps completed filters on the history surface and rejects removed layouts', () => {
+  const state = parseDashboardSearch({
+    mode: 'completed',
+    historyLayout: 'recap',
+    historyDay: '2026-09-18',
+    historyQuery: 'dashboard',
+  });
+  const updated = {
+    ...state,
+    ...manualFilterSearch(state, {
+      ...state.filter,
+      types: ['feature'],
+      priorities: ['p1'],
+      terms: { web: 'include' },
+    }),
+  };
+  expect(updated).toMatchObject({
+    mode: 'completed',
+    historyLayout: 'recap',
+    historyQuery: 'dashboard',
+    historyDay: '2026-09-18',
+    filter: { types: ['feature'], priorities: ['p1'], terms: { web: 'include' } },
+  });
+  expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(updated)))).toEqual(
+    updated,
+  );
+  expect(parseDashboardSearch({ historyLayout: 'ledger' }).historyLayout).toBe('timeline');
 });

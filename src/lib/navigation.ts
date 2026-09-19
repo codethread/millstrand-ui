@@ -185,6 +185,7 @@ export function useDashboardActions() {
       filter((current) => ({ ...current, types: toggle(current.types, type) })),
     togglePriority: (priority: Priority) =>
       filter((current) => ({ ...current, priorities: toggle(current.priorities, priority) })),
+    setLabelMode: (mode: ViewFilter['mode']) => filter((current) => ({ ...current, mode })),
     toggleLabel: (label: string) =>
       filter((current) => {
         const terms = { ...current.terms };

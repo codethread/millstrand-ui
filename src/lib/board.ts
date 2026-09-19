@@ -268,9 +268,9 @@ export interface CompletedDay {
 
 /** Last update is an explicitly labelled proxy, never an asserted completion time.
  * Only done outcomes count: abandoned, unactioned and unknown closures are not wins. */
-export function completedHistory(cards: Card[], query: string): CompletedEntry[] {
+export function completedHistory(cards: Card[], sourceFilter: ViewFilter): CompletedEntry[] {
   const parents = new Map(cards.map((card) => [card.id, card]));
-  const filter = { ...emptyFilter(), includeClosed: true, query };
+  const filter = { ...sourceFilter, includeClosed: true, lanes: [] };
   const entries = cards
     .filter(
       (card) => card.state === 'closed' && card.outcome === 'done' && matchesCard(card, filter),

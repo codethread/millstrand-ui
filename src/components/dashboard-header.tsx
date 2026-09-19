@@ -25,7 +25,6 @@ import { useDashboardStore } from '../store';
 import { AgentNotifications } from './agent-notifications';
 import { AgentSearchControls } from './agent-directory';
 import { DashboardFilters } from './dashboard-filters';
-import { CompletedSearchControls } from './completed-view';
 import { ReviewSearchControls } from './review-inbox';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -90,9 +89,7 @@ export function DashboardHeader() {
           </div>
         )}
         <AgentNotifications />
-        {mode === 'completed' ? (
-          <CompletedSearchControls />
-        ) : mode === 'reviews' ? (
+        {mode === 'completed' ? null : mode === 'reviews' ? (
           <ReviewSearchControls />
         ) : mode === 'agents' ? (
           <AgentSearchControls />
