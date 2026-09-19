@@ -142,7 +142,7 @@
 
 (defn- clean-worktree-argv []
   ["sh" "-ceu"
-   "test -z \"$(git status --porcelain --ignored --untracked-files=all)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"])
+   "test -z \"$(git status --porcelain)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"])
 
 (defn- clean-inspection-cleanup-gate [id dependencies]
   (workflow/gate
@@ -152,7 +152,7 @@
    {"shell/argv"
     (fn [{:keys [branch worktree]}]
       ["sh" "-ceu"
-       "branch=$1\nworktree=$2\nroot=$(dirname \"$(git -C \"$worktree\" rev-parse --path-format=absolute --git-common-dir)\")\ntest \"$branch\" != main\ntest \"$branch\" = \"$(git -C \"$worktree\" branch --show-current)\ntest -z \"$(git -C \"$worktree\" status --porcelain --ignored --untracked-files=all)\ntest \"$(git -C \"$worktree\" rev-list --count origin/main..HEAD)\" -eq 0\ngit -C \"$root\" worktree remove \"$worktree\"\ngit -C \"$root\" branch -d \"$branch\""
+       "branch=$1\nworktree=$2\nroot=$(dirname \"$(git -C \"$worktree\" rev-parse --path-format=absolute --git-common-dir)\")\ntest \"$branch\" != main\ntest \"$branch\" = \"$(git -C \"$worktree\" branch --show-current)\ntest -z \"$(git -C \"$worktree\" status --porcelain)\"\ntest \"$(git -C \"$worktree\" rev-list --count origin/main..HEAD)\" -eq 0\ngit -C \"$root\" worktree remove \"$worktree\"\ngit -C \"$root\" branch -d \"$branch\""
        "clean-inspection-cleanup" branch worktree])
     "shell/cwd" (fn [{:keys [worktree]}] worktree)
     "shell/timeout-secs" 120}

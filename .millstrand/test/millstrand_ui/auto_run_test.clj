@@ -280,14 +280,20 @@
             (is (= "Verify no dirty files or commits ahead" (:title gate)))
             (is (= "shell" (:gate gate)))
             (is (str/includes? (nth argv 2) "git status --porcelain"))
+            (is (not (str/includes? (nth argv 2) "--ignored")))
             (is (str/includes? (nth argv 2) "origin/main..HEAD"))
             (is (some #(= "Finish the clean evidence-only card" (:title %)) views))
             (let [root (workflow/current-root "inspect-clean")
                   strands (:strands (graph/subgraph rt [(:id root)]))
                   finish-step (first (filter #(= "Finish the clean evidence-only card" (:title %))
-                                             strands))]
+                                             strands))
+                  cleanup-step (first (filter #(= "Remove the clean inspection worktree and branch" (:title %))
+                                               strands))
+                  cleanup-argv (attr-get cleanup-step :shell/argv)]
               (is (some #(= "Reserve the claimed card for clean completion" (:title %)) strands))
               (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) strands))
+              (is (str/includes? (nth cleanup-argv 2) "git -C \"$worktree\" status --porcelain"))
+              (is (not (str/includes? (nth cleanup-argv 2) "--ignored")))
               (is (= "millhouse.spools.land.card-actions/finish-card!"
                      (attr-get finish-step :code/fn))))
             (is (not-any? #(= "Publish the exact change with its review package" (:title %)) views))))
@@ -328,22 +334,24 @@
             (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) views))
             (is (some #(= "Leave the blocked card open with trustworthy evidence" (:title %)) views))))))))))
 
-(deftest clean-inspection-gate-rejects-dirty-and-ahead-worktrees
+(deftest clean-inspection-gate-accepts-ignored-artifacts-and-rejects-dirty-or-ahead-worktrees
   (let [dir (temporary-git-worktree!)
         argv ["sh" "-ceu"
-              "test -z \"$(git status --porcelain --ignored --untracked-files=all)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"]]
+              "test -z \"$(git status --porcelain)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"]]
     (try
       (is (zero? (command-exit dir argv)) "clean evidence-only work passes")
-      (spit (io/file dir "dirty.txt") "dirty\n")
-      (is (pos? (command-exit dir argv)) "dirty files reject a clean disposition")
-      (io/delete-file (io/file dir "dirty.txt"))
       (spit (io/file dir ".gitignore") "ignored.txt\n")
       (git! dir "git" "add" ".gitignore")
       (git! dir "git" "commit" "--quiet" "-m" "ignore")
       (git! dir "git" "update-ref" "refs/remotes/origin/main" "HEAD")
       (spit (io/file dir "ignored.txt") "ignored\n")
-      (is (pos? (command-exit dir argv)) "ignored files reject a clean disposition")
-      (io/delete-file (io/file dir "ignored.txt"))
+      (is (zero? (command-exit dir argv)) "ignored artifacts allow a clean disposition")
+      (spit (io/file dir "untracked.txt") "untracked\n")
+      (is (pos? (command-exit dir argv)) "ordinary untracked files reject a clean disposition")
+      (io/delete-file (io/file dir "untracked.txt"))
+      (spit (io/file dir "evidence.txt") "modified\n")
+      (is (pos? (command-exit dir argv)) "tracked changes reject a clean disposition")
+      (git! dir "git" "checkout" "--" "evidence.txt")
       (spit (io/file dir "ahead.txt") "ahead\n")
       (git! dir "git" "add" "ahead.txt")
       (git! dir "git" "commit" "--quiet" "-m" "ahead")

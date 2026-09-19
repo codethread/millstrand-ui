@@ -74,7 +74,8 @@ a change. The card body names the scope; the workflow requires the worker to rec
 one structured summary containing the conclusion, evidence, findings, and recommended
 next action before it can select a disposition.
 
-- **clean** — a shell gate verifies both an empty `git status --porcelain` and no
+- **clean** — a shell gate verifies both an empty `git status --porcelain` (so
+  ignored build, dependency, and browser artifacts do not count as changes) and no
   commits ahead of `origin/main`. The evidence remains in the workflow/card, then
   the feature finishes as done without a branch push or PR.
 - **fixed** — bounded worktree changes exist. Quality runs first and the admitted
