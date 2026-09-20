@@ -3,8 +3,9 @@ import { useQueries, useQueryClient, type UseQueryResult } from '@tanstack/react
 import type { AgentDirectory, AgentIdentity, Board, Card, WorkspaceOption } from '../../shared/api';
 import { agentQueryOptions } from '../lib/api/agents';
 import { boardQueryOptions } from '../lib/api/cards';
-import { useWorkspaces } from '../lib/api/workspaces';
+import { useVisibleWorkspaces } from './use-visible-workspaces';
 import { activeAgentIdentities } from '../lib/agents';
+import { useWorkspacePreferenceStore } from '../workspace-preference-store';
 import {
   overviewActivity,
   overviewCards,
@@ -46,7 +47,8 @@ function combineAgents(results: UseQueryResult<AgentIdentity[]>[]): AgentActivit
 
 /** Overview's sole board/agent poll owner, mounted only outside WorkspacePage. */
 export function useOverview() {
-  const discovery = useWorkspaces();
+  const discovery = useVisibleWorkspaces();
+  const preferences = useWorkspacePreferenceStore((state) => state.preferences);
   const options = discovery.data ?? noWorkspaces;
   const client = useQueryClient();
   const boards = useQueries({
@@ -75,8 +77,9 @@ export function useOverview() {
         options.map((workspace, index) =>
           workspaceActivity(workspace, boards[index]!, agents[index]!),
         ),
+        preferences,
       ),
-    [options, boards, agents],
+    [options, boards, agents, preferences],
   );
   function refreshSource(workspace: WorkspaceOption, source: 'board' | 'agents') {
     if (workspace.status !== 'running') return;

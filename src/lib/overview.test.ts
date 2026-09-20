@@ -40,6 +40,7 @@ it('retains independent snapshots and counts while one source fails', () => {
   );
   const activity = overviewActivity([retained, unavailable]);
   expect(activity).toEqual({
+    pinned: [],
     busy: [retained],
     other: [unavailable],
     cardCount: 1,
@@ -75,5 +76,28 @@ it('distinguishes quiet success, initial loading and offline retained activity',
     busy: [offline],
     cardCount: 1,
     partial: true,
+  });
+});
+
+it('promotes quiet pinned weavers without double-counting or losing activity', () => {
+  const quiet = workspaceActivity(
+    workspace,
+    { data: [], health: { kind: 'live' } },
+    { data: [], health: { kind: 'live' } },
+  );
+  const busy = workspaceActivity(
+    { ...workspace, id: 'two' },
+    { data: [card], health: { kind: 'live' } },
+    { data: [], health: { kind: 'live' } },
+  );
+  expect(
+    overviewActivity([busy, quiet], { one: { kind: 'pinned', name: 'One', path: '/one' } }),
+  ).toEqual({
+    pinned: [quiet],
+    busy: [busy],
+    other: [],
+    cardCount: 1,
+    agentCount: 0,
+    partial: false,
   });
 });

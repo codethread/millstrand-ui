@@ -1,10 +1,10 @@
 import { useQueries } from '@tanstack/react-query';
-import { useWorkspaces } from '../lib/api/workspaces';
+import { useVisibleWorkspaces } from '../hooks/use-visible-workspaces';
 import { logActivityOptions } from '../lib/api/log-activity';
 
 /** Overview-only log summary owner, disjoint from WorkspaceResourcePolls. */
 export function OverviewLogPolls() {
-  const workspaces = useWorkspaces();
+  const workspaces = useVisibleWorkspaces();
   useQueries({
     queries: (workspaces.data ?? []).map((workspace) => ({
       ...logActivityOptions(workspace.id),

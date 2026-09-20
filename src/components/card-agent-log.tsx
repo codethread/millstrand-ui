@@ -97,6 +97,7 @@ export function CompactLog({
   source: LogSource;
   status: string | null;
 }) {
+  const workspace = useWorkspace();
   const paused = useLogUiStore((state) => state.paused);
   const setPaused = useLogUiStore((state) => state.setPaused);
   const open = useLogUiStore((state) => state.open);
@@ -132,7 +133,7 @@ export function CompactLog({
             variant="ghost"
             size="sm"
             className="h-6 px-2 text-[10px] text-[#bfcddd] hover:bg-white/10 hover:text-white"
-            onClick={() => open(identity, source)}
+            onClick={() => open(identity, source, workspace)}
           >
             <Maximize2 className="size-3!" />
             Expand

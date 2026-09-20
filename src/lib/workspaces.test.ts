@@ -3,7 +3,13 @@ import { QueryObserver } from '@tanstack/react-query';
 import type { WorkspaceOption } from '../../shared/api';
 import { createQueryClient } from './api/query-client';
 import { workspaceQueryOptions, workspaceReaderOptions } from './api/workspaces';
-import { matchingWorkspaces, selectedWorkspace } from './workspaces';
+import {
+  matchingWorkspaces,
+  selectedWorkspace,
+  visibleWorkspaces,
+  hiddenWorkspaces,
+  workspaceIsHidden,
+} from './workspaces';
 
 const options: WorkspaceOption[] = [
   { id: 'a', name: 'Alpha', path: '/projects/alpha/.millstrand', status: 'running' },
@@ -54,4 +60,18 @@ it('shares discovery with projection readers and retains selected data after a f
   stopOwner();
   stopReader();
   client.clear();
+});
+
+it('puts pins first, excludes hidden weavers even from search, and preserves discovery order', () => {
+  const pinned = { b: { kind: 'pinned' as const, name: 'Beta', path: '/b' } };
+  expect(visibleWorkspaces(options, pinned)).toEqual([options[1], options[0]]);
+  const preferences = { ...pinned, a: { kind: 'hidden' as const, name: 'Alpha', path: '/a' } };
+  expect(visibleWorkspaces(options, preferences)).toEqual([options[1]]);
+  expect(matchingWorkspaces(visibleWorkspaces(options, preferences), 'Alpha')).toEqual([]);
+  expect(options.map((option) => option.id)).toEqual(['a', 'b']);
+  expect(hiddenWorkspaces(preferences)).toEqual([{ id: 'a', name: 'Alpha', path: '/a' }]);
+  expect(workspaceIsHidden('a', preferences)).toBe(true);
+  expect(workspaceIsHidden('b', preferences)).toBe(false);
+  expect(workspaceIsHidden(null, preferences)).toBe(true);
+  expect(workspaceIsHidden(null, pinned)).toBe(false);
 });
