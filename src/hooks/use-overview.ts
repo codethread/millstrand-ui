@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useAttentionStore } from '../attention-store';
+import { useCallback, useMemo } from 'react';
 import { useQueries, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type { AgentDirectory, AgentIdentity, Board, Card, WorkspaceOption } from '../../shared/api';
 import { agentQueryOptions } from '../lib/api/agents';
@@ -18,7 +19,6 @@ import {
 type DiscoveryHealth = { kind: 'loading' } | { kind: 'live' } | { kind: 'failed'; error: Error };
 
 const noWorkspaces: WorkspaceOption[] = [];
-const selectCards = (board: Board) => overviewCards(board.cards);
 const selectAgents = (directory: AgentDirectory) => activeAgentIdentities(directory.identities);
 
 function activityHealth(
@@ -47,6 +47,8 @@ function combineAgents(results: UseQueryResult<AgentIdentity[]>[]): AgentActivit
 
 /** Overview's sole board/agent poll owner, mounted only outside WorkspacePage. */
 export function useOverview() {
+  const labels = useAttentionStore((state) => state.labels);
+  const selectCards = useCallback((board: Board) => overviewCards(board.cards, labels), [labels]);
   const discovery = useVisibleWorkspaces();
   const preferences = useWorkspacePreferenceStore((state) => state.preferences);
   const options = discovery.data ?? noWorkspaces;

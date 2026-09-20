@@ -201,7 +201,7 @@ describe('all-weaver overview cards', () => {
       { ...card('closed'), lane: 'claimed', state: 'closed' },
       { ...card('unknown'), lane: 'unknown' },
     ];
-    expect(overviewCards(cards).map((item) => item.id)).toEqual([
+    expect(overviewCards(cards, []).map((item) => item.id)).toEqual([
       'review',
       'production',
       'progress',

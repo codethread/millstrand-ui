@@ -1,3 +1,5 @@
+import { useAttentionStore } from '../attention-store';
+import { useCockpitStore } from '../cockpit-store';
 import type { ReviewScope, ReviewStage } from '../../shared/reviews';
 import { flushSync } from 'react-dom';
 import { useNavigate, useSearch } from '@tanstack/react-router';
@@ -122,6 +124,17 @@ export function useDashboardActions() {
     updateCurrent((current) => manualFilterSearch(current, change(current.filter)), replace);
   }
   return {
+    inspectOverviewCard: (workspace: string, issue: string) =>
+      update({
+        mode: 'overview',
+        workspace,
+        issue,
+        agent: null,
+        agentRun: null,
+        detailTab: 'overview',
+      }),
+    inspectOverviewAgent: (workspace: string, agent: string) =>
+      update({ mode: 'overview', workspace, agent, issue: null, agentRun: null }),
     openHistoryRecap: (historyDay: string | null) => update({ historyDay, historyLayout: 'recap' }),
     setHistoryLayout: (historyLayout: HistoryLayout) => update({ historyLayout }),
     setHistoryDay: (historyDay: string) => update({ historyDay }),
@@ -223,9 +236,13 @@ export function useDashboardKeys() {
   const keys = useDashboardStore((state) => state.shortcuts);
   const overlay = useDashboardStore((state) => state.overlay.kind);
   const composer = useAgentPromptStore((state) => state.composer.kind);
+  const attentionEditor = useAttentionStore((state) => state.editor.kind);
+  const weaverControls = useCockpitStore((state) => state.controls.kind);
   const enabled =
     overlay === 'closed' &&
     composer === 'closed' &&
+    attentionEditor === 'closed' &&
+    weaverControls === 'closed' &&
     issue === null &&
     agent === null &&
     agentRun === null;
@@ -236,16 +253,18 @@ export function useDashboardKeys() {
       flushSync(() => useDashboardStore.getState().setContentFullscreen(false));
       document
         .getElementById(
-          mode === 'agents'
-            ? 'agent-search'
-            : mode === 'reviews'
-              ? 'review-search'
-              : 'issue-search',
+          mode === 'overview'
+            ? 'fleet-search'
+            : mode === 'agents'
+              ? 'agent-search'
+              : mode === 'reviews'
+                ? 'review-search'
+                : 'issue-search',
         )
         ?.focus();
     },
-    { preventDefault: true, enabled: workspaceEnabled },
-    [keys.search, workspaceEnabled, mode],
+    { preventDefault: true, enabled },
+    [keys.search, enabled, mode],
   );
   useHotkeys(
     'escape',

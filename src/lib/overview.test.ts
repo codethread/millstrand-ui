@@ -1,6 +1,148 @@
 import { expect, it } from 'vitest';
 import type { Card, WorkspaceOption } from '../../shared/api';
-import { overviewActivity, workspaceActivity } from './overview';
+import { sorted } from '../../shared/array';
+import type { LogBinding } from '../../shared/log-activity';
+import {
+  agentPulse,
+  cockpitWork,
+  defaultAttentionLabels,
+  overviewActivity,
+  overviewCards,
+  workspaceActivity,
+} from './overview';
+
+it('includes explicit asks outside active lanes, without reviving closed cards', () => {
+  expect(
+    sorted(
+      overviewCards(
+        [
+          { ...card, id: 'ask', lane: 'refinement', labels: ['human-attention'] },
+          { ...card, id: 'backlog', lane: 'pending' },
+          { ...card, id: 'done', lane: 'closed', state: 'closed', labels: ['human-attention'] },
+          card,
+        ],
+        defaultAttentionLabels,
+      ).map((item) => item.id),
+    ),
+  ).toEqual(['ask', 'production']);
+});
+
+it('keeps explicit review-lane asks in attention, not duplicated into ready-for-a-look', () => {
+  const snapshots = [
+    workspaceActivity(
+      workspace,
+      {
+        data: [
+          { ...card, id: 'ask', lane: 'in_review', labels: ['auto-run-failure'] },
+          { ...card, id: 'review', lane: 'in_review' },
+        ],
+        health: { kind: 'live' },
+      },
+      { data: [], health: { kind: 'live' } },
+    ),
+  ];
+  const work = cockpitWork(
+    snapshots,
+    [],
+    { search: '', scope: null, attentionLabels: defaultAttentionLabels },
+    0,
+  );
+  expect(work.attention.map((item) => item.card.id)).toEqual(['ask']);
+  expect(work.review.map((item) => item.card.id)).toEqual(['review']);
+  expect(
+    cockpitWork(
+      snapshots,
+      [],
+      { search: '', scope: 'another', attentionLabels: defaultAttentionLabels },
+      0,
+    ).attention,
+  ).toEqual([]);
+  expect(
+    cockpitWork(
+      snapshots,
+      [],
+      { search: 'One review', scope: null, attentionLabels: defaultAttentionLabels },
+      0,
+    ).review,
+  ).toHaveLength(1);
+});
+
+it('applies one custom label list across workspaces, with an empty list disabling attention', () => {
+  const labels = ['approval-needed', 'decision'];
+  const snapshots = [workspace, { ...workspace, id: 'two', name: 'Two' }].map((item) =>
+    workspaceActivity(
+      item,
+      {
+        data: overviewCards(
+          [
+            { ...card, id: 'ask', lane: 'refinement', labels: ['decision'] },
+            { ...card, id: 'review', lane: 'in_review', labels: ['approval-needed'] },
+            { ...card, id: 'closed', state: 'closed', labels: ['decision'] },
+          ],
+          labels,
+        ),
+        health: { kind: 'live' },
+      },
+      { data: [], health: { kind: 'live' } },
+    ),
+  );
+  const configured = cockpitWork(
+    snapshots,
+    [],
+    { search: '', scope: null, attentionLabels: labels },
+    0,
+  );
+  expect(configured.attention.map((item) => [item.workspace.id, item.card.id])).toEqual([
+    ['one', 'ask'],
+    ['one', 'review'],
+    ['two', 'ask'],
+    ['two', 'review'],
+  ]);
+  expect(configured.review).toEqual([]);
+  const disabled = cockpitWork(snapshots, [], { search: '', scope: null, attentionLabels: [] }, 0);
+  expect(disabled.attention).toEqual([]);
+  expect(disabled.review.map((item) => item.workspace.id)).toEqual(['one', 'two']);
+});
+
+it('only calls a running process quiet with fresh log evidence older than five minutes', () => {
+  const binding: LogBinding = {
+    identity: 'worker',
+    source: { provider: 'pi', session: 'session' },
+    activity: {
+      kind: 'available',
+      modifiedAt: '2026-09-20T05:00:00Z',
+      latest: {
+        id: 'event',
+        record: {
+          v: 1,
+          event: 'file',
+          ts: '2026-09-20T05:00:00Z',
+          session_id: 'session',
+          tool: 'Read',
+          file_path: 'README.md',
+        },
+      },
+    },
+  };
+  expect(agentPulse(true, binding, false, Date.parse('2026-09-20T05:04:59Z')).kind).toBe('recent');
+  expect(agentPulse(true, binding, false, Date.parse('2026-09-20T05:05:00Z'))).toMatchObject({
+    kind: 'quiet',
+    age: '5m',
+  });
+  expect(agentPulse(false, binding, false, Date.parse('2026-09-20T05:10:00Z')).kind).toBe('recent');
+  expect(agentPulse(true, binding, true, Date.parse('2026-09-20T05:10:00Z')).kind).toBe(
+    'last-known',
+  );
+  expect(agentPulse(true, null, false, Date.parse('2026-09-20T05:10:00Z')).kind).toBe('unknown');
+  expect(
+    agentPulse(
+      true,
+      { ...binding, activity: { kind: 'unavailable', message: 'Not readable' } },
+      false,
+      Date.parse('2026-09-20T05:10:00Z'),
+    ).kind,
+  ).toBe('unknown');
+});
 
 const workspace: WorkspaceOption = {
   id: 'one',
