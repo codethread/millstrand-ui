@@ -1,4 +1,5 @@
 import type { AgentIdentity } from '../../shared/api';
+import { attributionLabel } from '../lib/provenance';
 import { useDashboardActions } from '../lib/navigation';
 import { AgentRunReply } from './agent-run-reply';
 import { AgentRunStatus } from './agent-status';
@@ -48,6 +49,28 @@ export function AgentRunHistory({
             <dd className="font-mono text-xs">{run.cwd ?? 'Not recorded'}</dd>
             <dt>Target</dt>
             <dd>{run.target ?? 'No explicit target'}</dd>
+            <dt>Contributors</dt>
+            <dd>
+              {run.participants.length > 0
+                ? run.participants.map((participant) => attributionLabel(participant)).join(', ')
+                : 'No published participants'}
+            </dd>
+            {run.continuation !== null && (
+              <>
+                <dt>Continuation</dt>
+                <dd>
+                  {run.continuation.kind === 'native-resume'
+                    ? 'Native resume of '
+                    : 'Fresh retry of '}
+                  <button
+                    className="text-left text-primary hover:underline"
+                    onClick={() => focusAgentRun(run.continuation!.predecessorRunId)}
+                  >
+                    {run.continuation.predecessorRunId}
+                  </button>
+                </dd>
+              </>
+            )}
             {run.rootTargets.length > 0 && (
               <>
                 <dt>Work roots</dt>
