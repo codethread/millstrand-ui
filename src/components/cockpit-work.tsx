@@ -111,7 +111,7 @@ function QuietRow({ agent }: { agent: CockpitAgent }) {
       )}
       <AgentLogHint
         workspace={agent.workspace.id}
-        identity={agent.identity.id}
+        identityStrandId={agent.identity.strandId}
         stale={agent.stale}
       />
     </button>
@@ -248,7 +248,7 @@ export function ActivityRail({ agents }: { agents: CockpitAgent[] }) {
               </div>
               <AgentLogHint
                 workspace={agent.workspace.id}
-                identity={agent.identity.id}
+                identityStrandId={agent.identity.strandId}
                 stale={agent.stale}
               />
             </button>
@@ -264,6 +264,7 @@ export function ActivityRail({ agents }: { agents: CockpitAgent[] }) {
             <AgentLogButton
               workspace={agent.workspace.id}
               identity={agent.identity.id}
+              identityStrandId={agent.identity.strandId}
               disabled={agent.stale}
             />
           </article>
