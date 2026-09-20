@@ -15,6 +15,7 @@ export function graphFromCards(cards: Card[], allCards: Card[]): CardGraph {
       title: card.title,
       kind: card.type,
       state: card.state,
+      owner: card.owner,
       createdAt: card.createdAt,
       updatedAt: card.updatedAt,
       attributes: {

@@ -17,7 +17,7 @@ export function Notes({ notes }: { notes: Note[] }) {
             <MessageSquare className="size-3" />
           </span>
           <header>
-            <strong>{note.by ?? 'Workspace note'}</strong>
+            <strong>{note.actor?.identity ?? 'Workspace note'}</strong>
             {note.kind && <span className="note-kind">{note.kind}</span>}
             <time title={note.at}>{relativeTime(note.at)}</time>
           </header>

@@ -159,6 +159,8 @@ const card: Card = {
   priority: 'p2',
   epicId: null,
   owner: null,
+  reporter: null,
+  ownership: { current: null, history: [] },
   branch: null,
   worktree: null,
   source: null,

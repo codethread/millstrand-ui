@@ -7,16 +7,12 @@ vi.mock('node:child_process', async () => {
   return { execFile: Object.assign(() => undefined, { [promisify.custom]: exec }) };
 });
 
-const readCardStrands = vi.fn();
-const database = {
-  readAgentStrands: vi.fn(),
-  readCardStrands,
-};
+const readProvenance = vi.fn();
+const database = { readProvenance };
 
 beforeEach(() => {
   exec.mockReset();
-  readCardStrands.mockReset();
-  database.readAgentStrands.mockReset();
+  readProvenance.mockReset();
 });
 
 const card = {
@@ -30,7 +26,15 @@ const card = {
 it('reads domain membership before bounded persisted hydration and retains long dispatch errors', async () => {
   const error = 'Delivery preparation failed. '.repeat(100);
   exec.mockResolvedValue({ stdout: JSON.stringify({ cards: [card] }) });
-  readCardStrands.mockResolvedValue([{ ...card, attributes: { 'auto-run/error': error } }]);
+  readProvenance.mockResolvedValue({
+    strands: [
+      {
+        ...card,
+        attributes: { 'kanban/card': 'true', 'auto-run/error': error },
+      },
+    ],
+    edges: [],
+  });
   const data = new StrandData('/repo/.millstrand', database);
   const board = await data.board();
   expect(board.cards[0]?.autoRun?.error).toBe(error);
@@ -39,13 +43,16 @@ it('reads domain membership before bounded persisted hydration and retains long 
     'strand',
     ['--workspace', '/repo/.millstrand', 'kanban', 'board', '--all', 'true'],
   ]);
-  expect(readCardStrands).toHaveBeenCalledTimes(1);
+  expect(readProvenance).toHaveBeenCalledTimes(1);
   expect(await data.board()).toBe(board);
 });
 
 it('omits a deleted card without rejecting its surviving peers', async () => {
   exec.mockResolvedValue({ stdout: JSON.stringify({ cards: [card, { ...card, id: 'deleted' }] }) });
-  readCardStrands.mockResolvedValue([card]);
+  readProvenance.mockResolvedValue({
+    strands: [{ ...card, attributes: { 'kanban/card': 'true' } }],
+    edges: [],
+  });
   expect(
     (await new StrandData('/repo/.millstrand', database).board()).cards.map(({ id }) => id),
   ).toEqual(['card1']);
@@ -53,7 +60,7 @@ it('omits a deleted card without rejecting its surviving peers', async () => {
 
 it('reports hydration failures rather than claiming cards have no configuration', async () => {
   exec.mockResolvedValue({ stdout: JSON.stringify({ cards: [card] }) });
-  readCardStrands.mockRejectedValue(
+  readProvenance.mockRejectedValue(
     Object.assign(new Error('Matching-row cap exceeded'), { status: 502 }),
   );
   await expect(new StrandData('/repo/.millstrand', database).board()).rejects.toMatchObject({

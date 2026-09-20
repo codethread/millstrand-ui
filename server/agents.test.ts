@@ -12,20 +12,23 @@ function strand(
     state: 'active',
     created_at: createdAt,
     updated_at: createdAt,
-    attributes: Object.fromEntries(
-      Object.entries(attributes).filter(([, value]) => value !== undefined),
-    ),
+    attributes,
   };
 }
-const identity = strand('identity1', {
-  'identity/session': 'true',
-  'identity/id': 'calm-young-tiger',
-  'identity/harness': 'pi',
-});
+function edge(from: string, to: string, edgeType: string) {
+  return { from_strand_id: from, to_strand_id: to, edge_type: edgeType };
+}
+function identity(id: string, friendly: string) {
+  return strand(id, {
+    'identity/session': 'true',
+    'identity/id': friendly,
+    'identity/harness': 'pi',
+  });
+}
 const runAttrs = {
   'harness/run': 'true',
   'harness/published': 'true',
-  'identity/id': 'calm-young-tiger',
+  'identity/id': 'latest-worker',
   'harness/alias': 'luna-high',
   'harness/harness': 'pi',
   'harness/status': 'running',
@@ -34,78 +37,89 @@ const runAttrs = {
 };
 
 describe('agent directory boundary', () => {
-  it('joins friendly ownership and tracked run aliases without exposing provider secrets', () => {
-    const agents = parseAgents([
-      identity,
-      strand('run1', {
-        ...runAttrs,
-        'harness/target': 'card1',
-        'harness/root-targets': ['epic1'],
-        'harness/env': { TOKEN: 'secret-value' },
-        'harness/prompt': { 'millstrand/omitted': true, bytes: 9999 },
-      }),
-      strand('card1', { owner: 'calm-young-tiger', 'kanban/card': 'true' }),
-      strand('task1', { owner: 'calm-young-tiger', 'kanban/task': 'true' }),
-      strand('other', { owner: 'pi', 'kanban/card': 'true' }),
-    ]);
-    expect(agents).toHaveLength(1);
-    expect(agents[0]).toMatchObject({
-      id: 'calm-young-tiger',
-      harness: 'pi',
-      runs: [{ alias: 'luna-high', status: 'running', target: 'card1', rootTargets: ['epic1'] }],
-      work: [
-        { id: 'card1', kind: 'card' },
-        { id: 'task1', kind: 'task' },
+  it('uses performed and serving edges for all historical participants instead of scalar snapshots', () => {
+    const result = parseAgents({
+      strands: [
+        identity('identity-a', 'worker-a'),
+        identity('identity-b', 'worker-b'),
+        strand('run1', {
+          ...runAttrs,
+          'harness/target': 'stale-target',
+          'harness/root-targets': ['stale-root'],
+          'harness/env': { TOKEN: 'secret-value' },
+        }),
+      ],
+      edges: [
+        edge('identity-a', 'run1', 'performed'),
+        edge('identity-b', 'run1', 'performed'),
+        edge('run1', 'task1', 'serves'),
+        edge('run1', 'card1', 'serves-root'),
       ],
     });
-    expect(JSON.stringify(agents)).not.toContain('secret-value');
-    expect(JSON.stringify(agents)).not.toContain('harness/prompt');
-  });
 
-  it('retains run history newest first, excludes unpublished runs, and does not infer status from strand state', () => {
-    const [agent] = parseAgents([
-      identity,
-      strand('old', { ...runAttrs, 'harness/status': 'stopped', 'harness/substatus': 'completed' }),
-      strand('new', { ...runAttrs, 'harness/status': 'ready' }, '2026-09-14 10:00:00'),
-      strand('partial', { 'harness/run': 'true' }),
+    expect(result.runs).toMatchObject([
+      {
+        id: 'run1',
+        target: 'task1',
+        rootTargets: ['card1'],
+        participants: [
+          { identity: 'worker-a', status: 'resolved', identityStrandIds: ['identity-a'] },
+          { identity: 'worker-b', status: 'resolved', identityStrandIds: ['identity-b'] },
+        ],
+      },
     ]);
-    expect(agent?.runs.map((run) => [run.id, run.status])).toEqual([
-      ['new', 'ready'],
-      ['old', 'stopped'],
+    expect(result.identities.map((candidate) => candidate.runs.map((run) => run.id))).toEqual([
+      ['run1'],
+      ['run1'],
     ]);
-    expect(() =>
-      parseAgents([identity, strand('invalid', { ...runAttrs, 'harness/status': null })]),
-    ).toThrow('harness/status');
+    expect(JSON.stringify(result)).not.toContain('secret-value');
+    expect(JSON.stringify(result)).not.toContain('stale-target');
   });
 
-  it('supports identities without tracked runs and worlds without identities', () => {
-    expect(parseAgents([identity])[0]).toMatchObject({ runs: [], work: [] });
-    expect(parseAgents([])).toEqual([]);
-    expect(parseAgents([strand('card', { 'kanban/card': 'true' })])).toEqual([]);
+  it('keeps native resume and fresh retry provenance distinct', () => {
+    const result = parseAgents({
+      strands: [
+        identity('identity-a', 'worker-a'),
+        strand('original', { ...runAttrs, 'harness/status': 'stopped' }),
+        strand('resumed', runAttrs, '2026-09-14 10:00:00'),
+        strand('fresh', { ...runAttrs, 'harness/status': 'ready' }, '2026-09-15 10:00:00'),
+      ],
+      edges: [
+        edge('identity-a', 'original', 'performed'),
+        edge('identity-a', 'resumed', 'performed'),
+        edge('identity-a', 'fresh', 'performed'),
+        edge('resumed', 'original', 'resumes'),
+        edge('fresh', 'resumed', 'continues'),
+      ],
+    });
+
+    expect(result.runs.map(({ id, continuation }) => ({ id, continuation }))).toEqual([
+      {
+        id: 'fresh',
+        continuation: { kind: 'fresh-retry', predecessorRunId: 'resumed' },
+      },
+      {
+        id: 'resumed',
+        continuation: { kind: 'native-resume', predecessorRunId: 'original' },
+      },
+      { id: 'original', continuation: null },
+    ]);
   });
 
-  it.each([undefined, null])(
-    'retains linked runs and owned work when a historical run has identity %s',
-    (identityId) => {
-      const unlinkedRun = strand('historical', {
-        ...runAttrs,
-        'identity/id': identityId,
-        owner: 'calm-young-tiger',
-      });
-      const agents = parseAgents([unlinkedRun, identity, strand('linked', runAttrs)]);
+  it('returns unresolved run provenance without inventing an identity record', () => {
+    const result = parseAgents({ strands: [strand('run', runAttrs)], edges: [] });
+    expect(result.identities).toEqual([]);
+    expect(result.runs[0]?.participants).toEqual([
+      { identity: 'latest-worker', status: 'unresolved', identityStrandIds: [] },
+    ]);
+  });
 
-      expect(agents).toHaveLength(1);
-      expect(agents[0]?.runs.map((run) => run.id)).toEqual(['linked']);
-      expect(agents[0]?.work).toEqual([
-        { id: 'historical', title: 'historical', state: 'active', kind: 'work' },
-      ]);
-      expect(parseAgents([unlinkedRun])).toEqual([]);
-    },
-  );
-
-  it('rejects malformed identity linkage instead of silently assigning the wrong alias', () => {
+  it('rejects unsupported graph shapes instead of selecting a conflicting identity', () => {
     expect(() =>
-      parseAgents([identity, strand('broken', { ...runAttrs, 'identity/id': 42 })]),
-    ).toThrow('identity/id');
+      parseAgents({
+        strands: [identity('identity-a', 'worker-a'), strand('run', runAttrs)],
+        edges: [edge('run', 'task-a', 'serves'), edge('run', 'task-b', 'serves')],
+      }),
+    ).toThrow('serves multiple direct targets');
   });
 });

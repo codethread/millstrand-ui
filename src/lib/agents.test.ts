@@ -29,6 +29,8 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     cwd: '/workspace',
     target: null,
     rootTargets: [],
+    participants: [],
+    continuation: null,
     createdAt: '2026-09-13 10:00:00',
     startedAt: null,
     finishedAt: null,
@@ -73,6 +75,16 @@ describe('agent activity and issue attribution', () => {
     expect(issueAgents([owner], owner.id, 'card1')).toEqual([owner]);
     expect(issueAgentActivity(owner, 'card1')).toBe('Session running');
     expect(issueAgents([owner], null, 'card1')).toEqual([]);
+  });
+
+  it('does not select an ambiguous friendly identity as owner or exact-run participant', () => {
+    const sharedRun = run({ id: 'shared', target: 'card1' });
+    const duplicateA = identity([sharedRun], 'duplicate');
+    const duplicateB = { ...identity([sharedRun], 'duplicate'), strandId: 'identity2' };
+    expect(issueAgents([duplicateA, duplicateB], 'duplicate', 'other')).toEqual([]);
+    expect(selectedAgentActivity([duplicateA, duplicateB], 'duplicate', null)).toBeNull();
+    expect(selectedAgentActivity([duplicateA, duplicateB], null, 'shared')).toBeNull();
+    expect(agentRunIdentities([duplicateA, duplicateB])).toEqual({});
   });
 
   it('links direct and root-targeted work even when the agent is not the card owner', () => {

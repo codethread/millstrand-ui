@@ -39,7 +39,7 @@ export function cardLogTasks(graph: CardGraph): CardLogTask[] {
       id: node.id,
       title: node.title,
       state: node.state,
-      owner: typeof node.attributes['owner'] === 'string' ? node.attributes['owner'] : null,
+      owner: node.owner,
     }));
 }
 
@@ -50,8 +50,13 @@ export function cardLogAgents(
   target: string,
   tasks: CardLogTask[],
 ): CardLogAgent[] {
+  const identityCounts = new Map<string, number>();
+  for (const identity of agents)
+    identityCounts.set(identity.id, (identityCounts.get(identity.id) ?? 0) + 1);
+  const resolves = (friendly: string | null, identity: AgentIdentity) =>
+    friendly === identity.id && identityCounts.get(identity.id) === 1;
   const matches = agents.flatMap((identity): CardLogAgent[] => {
-    const ownedTasks = tasks.filter((task) => task.owner === identity.id);
+    const ownedTasks = tasks.filter((task) => resolves(task.owner, identity));
     const targetedRuns = identity.runs.filter(
       (run) => runTargets(run, target) || tasks.some((task) => runTargets(run, task.id)),
     );
@@ -59,7 +64,7 @@ export function cardLogAgents(
       targetedRuns.find((run) => run.status === 'running') ??
       targetedRuns.find((run) => run.status === 'ready') ??
       targetedRuns[0];
-    const ownsCard = identity.id === owner;
+    const ownsCard = resolves(owner, identity);
     if (!targeted && !ownsCard && !ownedTasks.length) return [];
     const current =
       ownsCard ||
@@ -73,7 +78,8 @@ export function cardLogAgents(
         tasks: sorted(
           tasks.filter(
             (task) =>
-              task.owner === identity.id || targetedRuns.some((run) => runTargets(run, task.id)),
+              resolves(task.owner, identity) ||
+              targetedRuns.some((run) => runTargets(run, task.id)),
           ),
           (a, b) => Number(b.state === 'active') - Number(a.state === 'active'),
         ),
@@ -86,7 +92,7 @@ export function cardLogAgents(
     (a, b) =>
       Number(a.group === 'history') - Number(b.group === 'history') ||
       Number(b.run?.status === 'running') - Number(a.run?.status === 'running') ||
-      Number(b.identity.id === owner) - Number(a.identity.id === owner) ||
+      Number(resolves(owner, b.identity)) - Number(resolves(owner, a.identity)) ||
       (b.run?.createdAt ?? b.identity.createdAt).localeCompare(
         a.run?.createdAt ?? a.identity.createdAt,
       ),

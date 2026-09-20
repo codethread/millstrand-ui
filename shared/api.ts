@@ -24,6 +24,31 @@ export interface AutoRun {
   branch: string | null;
 }
 
+export type AttributionStatus = 'resolved' | 'unresolved' | 'ambiguous';
+
+/** Raw friendly identity plus graph-enrichment state. Empty IDs never imply a guessed match. */
+export interface IdentityAttribution {
+  identity: string;
+  status: AttributionStatus;
+  identityStrandIds: string[];
+}
+
+export interface OwnershipClaim {
+  id: string;
+  owner: IdentityAttribution;
+  actor: IdentityAttribution | null;
+  claimedAt: string;
+  order: number;
+  branch: string | null;
+  worktree: string | null;
+  runId: string | null;
+}
+
+export interface CardOwnership {
+  current: OwnershipClaim | null;
+  history: OwnershipClaim[];
+}
+
 export interface Card {
   id: string;
   title: string;
@@ -32,7 +57,10 @@ export interface Card {
   lane: Lane;
   priority: Priority;
   epicId: string | null;
+  /** Convenience projection of ownership.current.owner.identity. */
   owner: string | null;
+  reporter: IdentityAttribution | null;
+  ownership: CardOwnership;
   branch: string | null;
   worktree: string | null;
   source: string | null;
@@ -52,6 +80,10 @@ export interface Board {
 
 export type AgentRunStatus = 'ready' | 'running' | 'stopped' | 'failed' | 'unknown';
 
+export type LogContinuation =
+  | { kind: 'native-resume'; predecessorRunId: string }
+  | { kind: 'fresh-retry'; predecessorRunId: string };
+
 export interface AgentRun {
   id: string;
   requestId: string | null;
@@ -66,6 +98,8 @@ export interface AgentRun {
   cwd: string | null;
   target: string | null;
   rootTargets: string[];
+  participants: IdentityAttribution[];
+  continuation: LogContinuation | null;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
@@ -93,6 +127,8 @@ export interface AgentDirectory {
   workspace: { path: string; name: string };
   fetchedAt: string;
   identities: AgentIdentity[];
+  /** Every published run, including unresolved participants not present in the registry. */
+  runs: AgentRun[];
 }
 
 export interface AgentOption {
@@ -153,17 +189,24 @@ export interface Note {
   id: string;
   text: string;
   at: string;
-  by: string | null;
+  actor: IdentityAttribution | null;
   kind: string | null;
   truncated: boolean;
 }
+
+export type TaskOwnership =
+  | { source: 'direct'; claim: OwnershipClaim }
+  | { source: 'inherited'; featureId: string; claim: OwnershipClaim };
 
 export interface Task {
   id: string;
   title: string;
   state: string;
   status: TaskStatus;
+  /** Convenience projection of ownership.claim.owner.identity. */
   owner: string | null;
+  ownerSource: TaskOwnership['source'] | null;
+  ownership: TaskOwnership | null;
   body: string;
   latestNote: Note | null;
 }
@@ -193,6 +236,7 @@ export interface CardDetail {
 
 export interface GraphNode extends WorkItem {
   kind: 'epic' | 'feature' | 'task' | 'work';
+  owner: string | null;
 }
 
 export type GraphEdge =

@@ -5,7 +5,10 @@ import { logBindings } from './log-activity';
 function identityRow(identity: string, nativeSession?: string) {
   return {
     id: `identity-${identity}`,
+    title: identity,
+    state: 'active',
     created_at: '2026-09-19 10:00:00',
+    updated_at: '2026-09-19 10:00:00',
     attributes: {
       'identity/session': 'true',
       'identity/id': identity,
@@ -14,19 +17,41 @@ function identityRow(identity: string, nativeSession?: string) {
     },
   };
 }
-
 function runRow(identity: string, id: string, status: string, createdAt: string) {
   return {
     id,
+    title: id,
+    state: 'active',
     created_at: createdAt,
+    updated_at: createdAt,
     attributes: {
       'harness/run': 'true',
       'harness/published': 'true',
       'harness/harness': 'pi',
       'harness/session-id': `session-${id}`,
       'harness/status': status,
+      'harness/alias': 'tui',
+      'harness/mode': 'headless',
       'identity/id': identity,
     },
+  };
+}
+function graph(strands: ReturnType<typeof identityRow | typeof runRow>[]) {
+  const identities = new Map(
+    strands
+      .filter((row) => (row.attributes as Record<string, string>)['identity/session'] === 'true')
+      .map((row) => [(row.attributes as Record<string, string>)['identity/id'], row.id]),
+  );
+  return {
+    strands,
+    edges: strands.flatMap((row) => {
+      const attributes = row.attributes as Record<string, string>;
+      if (attributes['harness/run'] !== 'true') return [];
+      const identity = identities.get(attributes['identity/id']);
+      return identity
+        ? [{ from_strand_id: identity, to_strand_id: row.id, edge_type: 'performed' }]
+        : [];
+    }),
   };
 }
 
@@ -50,90 +75,39 @@ it.each([
   ).toThrow(expect.objectContaining({ status: 400 }));
 });
 
-it('resolves persisted native session bindings without guessing from identity or workspace names', () => {
+it('resolves persisted native session bindings without guessing', () => {
   expect(
-    logBindings([
-      {
-        id: 'identity-1',
-        created_at: '2026-09-19 10:00:00',
-        attributes: {
-          'identity/session': 'true',
-          'identity/id': 'worker',
-          'identity/harness': 'pi',
-          'identity/native-session-id': 'native-123',
-        },
-      },
-      {
-        id: 'identity-2',
-        created_at: '2026-09-19 10:00:00',
-        attributes: {
-          'identity/session': 'true',
-          'identity/id': 'unbound',
-          'identity/harness': 'pi',
-        },
-      },
-      {
-        id: 'owned-work',
-        created_at: '2026-09-19 10:00:00',
-        attributes: { owner: 'worker' },
-      },
-    ]),
+    logBindings(graph([identityRow('worker', 'native-123'), identityRow('unbound')])).map(
+      ({ identity, source }) => ({ identity, source }),
+    ),
   ).toEqual([
-    {
-      identity: 'worker',
-      source: { provider: 'pi', session: 'native-123' },
-      activity: { kind: 'idle' },
-    },
-    { identity: 'unbound', source: null, activity: { kind: 'idle' } },
+    { identity: 'worker', source: { provider: 'pi', session: 'native-123' } },
+    { identity: 'unbound', source: null },
   ]);
 });
 
-it('uses the exact session recorded by a running published run before identity attachment', () => {
+it('uses the exact session recorded by a running performed run before native attachment', () => {
   expect(
-    logBindings([
-      {
-        id: 'identity-1',
-        created_at: '2026-09-19 10:00:00',
-        attributes: {
-          'identity/session': 'true',
-          'identity/id': 'worker',
-          'identity/harness': 'pi',
-        },
-      },
-      {
-        id: 'run-1',
-        created_at: '2026-09-19 10:01:00',
-        attributes: {
-          'harness/run': 'true',
-          'harness/published': 'true',
-          'harness/harness': 'pi',
-          'harness/session-id': 'session-123',
-          'harness/status': 'running',
-          'identity/id': 'worker',
-        },
-      },
-    ]),
-  ).toEqual([
-    {
-      identity: 'worker',
-      source: { provider: 'pi', session: 'session-123' },
-      activity: { kind: 'idle' },
-    },
-  ]);
+    logBindings(
+      graph([identityRow('worker'), runRow('worker', 'run-1', 'running', '2026-09-19 10:01:00')]),
+    )[0]?.source,
+  ).toEqual({ provider: 'pi', session: 'session-run-1' });
 });
 
 it('prefers a running run, then native identity linkage, then newest run history', () => {
   expect(
-    logBindings([
-      identityRow('active', 'native-active'),
-      runRow('active', 'old-running', 'running', '2026-09-19 10:01:00'),
-      runRow('active', 'new-stopped', 'stopped', '2026-09-19 10:02:00'),
-      identityRow('attached', 'native-attached'),
-      runRow('attached', 'stopped', 'stopped', '2026-09-19 10:03:00'),
-      identityRow('history'),
-      runRow('history', 'old-ready', 'ready', '2026-09-19 10:04:00'),
-      runRow('history', 'new-stopped', 'stopped', '2026-09-19 10:05:00'),
-    ]).map(({ identity, source }) => ({ identity, source })),
+    logBindings(
+      graph([
+        identityRow('active', 'native-active'),
+        runRow('active', 'old-running', 'running', '2026-09-19 10:01:00'),
+        runRow('active', 'new-stopped', 'stopped', '2026-09-19 10:02:00'),
+        identityRow('attached', 'native-attached'),
+        runRow('attached', 'stopped', 'stopped', '2026-09-19 10:03:00'),
+        identityRow('history'),
+        runRow('history', 'old-ready', 'ready', '2026-09-19 10:04:00'),
+        runRow('history', 'new-stopped', 'stopped', '2026-09-19 10:05:00'),
+      ]),
+    ).map(({ identity, source }) => ({ identity, source })),
   ).toEqual([
     { identity: 'active', source: { provider: 'pi', session: 'session-old-running' } },
     { identity: 'attached', source: { provider: 'pi', session: 'native-attached' } },

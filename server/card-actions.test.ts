@@ -63,8 +63,13 @@ function mockBoard() {
     throw new Error(`Unexpected command ${JSON.stringify(op)}`);
   });
   const database = {
-    readAgentStrands: vi.fn(),
-    readCardStrands: vi.fn(async () => cards),
+    readProvenance: vi.fn(async () => ({
+      strands: cards.map((item) => ({
+        ...item,
+        attributes: { 'kanban/card': 'true', 'kanban/lane': item.lane },
+      })),
+      edges: [],
+    })),
   };
   return {
     database,
@@ -117,7 +122,10 @@ it('invalidates the board even when the command fails after a possible side effe
   await data.board();
   // Validation reads the compact board, then hydrates it before the mutation times out.
   exec.mockResolvedValueOnce({ stdout: JSON.stringify({ cards: [card] }) });
-  database.readCardStrands.mockResolvedValueOnce([card]);
+  database.readProvenance.mockResolvedValueOnce({
+    strands: [{ ...card, attributes: { 'kanban/card': 'true', 'kanban/lane': card.lane } }],
+    edges: [],
+  });
   exec.mockRejectedValueOnce(new Error('Timeout'));
   await expect(data.changeCard('card1', { kind: 'delete' })).rejects.toThrow('Timeout');
   exec.mockResolvedValueOnce({ stdout: '{"cards":[]}' });

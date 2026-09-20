@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
-  parseCard,
-  parseBoardCards,
-  parseGraph,
+  parseCard as parseCardBoundary,
+  parseBoardCards as parseBoardCardsBoundary,
+  parseGraph as parseGraphBoundary,
   parseLabelChange,
   parseRelation,
-  parseTask,
+  parseTask as parseTaskBoundary,
   parseViews,
   parseWork,
   strandErrorMessage,
 } from './parse.ts';
+import { emptyProvenance } from './provenance.ts';
+
+const provenance = emptyProvenance();
+const parseCard = (value: unknown) => parseCardBoundary(value, provenance);
+const parseTask = (value: unknown) => parseTaskBoundary(value, provenance);
+const parseGraph = (value: unknown) => parseGraphBoundary(value, provenance);
+const parseBoardCards = (compact: unknown, raw: unknown) =>
+  parseBoardCardsBoundary(compact, raw, provenance);
 
 const entity = {
   id: 'abc12',
@@ -159,7 +167,7 @@ describe('auto-run card projections', () => {
     const cards = parseBoardCards([{ ...row, epic: 'epic1' }], [{ ...row, id: 'other' }, raw]);
     expect(cards[0]).toMatchObject({
       epicId: 'epic1',
-      branch: 'feat/current',
+      branch: null,
       autoRun: {
         optedIn: false,
         seat: 'implementer',

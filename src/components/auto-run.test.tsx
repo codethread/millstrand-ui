@@ -1,17 +1,21 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
 import { parseCard } from '../../server/parse';
+import { emptyProvenance } from '../../server/provenance';
 import type { JsonValue } from '../../shared/api';
 import { AutoRunDetails, AutoRunSummary } from './auto-run';
 
 function autoRun(attributes: Record<string, JsonValue>) {
-  return parseCard({
-    id: 'card1',
-    title: 'Card',
-    state: 'active',
-    created_at: '2026-09-17',
-    attributes,
-  }).autoRun;
+  return parseCard(
+    {
+      id: 'card1',
+      title: 'Card',
+      state: 'active',
+      created_at: '2026-09-17',
+      attributes,
+    },
+    emptyProvenance(),
+  ).autoRun;
 }
 
 it('does not add auto-run chrome to ordinary cards', () => {

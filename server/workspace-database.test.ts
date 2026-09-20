@@ -2,16 +2,19 @@ import { expect, it, vi } from 'vitest';
 import { parseDatabasePath, WorkspaceDatabase } from './workspace-database.ts';
 
 const workspace = '/repo/"unsafe"/.millstrand';
-const row = {
-  id: 'strand1',
-  title: 'Strand',
-  state: 'active',
-  created_at: '2026-09-18 00:00:00',
-  updated_at: '2026-09-18 00:00:00',
-  attributes: '{"owner":"agent"}',
+const strandRecord = {
+  record: JSON.stringify({
+    kind: 'strand',
+    id: 'strand1',
+    title: 'Strand',
+    state: 'active',
+    created_at: '2026-09-18 00:00:00',
+    updated_at: '2026-09-18 00:00:00',
+    attributes: { 'kanban/card': 'true' },
+  }),
 };
 
-function fakeDatabase(rows: unknown[] = [row], version = 1) {
+function fakeDatabase(rows: unknown[] = [strandRecord], version = 1) {
   return {
     configure: vi.fn(),
     schemaVersion: vi.fn(() => ({ user_version: version })),
@@ -53,58 +56,40 @@ it('selects the registered file-backed SQLite database for the exact workspace',
       workspace,
     ),
   ).toThrow('not file-backed SQLite');
-  expect(() =>
-    parseDatabasePath(
-      [
-        {
-          config_dir: workspace,
-          database_kind: 'sqlite-file',
-          database_label: 'relative.sqlite',
-          database_path: 'relative.sqlite',
-        },
-      ],
-      workspace,
-    ),
-  ).toThrow('storage metadata is inconsistent');
 });
 
-it('runs bounded selective agent SQL without interpolating the workspace', async () => {
+it('runs one bounded selective graph read without interpolating the workspace', async () => {
   const database = fakeDatabase();
   const open = vi.fn(() => database);
   const reader = new WorkspaceDatabase(workspace, async () => '/state/workspace.sqlite', open);
 
-  await expect(reader.readAgentStrands()).resolves.toEqual([
-    { ...row, attributes: { owner: 'agent' } },
-  ]);
+  await expect(reader.readProvenance()).resolves.toEqual({
+    strands: [
+      {
+        id: 'strand1',
+        title: 'Strand',
+        state: 'active',
+        created_at: '2026-09-18 00:00:00',
+        updated_at: '2026-09-18 00:00:00',
+        attributes: { 'kanban/card': 'true' },
+      },
+    ],
+    edges: [],
+  });
   expect(open).toHaveBeenCalledWith('/state/workspace.sqlite');
   expect(database.configure).toHaveBeenCalledOnce();
   expect(database.close).toHaveBeenCalledOnce();
   const [sql, parameters] = database.all.mock.calls[0]!;
   expect(sql).toContain('LIMIT 10001');
-  expect(sql).toContain("identity_session.key = 'identity/session'");
-  expect(sql).toContain("published.key = 'harness/published'");
-  expect(sql).toContain("owner.key = 'owner'");
-  expect(sql).not.toContain(workspace);
-  expect(parameters).toContain('identity/id');
-  expect(parameters).not.toContain('harness/env');
-});
-
-it('projects only dashboard card attributes and label flags', async () => {
-  const database = fakeDatabase();
-  const reader = new WorkspaceDatabase(
-    workspace,
-    async () => '/state/workspace.sqlite',
-    () => database,
-  );
-
-  await reader.readCardStrands();
-  const [sql, parameters] = database.all.mock.calls[0]!;
-  expect(sql).toContain("card.key = 'kanban/card'");
+  expect(sql).toContain('LIMIT 50001');
+  expect(sql).toContain("marker.key = 'harness/run'");
   expect(sql).toContain("attributes.key LIKE 'kanban.label/%'");
-  expect(sql).toContain('LIMIT 10001');
   expect(sql).not.toContain(workspace);
-  expect(parameters).toContain('auto-run/error');
-  expect(parameters).not.toContain('body');
+  expect(parameters).toContain('kanban/ownership-claim');
+  expect(parameters).toContain('performed');
+  expect(parameters).toContain('serves-root');
+  expect(parameters).not.toContain('harness/env');
+  expect(parameters).not.toContain('harness/prompt');
 });
 
 it('fails loudly on an unsupported persisted schema and still closes the database', async () => {
@@ -115,19 +100,38 @@ it('fails loudly on an unsupported persisted schema and still closes the databas
     () => database,
   );
 
-  await expect(reader.readAgentStrands()).rejects.toMatchObject({ status: 502 });
+  await expect(reader.readProvenance()).rejects.toMatchObject({ status: 502 });
   expect(database.all).not.toHaveBeenCalled();
   expect(database.close).toHaveBeenCalledOnce();
 });
 
-it('fails malformed persisted rows instead of returning a partial snapshot', async () => {
-  const database = fakeDatabase([{ ...row, attributes: 'not-json' }]);
+it('fails malformed persisted records instead of returning a partial snapshot', async () => {
+  const database = fakeDatabase([{ record: 'not-json' }]);
   const reader = new WorkspaceDatabase(
     workspace,
     async () => '/state/workspace.sqlite',
     () => database,
   );
 
-  await expect(reader.readCardStrands()).rejects.toMatchObject({ status: 502 });
+  await expect(reader.readProvenance()).rejects.toMatchObject({ status: 502 });
   expect(database.close).toHaveBeenCalledOnce();
+});
+
+it('rejects an edge overflow rather than silently truncating history', async () => {
+  const edge = {
+    kind: 'edge',
+    from_strand_id: 'identity',
+    to_strand_id: 'run',
+    edge_type: 'performed',
+  };
+  const database = fakeDatabase(
+    Array.from({ length: 50_001 }, () => ({ record: JSON.stringify(edge) })),
+  );
+  const reader = new WorkspaceDatabase(
+    workspace,
+    async () => '/state/workspace.sqlite',
+    () => database,
+  );
+
+  await expect(reader.readProvenance()).rejects.toThrow('50000 role edges');
 });

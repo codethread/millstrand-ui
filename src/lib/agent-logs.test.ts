@@ -36,6 +36,8 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     cwd: '/workspace',
     target: null,
     rootTargets: [],
+    participants: [],
+    continuation: null,
     createdAt: '2026-09-18',
     startedAt: null,
     finishedAt: null,
@@ -51,7 +53,8 @@ function node(id: string, kind: GraphNode['kind'] = 'task'): GraphNode {
     title: id,
     kind,
     state: 'active',
-    attributes: { owner: 'worker' },
+    owner: 'worker',
+    attributes: {},
     createdAt: null,
     updatedAt: null,
   };

@@ -95,9 +95,11 @@ export function issueAgents(
   owner: string | null,
   id: string,
 ): AgentIdentity[] {
+  const ownerMatches = owner === null ? [] : agents.filter((agent) => agent.id === owner);
+  const resolvedOwner = ownerMatches.length === 1 ? ownerMatches[0] : null;
   return agents.filter(
     (agent) =>
-      agent.id === owner ||
+      agent === resolvedOwner ||
       agent.runs.some(
         (run) => (run.status === 'running' || run.status === 'ready') && runTargets(run, id),
       ),
@@ -154,10 +156,12 @@ export function selectedAgentActivity(
   identityId: string | null,
   runId: string | null,
 ): SelectedAgentActivity | null {
-  const runIdentity = runId
-    ? agents.find((identity) => identity.runs.some((run) => run.id === runId))
-    : undefined;
-  const identity = runIdentity ?? agents.find((candidate) => candidate.id === identityId);
+  const runMatches = runId
+    ? agents.filter((identity) => identity.runs.some((run) => run.id === runId))
+    : [];
+  const runIdentity = runMatches.length === 1 ? runMatches[0] : undefined;
+  const routeMatches = agents.filter((candidate) => candidate.id === identityId);
+  const identity = runIdentity ?? (routeMatches.length === 1 ? routeMatches[0] : undefined);
   if (!identity) return null;
   const selectedRun = runId
     ? (identity.runs.find((run) => run.id === runId) ?? null)
@@ -171,8 +175,16 @@ export function selectedAgentActivity(
 }
 
 export function agentRunIdentities(agents: AgentIdentity[]): Record<string, string> {
+  const participants = new Map<string, AgentIdentity[]>();
+  for (const identity of agents) {
+    for (const run of identity.runs) {
+      participants.set(run.id, [...(participants.get(run.id) ?? []), identity]);
+    }
+  }
   return Object.fromEntries(
-    agents.flatMap((identity) => identity.runs.map((run) => [run.id, identity.id] as const)),
+    [...participants].flatMap(([runId, identities]) =>
+      identities.length === 1 ? [[runId, identities[0]!.id] as const] : [],
+    ),
   );
 }
 
