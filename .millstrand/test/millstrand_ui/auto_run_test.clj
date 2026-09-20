@@ -23,6 +23,10 @@
 (defn- role-step [strands role]
   (first (filter #(= role (attr-get % :auto-run/role)) strands)))
 
+(defn- includes-normalized? [text fragment]
+  (str/includes? (str/replace text #"\s+" " ")
+                 (str/replace fragment #"\s+" " ")))
+
 (deftest repository-activation-and-delivery-contracts
   (t/with-weaver-world
     [ctx {:storage :sqlite-memory
@@ -53,11 +57,23 @@
                 root (workflow/current-root run-id)
                 strands (:strands (graph/subgraph rt [(:id root)]))
                 views (map workflow/step-view strands)
+                ci-step (first (filter #(= "Wait for the PR checks" (:title %)) strands))
+                verify-step (first (filter #(= "Verify the passing PR and review package" (:title %)) strands))
+                ci-argv (attr-get ci-step :shell/argv)
                 gates (set (keep #(attr-get % :workflow/gate) strands))]
             (is (= ["Implement and verify the assigned feature"] (mapv :title (:ready result))))
             (is (contains? gates "shell"))
             (is (contains? gates "code"))
             (is (not (contains? gates "agent")) "The finisher is an explicit handoff, not an eager agent gate")
+            (testing "PR checks require registered CI before the stricter review-package verifier"
+              (is (= ["pr-checks" "required" "auto/fixture-card" "120" "5"]
+                     (subvec ci-argv (- (count ci-argv) 5))))
+              (is (= ["node" "--experimental-transform-types"
+                      "scripts/auto-run-review.ts" "auto/fixture-card"]
+                     (attr-get verify-step :shell/argv)))
+              (is (= [(:id ci-step)]
+                     (mapv :to_strand_id
+                           (graph/outgoing-edges rt [(:id verify-step)] "depends-on")))))
             (if (= name :auto-human-review)
               (testing "Human review still stops without any landing delegation"
                 (let [checkpoint (first (filter #(= "human" (:checkpoint-kind %)) views))]
@@ -90,7 +106,7 @@
                                     "stop BEFORE accepting"
                                     "before this handoff proceeds"
                                     "When a finisher WAS accepted, do not launch another worker"]]
-                    (is (str/includes? instruction required) required))
+                    (is (includes-normalized? instruction required) required))
                   (doseq [required ["This step is finisher-only"
                                     "Do not claim card fixture-card, implement new scope or launch another finisher"
                                     "--query agent-run-settled"
@@ -98,7 +114,7 @@
                                     "require settled=true, completed"
                                     "Do not finish the card early"
                                     "Verify land is done and the card is closed with outcome done"]]
-                    (is (str/includes? (:instruction finisher) required) required))
+                    (is (includes-normalized? (:instruction finisher) required) required))
                   (is (not (str/includes? (:instruction finisher) "agent run grunt")))
                   (testing "Failed autonomous gates preserve work for manual intervention"
                     (doseq [view (concat [handoff finisher] (filter :gate views))]
@@ -147,7 +163,7 @@
                                         :auto-run/finisher-run-id (:id finisher)}})
           (is (= [(:id finisher-step)]
                  (mapv :id (:ready (workflow/complete! "separate-target-handoff"
-                                                       {:by "fixture-worker"})))))
+                                                       {:by-identity "fixture-worker"})))))
           (is (assignment/launch-ready? rt finisher))
           (is (= (:id worker)
                  (attr-get (weaver/show rt (:id finisher-step)) :auto-run/worker-run-id)))

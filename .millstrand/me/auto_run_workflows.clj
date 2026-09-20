@@ -3,6 +3,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [millhouse.spools.land.autonomous :as autonomous]
+            [millhouse.spools.land.support :as land-support]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.format.alpha :as format]))
 
@@ -73,7 +74,7 @@
           " {:card card :branch branch})))
       (shell-gate :ci "Wait for the PR checks" [:prepare-pr]
                   (fn [{:keys [branch]}]
-                    ["gh" "pr" "checks" branch "--watch" "--fail-fast"])
+                    (land-support/pr-checks-argv "required" branch))
                   2100 failure-instruction)
       (shell-gate :verify-handoff "Verify the passing PR and review package" [:ci]
                   (fn [{:keys [branch]}]
