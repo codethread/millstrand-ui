@@ -140,6 +140,8 @@ export interface AgentReply {
     | null;
 }
 
+export type WeaverOperation = 'start' | 'stop' | 'restart';
+
 export interface WorkspaceOption {
   id: string;
   name: string;
@@ -229,6 +231,7 @@ export interface ApiError {
 
 /**
  * GET /api/workspaces → WorkspaceOption[] (known local mill weavers)
+ * POST /api/workspaces/:id/lifecycle, { operation: WeaverOperation } → { ok: true }
  * GET /api/agents → AgentDirectory (identities, tracked runs, and owned work)
  * GET /api/agent-options → AgentOption[] (available headless harnesses and aliases)
  * GET /api/agent-runs/:id → AgentReply

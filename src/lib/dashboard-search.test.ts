@@ -11,6 +11,19 @@ import {
 } from './dashboard-search';
 
 describe('shareable dashboard navigation', () => {
+  it('keeps cross-weaver inspector selection on the overview', () => {
+    const state = parseDashboardSearch({
+      mode: 'overview',
+      workspace: 'weaver-b',
+      issue: 'card-b',
+    });
+    expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(state)))).toEqual(state);
+    expect(state).toMatchObject({
+      mode: 'overview',
+      workspace: 'weaver-b',
+      issue: 'card-b',
+    });
+  });
   it('preserves the production lane in shared filters after a URL round trip', () => {
     const state = parseDashboardSearch({ filter: { lanes: ['in_production'] } });
     expect(state.filter.lanes).toEqual(['in_production']);

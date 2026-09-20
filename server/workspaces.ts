@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import type { WorkspaceOption } from '../shared/api.ts';
+import type { WeaverOperation, WorkspaceOption } from '../shared/api.ts';
 import { sorted } from '../shared/array.ts';
 import { z } from 'zod';
 import { HttpError } from './parse.ts';
@@ -73,6 +73,21 @@ async function discoverWorkspaces(defaultPath: string): Promise<WorkspaceOption[
   }
 }
 
+const operationSchema = z.compile(z.object({ operation: z.enum(['start', 'stop', 'restart']) }), {
+  strict: true,
+});
+export function parseWeaverOperation(value: unknown): WeaverOperation {
+  return operationSchema.parse(value).operation;
+}
+
+async function runWeaver(operation: WeaverOperation, path: string): Promise<void> {
+  await exec('mill', ['weaver', operation, '--workspace', path, '--json'], {
+    encoding: 'utf8',
+    timeout: 330_000, // mill start/restart has a five-minute readiness budget.
+    maxBuffer: 1024 * 1024,
+  });
+}
+
 export class WorkspaceDirectory {
   private readonly clients = new Map<string, WorkspaceClients>();
   private snapshot: WorkspaceOption[] | null = null;
@@ -82,6 +97,7 @@ export class WorkspaceDirectory {
   constructor(
     private readonly defaultPath: string,
     private readonly discover: DiscoverWorkspaces = () => discoverWorkspaces(defaultPath),
+    private readonly run: typeof runWeaver = runWeaver,
   ) {}
 
   async list(force = false): Promise<WorkspaceOption[]> {
@@ -97,6 +113,22 @@ export class WorkspaceDirectory {
         this.pending = null;
       });
     return this.pending;
+  }
+
+  async operate(id: string, operation: WeaverOperation): Promise<void> {
+    const workspace = (await this.list(true)).find((item) => item.id === id);
+    if (!workspace) throw new HttpError(404, 'That workspace is not known to the local mill.');
+    try {
+      await this.run(operation, workspace.path);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown mill failure';
+      throw new HttpError(
+        502,
+        `Weaver ${operation} failed or timed out. Refresh status before trying again: ${detail.slice(0, 1500)}`,
+      );
+    } finally {
+      this.validUntil = 0;
+    }
   }
 
   async select(id: string | null): Promise<WorkspaceClients> {

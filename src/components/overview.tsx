@@ -1,155 +1,217 @@
-import { GitBranch, LayoutGrid, Pin, RefreshCw } from 'lucide-react';
-import { useOverview } from '../hooks/use-overview';
+import { useAttentionStore } from '../attention-store';
+import { Filter, GitBranch, RefreshCw, Settings2 } from 'lucide-react';
+import { useCockpitStore, type CockpitSection } from '../cockpit-store';
+import { useCockpit } from '../hooks/use-cockpit';
+import {
+  useSelectedAgent,
+  useSelectedAgentRun,
+  useSelectedIssue,
+  useWorkspaceId,
+} from '../lib/navigation';
+import type { WorkspaceActivityModel } from '../lib/overview';
 import { cn } from '../lib/utils';
+import { ActivityRail, AttentionCentre } from './cockpit-work';
+import { WeaverControlsDialog, WeaverFleet, WeaverRail } from './cockpit-weavers';
+import { AgentDetail } from './agent-detail';
+import { AgentPromptDialog } from './agent-prompt';
+import { IssueDetail } from './issue-detail';
 import { ErrorNotice, Loading } from './issue-parts';
-import { Button } from './ui/button';
 import { OverviewLogPolls } from './overview-log-polls';
-import { WorkspaceActivity } from './workspace-activity';
-import { HiddenWorkspaces, WorkspacePreferenceError } from './workspace-preferences';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { WorkspacePreferenceError } from './workspace-preferences';
 import { WorkspaceSwitcher } from './workspace-switcher';
 
+const sections: { id: CockpitSection; label: string }[] = [
+  { id: 'all', label: 'Everything' },
+  { id: 'attention', label: 'Needs attention' },
+  { id: 'review', label: 'Ready for a look' },
+  { id: 'quiet', label: 'Running, but quiet' },
+];
+
+function SourceNotice({ snapshot }: { snapshot: WorkspaceActivityModel }) {
+  const messages = [
+    ...(snapshot.workspace.status !== 'running'
+      ? ['Weaver offline. Any retained work is last known.']
+      : []),
+    ...(snapshot.board.health.kind === 'failed'
+      ? [`Kanban unavailable: ${snapshot.board.health.message}`]
+      : []),
+    ...(snapshot.agents.health.kind === 'failed'
+      ? [`Agent data unavailable: ${snapshot.agents.health.message}`]
+      : []),
+  ];
+  return messages.length ? (
+    <details className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-destructive">
+      <summary className="cursor-pointer">
+        {snapshot.workspace.name} ·{' '}
+        {snapshot.workspace.status !== 'running' ? 'offline' : 'some data unavailable'}
+      </summary>
+      <p className="mt-2 break-words">{messages.join(' ')}</p>
+    </details>
+  ) : null;
+}
+
 export function Overview() {
-  const { discoveryHealth, options, activity, refreshSource, refreshAll } = useOverview();
-  const { pinned, busy, other, cardCount, agentCount } = activity;
-  const partial = activity.partial || discoveryHealth.kind !== 'live';
+  const cockpit = useCockpit();
+  const { options, snapshots, work, discoveryHealth, refreshAll } = cockpit;
+  const search = useCockpitStore((state) => state.search);
+  const setSearch = useCockpitStore((state) => state.setSearch);
+  const scope = useCockpitStore((state) => state.scope);
+  const setScope = useCockpitStore((state) => state.setScope);
+  const section = useCockpitStore((state) => state.section);
+  const setSection = useCockpitStore((state) => state.setSection);
+  const setControls = useCockpitStore((state) => state.setControls);
+  const attentionError = useAttentionStore((state) => state.loadError);
+  const workspace = useWorkspaceId();
+  const issue = useSelectedIssue();
+  const agent = useSelectedAgent();
+  const agentRun = useSelectedAgentRun();
+  const inspectable = options.some(
+    (option) => option.id === workspace && option.status === 'running',
+  );
+  const filtered = section !== 'all' || scope !== null;
   return (
-    <main className="h-dvh overflow-y-auto bg-background" aria-label="All weavers overview">
+    <div className="flex min-h-dvh items-start bg-muted/15">
       <OverviewLogPolls />
-      <div className="mx-auto max-w-[1600px] p-4 sm:p-8">
-        <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-primary">
-              <GitBranch className="size-5" />
-              millstrand.
-            </div>
-            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-              <LayoutGrid className="size-5" />
+      <WeaverRail options={options} />
+      <main className="min-w-0 flex-1 p-4 sm:p-6" aria-label="All weavers cockpit">
+        <header className="mb-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="flex items-center gap-2 text-xl! font-semibold tracking-tight">
+              <GitBranch className="size-5 text-primary lg:hidden" />
               All weavers
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Work in motion, across your dashboards.
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              In-progress, review, and production cards · running, queued, or stopping sessions.
-              Tracked process state, not token activity.
-            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="w-60 max-w-full [&_.workspace-picker]:m-0 [&_.workspace-picker]:w-full">
-              <WorkspaceSwitcher workspace={null} />
-            </div>
-            <Button variant="outline" size="sm" onClick={refreshAll}>
-              <RefreshCw />
-              Refresh all
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              id="fleet-search"
+              aria-label="Search the fleet"
+              placeholder="Search the fleet…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-9 min-w-24 flex-1 bg-card sm:max-w-80"
+            />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn('h-9', filtered && 'border-primary text-primary')}
+                >
+                  <Filter />
+                  Filters{filtered ? ' · on' : ''}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="space-y-4">
+                <label className="block text-xs font-medium">
+                  Workspace
+                  <select
+                    aria-label="Filter workspace"
+                    value={scope ?? ''}
+                    onChange={(event) => setScope(event.target.value || null)}
+                    className="mt-2 block h-9 w-full rounded-md border border-input bg-background px-2"
+                  >
+                    <option value="">All visible weavers</option>
+                    {options.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  <p className="mb-2 text-xs font-medium">Show in the centre</p>
+                  <div className="flex flex-col gap-1">
+                    {sections.map((item) => (
+                      <Button
+                        key={item.id}
+                        variant={section === item.id ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="justify-start"
+                        aria-pressed={section === item.id}
+                        onClick={() => setSection(item.id)}
+                      >
+                        {item.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setScope(null);
+                    setSection('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </PopoverContent>
+            </Popover>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9"
+              onClick={() => setControls({ kind: 'fleet' })}
+            >
+              <Settings2 />
+              Weavers
             </Button>
+            <Button variant="ghost" size="icon" onClick={refreshAll} aria-label="Refresh all">
+              <RefreshCw className="size-4" />
+            </Button>
+          </div>
+          <div className="lg:hidden [&_.workspace-picker]:m-0 [&_.workspace-picker]:w-full">
+            <WorkspaceSwitcher workspace={null} />
           </div>
         </header>
         <WorkspacePreferenceError />
+        {attentionError && (
+          <p role="alert" className="mb-4 text-sm text-destructive">
+            {attentionError}
+          </p>
+        )}
         {discoveryHealth.kind === 'failed' && <ErrorNotice error={discoveryHealth.error} />}
-        {discoveryHealth.kind === 'failed' && options.length > 0 && (
+        {discoveryHealth.kind === 'loading' && <Loading text="Discovering weavers…" />}
+        {cockpit.activity.partial && (
           <p className="mb-4 text-xs text-destructive">
-            Discovery interrupted · showing last-known weavers.
+            Some sources are loading or unavailable. Available work is shown; see source status
+            below.
           </p>
         )}
-        {discoveryHealth.kind === 'loading' ? (
-          <Loading text="Discovering weavers…" />
-        ) : discoveryHealth.kind === 'live' && options.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border p-8 text-sm text-muted-foreground">
-            No visible weavers. Restore hidden weavers below, or refresh discovery.
-          </p>
-        ) : null}
-        {options.length > 0 && (
-          <p className="mb-4 text-xs text-muted-foreground">
-            {options.length} weavers ·{' '}
-            {options.filter((workspace) => workspace.status === 'running').length} online · select
-            any item to open its workspace
-          </p>
-        )}
-        {options.length > 0 && (
-          <div className="mb-5 flex flex-wrap gap-3 text-sm">
-            <span className="rounded-lg border border-border bg-card px-4 py-3">
-              <strong>{cardCount}</strong> in progress / review / production
-            </span>
-            <span className="rounded-lg border border-border bg-card px-4 py-3">
-              <strong>{agentCount}</strong> active agents
-            </span>
-            {partial && (
-              <span className="self-center text-xs text-muted-foreground">
-                Partial / last-known counts · see workspace status below
-              </span>
-            )}
-          </div>
-        )}
-        {pinned.length > 0 && (
-          <section className="mb-5" aria-label="Pinned weavers">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Pin className="size-4" /> Pinned weavers
-            </h2>
-            <div className="grid items-start gap-5 xl:grid-cols-2">
-              {pinned.map((snapshot) => (
-                <WorkspaceActivity
-                  key={snapshot.workspace.id}
-                  activity={snapshot}
-                  onRetry={refreshSource}
-                />
+        <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_270px]">
+          <div className="min-w-0">
+            <AttentionCentre
+              attention={work.attention}
+              review={work.review}
+              quiet={work.quiet}
+              section={section}
+              partial={cockpit.activity.partial}
+            />
+            <div className="mt-5 space-y-2">
+              {snapshots.map((snapshot) => (
+                <SourceNotice key={snapshot.workspace.id} snapshot={snapshot} />
               ))}
             </div>
-          </section>
-        )}
-        <div className="grid items-start gap-5 xl:grid-cols-2">
-          {busy.map((snapshot) => (
-            <WorkspaceActivity
-              key={snapshot.workspace.id}
-              activity={snapshot}
-              onRetry={refreshSource}
-            />
-          ))}
+          </div>
+          <ActivityRail agents={work.agents} />
+          <div className="min-w-0 xl:col-start-1">
+            <WeaverFleet options={options} />
+          </div>
         </div>
-        {options.length > 0 && cardCount + agentCount === 0 && (
-          <p className="mb-5 rounded-lg border border-dashed border-border p-5 text-sm text-muted-foreground">
-            {partial
-              ? 'No activity in the available snapshots yet. Some weavers are loading or unavailable.'
-              : 'No in-progress, review, or production cards, or active agents across your weavers.'}
-          </p>
-        )}
-        {other.length > 0 && (
-          <section className="mt-6" aria-label="Other weavers">
-            <h2 className="mb-3 text-sm font-semibold">Other weavers · {other.length}</h2>
-            <div className="space-y-2">
-              {other.map((snapshot) => {
-                const { workspace } = snapshot;
-                const status =
-                  snapshot.status === 'offline'
-                    ? 'Offline'
-                    : snapshot.status === 'unavailable'
-                      ? 'Data unavailable'
-                      : snapshot.status === 'loading'
-                        ? 'Loading…'
-                        : 'No active work';
-                return (
-                  <details key={workspace.id} className="rounded-lg border border-border bg-card">
-                    <summary className="cursor-pointer px-4 py-3 text-xs">
-                      <strong>{workspace.name}</strong>
-                      <span
-                        className={cn(
-                          'ml-3',
-                          snapshot.status === 'unavailable'
-                            ? 'text-destructive'
-                            : 'text-muted-foreground',
-                        )}
-                      >
-                        {status}
-                      </span>
-                    </summary>
-                    <WorkspaceActivity activity={snapshot} onRetry={refreshSource} />
-                  </details>
-                );
-              })}
-            </div>
-          </section>
-        )}
-        <HiddenWorkspaces />
-      </div>
-    </main>
+      </main>
+      {inspectable && issue && <IssueDetail key={`${workspace}:${issue}`} id={issue} />}
+      {inspectable && (agent || agentRun) && (
+        <AgentDetail
+          key={`${workspace}:${agent ?? ''}:${agentRun ?? ''}`}
+          identityId={agent}
+          runId={agentRun}
+        />
+      )}
+      <AgentPromptDialog />
+      <WeaverControlsDialog />
+    </div>
   );
 }

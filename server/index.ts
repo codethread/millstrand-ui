@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { HttpError, parseLabelChange, parseViews, requestValue } from './parse.ts';
 import { parseCurateReview, parsePublishReview } from './review-comments.ts';
-import { WorkspaceDirectory } from './workspaces.ts';
+import { parseWeaverOperation, WorkspaceDirectory } from './workspaces.ts';
 import { parseAgentPrompt } from './agent-prompts.ts';
 import { parseCardLane } from './card-actions.ts';
 import { WorkspaceDatabase } from './workspace-database.ts';
@@ -177,6 +177,15 @@ const server = createServer((request, response) => {
     if (method !== 'GET' && method !== 'HEAD') checkWriteOrigin(request);
     if (path === '/api/workspaces' && method === 'GET') {
       json(response, 200, await workspaces.list(url.searchParams.has('refresh')));
+      return;
+    }
+    const lifecycleId = /^\/api\/workspaces\/([a-f0-9]{24})\/lifecycle$/.exec(path)?.[1];
+    if (lifecycleId !== undefined && method === 'POST') {
+      await workspaces.operate(
+        lifecycleId,
+        requestValue(parseWeaverOperation, await body(request)),
+      );
+      json(response, 200, { ok: true });
       return;
     }
     if (path === '/api/health' && method === 'GET') {

@@ -1,80 +1,78 @@
-# Multi-workspace overview
+# All-weaver Inbox
 
-## Ownership and public contracts
+The overview (`/?mode=overview`) is a three-column cockpit: thin workspace navigation,
+attention/review/quiet-agent rows in the centre, and recorded agent activity on the
+right. On narrow screens these stack above the fleet. There are no aggregate tiles
+or design-preview controls.
 
-- `src/hooks/use-overview.ts`: `useOverview()` owns the overview's board/agent
-  queries. Dashboard renders Overview **instead of** WorkspacePage, so it never
-  competes with `WorkspaceResourcePolls`. Each discovered ID uses the ordinary
-  `boardQueryOptions(id)` and `agentQueryOptions(id)` cache keys. Running weavers
-  poll every 5s; offline weavers retain cached data without fetching.
-- Stable selectors call `overviewCards(board.cards)` (the board domain's
-  `selectCards` with claimed/review/production lanes) and
-  `activeAgentIdentities(directory.identities)`. Stable combine functions remove
-  query wrappers, timestamps and fetch functions; Query structurally shares the
-  resulting concrete arrays. `useMemo` composes those arrays and workspace options,
-  not unstable `useQueries` result arrays. No new cache or server endpoint exists.
-- `src/lib/overview.ts`: `CardActivity`, `AgentActivity` and `ActivityHealth`
-  distinguish null (no successful snapshot), empty arrays (successful empty), and
-  independent live/loading/failed health. `workspaceActivity` adds online/offline
-  workspace status; `overviewActivity` groups busy/other and totals available
-  snapshots once. Failed/offline retained work stays busy. Counts include retained
-  work and are labeled partial; a missing source displays `—`, not zero.
-- `src/components/workspace-activity.tsx`: `WorkspaceActivity({ activity, onRetry })`
-  renders the model and delegates retry. It imports only public shared
-  `WeaverAgentSetting` and destination helpers, never the Agents/Board pages.
-  `overview.tsx` owns page composition, discovery feedback and quiet expansion.
+## Attention and navigation
 
-Example pure composition (inputs are already active projections):
+- **Needs your attention** matches any configured label on an active card, including
+  refinement and pending cards. Closed cards never return. Its settings button opens
+  one global label list for every visible Kanban-enabled weaver, not per-weaver rules.
+  Defaults: `human-attention`, `auto-run-failure`, `factory-escalated`.
+- An empty label list disables attention matches. Matching review cards appear only
+  in attention; other `in_review` cards appear under **Ready for a look**.
+- `attention-store.ts` owns the editor and the browser-local
+  `millstrand-ui-attention-labels` key. Storage events update other tabs. Failed saves
+  retain the draft and prior selection; malformed/unreadable saved preferences show
+  an explicit warning. These preferences do not edit workspace labels or sync devices.
+- Fleet search and workspace/section filters live in `cockpit-store.ts`. Pins and
+  hidden weavers continue to use the existing workspace preference store and poll
+  exclusions. The left rail and fleet open the real workspace dashboard.
+- Card/agent selection stays in Router search over the overview, using the existing
+  `IssueDetail` and `AgentDetail` side panels. Back restores selection/navigation.
+  Log hints, compact tails and the expanded viewer reuse the existing components.
 
-```ts
-const model = workspaceActivity(
-  workspace,
-  { data: retainedCards, health: { kind: 'failed', message: 'Cards disconnected' } },
-  { data: activeIdentities, health: { kind: 'live' } },
-);
-const summary = overviewActivity([model]);
-// model.board remains last-known; model.agents remains live.
-// summary.partial is true and retained cards still contribute to summary.cardCount.
-```
+## Data ownership
 
-Discovery health is returned separately from activity. A discovery failure retains
-known options and marks page totals partial without falsely declaring each source
-failed. Refresh all invalidates discovery and the currently running board/agent keys;
-newly discovered workspaces mount their own queries. Per-source retry invalidates
-only its workspace key. No offline retry is enabled. Options changes rebuild both
-query lists by ID; ordering is used only to zip each list's guaranteed input-order
-results, never as cache identity.
+`useOverview` remains the sole overview board/agent poll owner, mutually exclusive
+with `WorkspaceResourcePolls`. Discovery belongs to `WorkspaceDiscovery` and logs to
+`OverviewLogPolls`. Running workspaces poll every five seconds; offline workspaces
+retain snapshots without fetching. Hidden workspaces are excluded by the shared
+`useVisibleWorkspaces` projection.
 
-`workspaceActivityDestination` remains authoritative for shareable workspace/card/
-agent URLs and returns null for offline weavers. Offline rendering contains no
-workspace/card/agent anchors. Alias preferences remain owned by the agent store and
-public setting component. Refresh does not replace browser drafts or preferences.
+The board selector uses `overviewCards(cards, attentionLabels)` to keep moving work
+and configured asks. Changing preferences reprojects the same cache immediately.
+`useCockpit` combines concrete snapshots with disabled log-activity readers, using
+`cockpitWork` and `agentPulse` from `src/lib/overview.ts`. It introduces no query keys
+or duplicate poll owners. Its 30-second display clock only ages recorded events.
+
+Quiet means a running process whose latest recorded event is at least five minutes
+old, not proof it is stuck. Missing, malformed or stale log evidence never establishes
+quietness. Card and agent failures remain independent: missing Kanban does not hide
+agents. Retained failed/offline cards and agents are explicitly last-known, and source
+errors remain visible. Refresh all invalidates discovery and running board/agent keys.
+
+## Weaver lifecycle
+
+Gear menus and the fleet controls dialog expose confirmed start, stop and restart.
+These operate the workspace weaver, not individual agents. The server accepts only
+`WeaverOperation` through `POST /api/workspaces/:id/lifecycle`, resolves the discovered
+ID to its canonical path (including offline entries), then executes the fixed
+`mill weaver <operation> --workspace <path> --json` argument vector without a shell.
+Unknown IDs and invalid operations fail before execution. The subprocess has a
+330-second budget around mill's default five-minute readiness wait.
+
+`weaverMutationOptions` owns pending/error/success feedback, disables automatic retries,
+and awaits discovery plus selected-workspace cache invalidation on either outcome.
+Menus lock while their workspace has a pending command. The UI never fabricates an
+online/offline result. Closing the confirmation does not cancel a submitted command;
+refresh status before explicitly retrying a failure or timeout.
+
+This is the existing unauthenticated trusted-LAN API. Anyone able to reach it can
+operate discovered weavers; use localhost/SSH when the network is not trusted.
 
 ## Verification
 
-`pnpm quality`: formatting, zero-warning Oxlint, strict TypeScript, 292 Vitest tests
-and production build. Existing board and destination tests protect production lane
-sorting and URL/offline semantics; new overview and workspace-activity tests protect
-partial counts, unavailable versus empty, independent health, offline labels and
-retry/navigation suppression.
+`pnpm quality`: formatting, zero-warning type-aware lint, strict TypeScript, 345 tests,
+and production build (existing large-chunk advisory only). Focused additions cover
+custom labels across workspaces, empty labels/review precedence, closed-card exclusion,
+quiet evidence, known-ID lifecycle resolution and failed-command cache expiry.
 
-Browser: isolated agent-browser session, built app on 127.0.0.1:4276, desktop
-1440×1000 and narrow 390×844. Real reads discovered seven running local weavers:
-active cards/agent, six quiet workspaces, quiet expansion, Refresh all, card and
-agent links in new tabs, and alias change/reload persistence passed. Narrow layout
-has document width 390, no horizontal overflow. Initial discovery/loading was
-observed before real snapshots arrived.
-
-Browser-local network boundaries (no Weaver shutdown or real writes):
-
-- Card request aborted after success: retained cards/counts and last-known labels;
-  agents remained live. Agent request aborted separately: retained agent data.
-- Discovery aborted: retained workspace list with explicit discovery error and
-  partial totals; independent sources continue.
-- Discovery fixture marks the active workspace offline: retained work remains
-  visible; zero anchors target that workspace. Refresh restores live links.
-- Response fixtures show production work plus queued and stopping agents; totals
-  and labels remain correct. Empty discovery fixture shows the explicit empty state.
-
-Fixtures existed only in browser request routing and were removed. No paid agents,
-external reviews, real card edits or weaver stops.
+Built-app browser checks at 1440×1000 and 390×844: no horizontal overflow, light/dark,
+settings save/reload, invalid labels, empty list, storage failure preserving the draft,
+search and filters, pin/hide/unhide, real workspace navigation, existing issue/agent
+inspectors, Back and expanded activity. Aborted board reads retained last-known cards
+while agents stayed live. Browser-intercepted lifecycle success and network failure
+exercised confirmation and feedback without starting/stopping/restarting real weavers.

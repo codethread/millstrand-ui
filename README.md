@@ -50,26 +50,36 @@ ssh -N -L 4173:127.0.0.1:4173 user@host
 
 Open `http://localhost:4173` locally. This MVP has no login: any client able to
 reach the server can browse discovered local weavers, move or delete cards, edit
-card labels and saved views, and read private recorded prompts, commands, and paths.
+card labels and saved views, start/stop/restart discovered weavers, and read private
+recorded prompts, commands, and paths.
 That includes the session-log source endpoints when a client knows a provider and
 session ID. Bind to localhost when using a tunnel or when the network is not trusted.
 
 ## All-weaver overview
 
-The home page (`/?mode=overview`) shows work in motion across every discovered
-local weaver: only in-progress/review/production cards and active agents (running, queued,
-or stopping). Busy workspaces appear first, with summary counts; quiet, loading,
-and offline weavers are listed compactly below. Expand one to inspect its status
-or open its dashboard. **All weavers** in any dashboard returns to this overview.
+The home page (`/?mode=overview`) is an Inbox cockpit: **Needs your attention**,
+**Ready for a look**, **Running, but quiet**, and a narrow recorded-activity rail.
+Search the fleet or filter by workspace/section. Workspace navigation opens its
+real dashboard; cards and agents open the existing side panels over the cockpit.
+**All weavers** in a workspace returns here.
 
-Card and agent links open the correct workspace and selected item, including in
-a new tab. Activity polls every five seconds and discovery every thirty seconds;
-**Refresh all** requests both immediately. Failed sources retain their last
-successful snapshot with explicit last-known labels. Counts are marked partial
-when a source is loading, offline, or failing. Offline snapshots remain visible,
-but their workspace, card, and agent links stay unavailable until discovery sees
-the weaver running again. A missing Kanban surface does not prevent that weaver's
-agents from appearing.
+Use the settings button beside **Needs your attention** to choose labels. Active
+cards matching **any** selected label appear across all visible Kanban-enabled
+weavers, including pending/refinement cards. The global browser preference defaults
+to `human-attention`, `auto-run-failure`, and `factory-escalated`. An empty list
+disables attention matches; review cards still appear under **Ready for a look**.
+No workspace labels are edited. Matching review cards are not shown twice.
+
+Quiet means no recorded session event for five minutes while the process is running,
+not proof of a stuck agent. Missing/stale logs do not establish quietness. Failed
+sources retain last-known data with visible errors; missing Kanban does not suppress
+agents. Activity polls every five seconds, discovery every thirty seconds.
+**Refresh all** refreshes discovery and running board/agent sources.
+
+The **Weavers** button and each gear menu provide start/stop/restart with confirmation.
+These affect the workspace weaver, not agent sessions. Pending commands and failures
+are explicit and never automatically retried; status comes from discovery, not a
+simulated result. See [overview contracts and verification](docs/overview.md).
 
 ## Switch weavers
 
@@ -182,7 +192,7 @@ assignment, or session-resume controls. A failed run can still have a useful rep
 which is shown alongside its failure.
 
 The default alias is **tui**, saved separately for each weaver in this browser.
-Change it on All weavers or in the compose dialog. Choices come from that weaver's
+Change it in the compose dialog. Choices come from that weaver's
 available headless harnesses; missing Harnesses support or an unavailable alias
 is shown explicitly. Prompts are passed as command arguments, never shell code;
 the API validates the selected card/graph target and alias and owns the execution
@@ -248,7 +258,7 @@ stay intact; the search shortcut also restores the header and focuses search.
 Use Board for lanes, Outline for epic/feature context, and Graph for relationships.
 The optional **In production** column appears after **In review** when matching
 cards use the spool's `in_production` lane. It supports filters and saved views
-and keeps production observation work visible in the all-weaver overview.
+and keeps production observation work available in workspace views.
 Choose a graph focus to load one card's task subtree and dependencies. Solid arrows
 point from parent to child; dashed arrows point from a dependent to its prerequisite.
 Scroll to zoom, drag to pan, and click a node to inspect it. Views above 150 nodes
