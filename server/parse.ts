@@ -477,16 +477,30 @@ export function requestValue<T>(parse: (value: unknown) => T, value: unknown): T
 }
 
 /** Recognize observed machine-readable CLI errors; retain diagnostics for every other failure. */
-export function strandErrorMessage(stderr: string, fallback: string): string {
+export function strandCommandError(stderr: string, fallback: string): HttpError {
   try {
     const error = object(JSON.parse(stderr) as unknown, 'strand error');
     const details = object(error['details'], 'strand error.details');
     if (
       error['code'] === 'domain/error' &&
+      error['message'] === 'Target already has an active managed run'
+    ) {
+      const runs = z.array(z.string().regex(/^[a-zA-Z0-9_-]+$/)).safeParse(details['runs']);
+      const runHint = runs.success && runs.data.length ? ` (${runs.data.join(', ')})` : '';
+      return new HttpError(
+        409,
+        `This target already has an active agent run${runHint}. Open it in Agents to inspect its progress. Wait for it to settle before starting another run; Prompt agent cannot message a running agent. Your prompt was not sent.`,
+      );
+    }
+    if (
+      error['code'] === 'domain/error' &&
       error['message'] === 'Operation not found' &&
       details['canonical-operation'] === 'kanban'
     ) {
-      return 'This weaver does not publish Kanban. Choose another workspace or enable the Kanban spool.';
+      return new HttpError(
+        502,
+        'This weaver does not publish Kanban. Choose another workspace or enable the Kanban spool.',
+      );
     }
     if (
       error['code'] === 'mill/invoke-world-failed' &&
@@ -496,11 +510,14 @@ export function strandErrorMessage(stderr: string, fallback: string): string {
         details['detail'],
       )
     ) {
-      return 'This weaver’s workspace configuration is unavailable. Choose another workspace or restore its configuration.';
+      return new HttpError(
+        502,
+        'This weaver’s workspace configuration is unavailable. Choose another workspace or restore its configuration.',
+      );
     }
   } catch {
     // Process termination and executable failures do not produce a JSON error envelope.
-    return fallback;
+    return new HttpError(502, fallback);
   }
-  return fallback;
+  return new HttpError(502, fallback);
 }

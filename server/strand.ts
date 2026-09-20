@@ -48,7 +48,7 @@ import {
   parseRelation,
   parseTask,
   parseWork,
-  strandErrorMessage,
+  strandCommandError,
 } from './parse.ts';
 
 const exec = promisify(execFile);
@@ -233,10 +233,7 @@ export class StrandData {
         error instanceof Error && 'stderr' in error && typeof error.stderr === 'string'
           ? error.stderr
           : '';
-      throw new HttpError(
-        502,
-        strandErrorMessage(stderr, `Strand command failed: ${detail.slice(0, 1500)}`),
-      );
+      throw strandCommandError(stderr, `Strand command failed: ${detail.slice(0, 1500)}`);
     }
   }
 

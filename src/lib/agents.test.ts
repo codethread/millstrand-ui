@@ -4,6 +4,7 @@ import {
   agentIsActive,
   agentRunIdentities,
   currentRun,
+  conflictingPromptRuns,
   issueAgentActivity,
   issueAgents,
   issueRun,
@@ -51,6 +52,23 @@ function identity(runs: AgentRun[], id = 'calm-young-tiger'): AgentIdentity {
 }
 
 describe('agent activity and issue attribution', () => {
+  it('blocks only active direct targets, deduplicates runs, and permits receipt recovery', () => {
+    const active = run({ id: 'active', target: 'card1' });
+    const queued = run({ id: 'queued', target: 'card1', status: 'ready' });
+    const agents = [
+      identity([
+        active,
+        queued,
+        run({ id: 'finished', target: 'card1', status: 'stopped' }),
+        run({ id: 'failed', target: 'card1', status: 'failed' }),
+        run({ id: 'descendant', target: 'task1', rootTargets: ['card1'] }),
+        run({ id: 'receipt', target: 'card1', requestId: 'ui-existing' }),
+      ]),
+      identity([active], 'second-identity'),
+    ];
+    expect(conflictingPromptRuns(agents, 'card1', 'ui-existing')).toEqual([active, queued]);
+    expect(conflictingPromptRuns(agents, 'other', 'ui-existing')).toEqual([]);
+  });
   it.each([
     ['running', true, 'Running'],
     ['ready', true, 'Queued'],

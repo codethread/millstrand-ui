@@ -197,3 +197,23 @@ export function targetAgentRunIds(agents: AgentIdentity[], target: string): stri
     ),
   ];
 }
+
+/** Only direct targets reserve execution; an unchanged retry can recover its own run. */
+export function conflictingPromptRuns(
+  agents: AgentIdentity[],
+  target: string,
+  requestId: string,
+): AgentRun[] {
+  const runs = new Map<string, AgentRun>();
+  for (const identity of agents) {
+    for (const run of identity.runs) {
+      if (
+        run.target === target &&
+        run.requestId !== requestId &&
+        (run.status === 'ready' || run.status === 'running')
+      )
+        runs.set(run.id, run);
+    }
+  }
+  return [...runs.values()];
+}

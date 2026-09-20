@@ -10,6 +10,7 @@ import {
 import {
   agentDirectorySummary,
   agentRunIdentities,
+  conflictingPromptRuns,
   relevantAgentActivity,
   selectedAgentActivity,
   targetAgentRunIds,
@@ -107,6 +108,17 @@ export function useTargetAgentRunIds(target: string) {
   const select = useCallback(
     (directory: AgentDirectory) => targetAgentRunIds(directory.identities, target),
     [target],
+  );
+  return useQuery({
+    ...agentReaderOptions(useWorkspace()),
+    select,
+  });
+}
+
+export function useConflictingPromptRuns(target: string, requestId: string) {
+  const select = useCallback(
+    (directory: AgentDirectory) => conflictingPromptRuns(directory.identities, target, requestId),
+    [target, requestId],
   );
   return useQuery({
     ...agentReaderOptions(useWorkspace()),
