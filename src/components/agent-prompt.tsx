@@ -142,7 +142,9 @@ function ComposePrompt({ workspace }: { workspace: string }) {
   const ready =
     options.data?.some((agent) => agent.name === alias) &&
     !options.error &&
-    !conflicts.data?.length;
+    conflicts.data !== undefined &&
+    !conflicts.error &&
+    conflicts.data.length === 0;
   return (
     <Dialog
       open
@@ -200,6 +202,23 @@ function ComposePrompt({ workspace }: { workspace: string }) {
           }}
         >
           <AgentChoice workspace={workspace} enabled disabled={mutation.isPending} />
+          {conflicts.error ? (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+              Agent activity could not refresh. Check it before sending a new prompt.{' '}
+              <button
+                type="button"
+                className="underline"
+                disabled={conflicts.isFetching}
+                onClick={() => {
+                  void conflicts.refetch();
+                }}
+              >
+                Retry activity
+              </button>
+            </p>
+          ) : conflicts.isPending ? (
+            <p className="text-sm text-foreground">Checking for an active agent run…</p>
+          ) : null}
           {!!conflicts.data?.length && (
             <div
               aria-live="polite"
@@ -209,9 +228,6 @@ function ComposePrompt({ workspace }: { workspace: string }) {
                 This target already has an active agent run. Wait for it to settle before starting
                 another. Prompt agent starts a new run; it cannot message the running agent.
               </p>
-              {conflicts.error && (
-                <p>Agent activity could not refresh; showing the last known runs.</p>
-              )}
               <div className="flex flex-wrap gap-2">
                 {conflicts.data.map((run) => (
                   <Button
