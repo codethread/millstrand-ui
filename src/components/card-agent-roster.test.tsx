@@ -33,7 +33,7 @@ it('renders named selectable rows and a narrow selector without implying ownersh
   );
   expect(html).toContain('aria-pressed="true"');
   expect(html).toContain('aria-label="Activity agent"');
-  expect(html).toContain('value="task-worker" selected');
+  expect(html).toContain('value="identity" selected');
   expect(html).toContain('Task owner · Improve the agent roster');
   expect(html).toContain('Untracked');
   expect(html).toContain('Ownership only · activity on this work is not confirmed');

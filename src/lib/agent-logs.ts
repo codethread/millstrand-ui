@@ -110,7 +110,8 @@ export function cardLogRoster(
   );
   return {
     agents,
-    selected: agents.find((candidate) => candidate.identity.id === chosen) ?? agents[0] ?? null,
+    selected:
+      agents.find((candidate) => candidate.identity.strandId === chosen) ?? agents[0] ?? null,
     historyCount: hasCurrent
       ? candidates.filter((candidate) => candidate.group === 'history').length
       : 0,

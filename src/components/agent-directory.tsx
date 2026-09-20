@@ -97,7 +97,7 @@ export function AgentDirectory() {
         <div className="agent-grid">
           {agents.map((agent) => (
             <AgentCard
-              key={agent.id}
+              key={agent.strandId}
               agent={agent}
               stale={health.error !== null}
               onSelect={() => openAgent(agent.id)}
