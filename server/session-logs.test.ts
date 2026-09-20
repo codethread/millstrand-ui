@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
+import type { LogProvider, LogSnapshot } from '../shared/session-log';
 import { parseSessionLogSource } from './session-logs';
-import { logBindings } from './log-activity';
+import { logBindings, readLogActivity } from './log-activity';
+import { SessionLogReader } from './session-log-reader';
 
 function identityRow(identity: string, nativeSession?: string) {
   return {
@@ -90,25 +92,48 @@ it('resolves persisted native session bindings without guessing', () => {
   ]);
 });
 
-it('keeps duplicate friendly identities bound to their immutable identity strands', () => {
+it('keeps duplicate friendly identities bound to their immutable identity strands', async () => {
   const first = identityRow('duplicate', 'native-first');
-  const second = { ...identityRow('duplicate', 'native-second'), id: 'identity-duplicate-second' };
-  expect(
-    logBindings(graph([first, second])).map(({ identity, identityStrandId, source }) => ({
-      identity,
-      identityStrandId,
-      source,
-    })),
-  ).toEqual([
+  const second = { ...identityRow('duplicate'), id: 'identity-duplicate-second' };
+  const activeRun = runRow('duplicate', 'second-running', 'running', '2026-09-19 10:01:00');
+  const snapshot = {
+    strands: [first, second, activeRun],
+    edges: [
+      {
+        from_strand_id: second.id,
+        to_strand_id: activeRun.id,
+        edge_type: 'performed',
+      },
+    ],
+  };
+  const reader = new (class extends SessionLogReader {
+    readonly sessions: string[] = [];
+
+    override snapshot(provider: LogProvider, session: string): Promise<LogSnapshot> {
+      this.sessions.push(`${provider}/${session}`);
+      return Promise.resolve({
+        events: [],
+        skipped: 0,
+        truncated: false,
+        bytes: 0,
+        modifiedAt: '2026-09-19T10:02:00Z',
+      });
+    }
+  })();
+
+  const activity = await readLogActivity(snapshot, reader);
+
+  expect(reader.sessions).toEqual(['pi/session-second-running']);
+  expect(activity.bindings).toMatchObject([
     {
       identity: 'duplicate',
       identityStrandId: 'identity-duplicate',
-      source: { provider: 'pi', session: 'native-first' },
+      activity: { kind: 'idle' },
     },
     {
       identity: 'duplicate',
       identityStrandId: 'identity-duplicate-second',
-      source: { provider: 'pi', session: 'native-second' },
+      activity: { kind: 'available' },
     },
   ]);
 });
