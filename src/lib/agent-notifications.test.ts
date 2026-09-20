@@ -4,33 +4,45 @@ import { parseAgents } from '../../server/agents';
 
 const requestId = 'ui-0123456789abcdef';
 function agents(status: string, request: string | null = requestId) {
-  return parseAgents([
-    {
-      id: 'identity',
-      title: 'Tiger',
-      state: 'active',
-      created_at: '2026-09-14',
-      updated_at: '2026-09-14',
-      attributes: { 'identity/session': 'true', 'identity/id': 'tiger', 'identity/harness': 'pi' },
-    },
-    ...['prompt-run', 'workflow-run'].map((id) => ({
-      id,
-      title: id,
-      state: 'active',
-      created_at: '2026-09-14',
-      updated_at: '2026-09-14',
-      attributes: {
-        'harness/run': 'true',
-        'harness/published': 'true',
-        'identity/id': 'tiger',
-        'harness/alias': 'tui',
-        'harness/harness': 'pi',
-        'harness/mode': 'headless',
-        'harness/status': status,
-        'harness/request-id': request,
+  const runIds = ['prompt-run', 'workflow-run'];
+  return parseAgents({
+    strands: [
+      {
+        id: 'identity',
+        title: 'Tiger',
+        state: 'active',
+        created_at: '2026-09-14',
+        updated_at: '2026-09-14',
+        attributes: {
+          'identity/session': 'true',
+          'identity/id': 'tiger',
+          'identity/harness': 'pi',
+        },
       },
+      ...runIds.map((id) => ({
+        id,
+        title: id,
+        state: 'active',
+        created_at: '2026-09-14',
+        updated_at: '2026-09-14',
+        attributes: {
+          'harness/run': 'true',
+          'harness/published': 'true',
+          'identity/id': 'tiger',
+          'harness/alias': 'tui',
+          'harness/harness': 'pi',
+          'harness/mode': 'headless',
+          'harness/status': status,
+          'harness/request-id': request,
+        },
+      })),
+    ],
+    edges: runIds.map((id) => ({
+      from_strand_id: 'identity',
+      to_strand_id: id,
+      edge_type: 'performed',
     })),
-  ]);
+  }).identities;
 }
 const receipts = { 'prompt-run': { requestId, read: false } };
 

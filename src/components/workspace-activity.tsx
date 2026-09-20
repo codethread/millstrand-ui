@@ -223,11 +223,18 @@ export function WorkspaceActivity({
                       Target · {run.target}
                     </span>
                   )}
-                  <AgentLogHint workspace={workspace.id} identity={agent.id} stale={staleAgents} />
+                  <AgentLogHint
+                    workspace={workspace.id}
+                    identityStrandId={agent.strandId}
+                    stale={staleAgents}
+                  />
                 </>
               );
               return destination ? (
-                <div key={agent.id} className="overflow-hidden rounded-lg border border-border">
+                <div
+                  key={agent.strandId}
+                  className="overflow-hidden rounded-lg border border-border"
+                >
                   <Link
                     to="/"
                     search={destination}
@@ -239,12 +246,13 @@ export function WorkspaceActivity({
                   <AgentLogButton
                     workspace={workspace.id}
                     identity={agent.id}
+                    identityStrandId={agent.strandId}
                     disabled={staleAgents}
                   />
                 </div>
               ) : (
                 <div
-                  key={agent.id}
+                  key={agent.strandId}
                   className="rounded-lg border border-border p-3 opacity-70"
                   title="Agent unavailable while this weaver is offline"
                 >

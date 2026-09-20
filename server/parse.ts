@@ -2,6 +2,8 @@ import type {
   AutoRun,
   Card,
   CardGraph,
+  CardOwnership,
+  IdentityAttribution,
   GraphEdge,
   GraphNode,
   JsonValue,
@@ -12,6 +14,7 @@ import type {
   Relation,
   SavedView,
   Task,
+  TaskOwnership,
   ViewFilter,
   WorkItem,
 } from '../shared/api.ts';
@@ -78,7 +81,7 @@ const noteSchema = z
     id: z.string(),
     note: z.string(),
     at: z.string(),
-    by: z.string().nullable().optional(),
+    'by-identity': z.string().nullable().optional(),
     kind: z.string().nullable().optional(),
     truncated: z.boolean().optional(),
   })
@@ -96,7 +99,6 @@ const cardSchema = z
     epic: z.string().optional(),
     type: cardTypeSchema.optional(),
     priority: prioritySchema.optional(),
-    owner: z.string().optional(),
     branch: z.string().optional(),
     worktree: z.string().optional(),
     source: z.string().optional(),
@@ -113,7 +115,6 @@ const taskSchema = z
     title: z.string(),
     state: strandStateSchema,
     status: taskStatusSchema,
-    owner: z.string().nullable().optional(),
     body: z.string().nullable().optional(),
     'latest-note': noteSchema.optional(),
   })
@@ -159,6 +160,14 @@ const labelSchema = z
   .toLowerCase()
   .regex(/^[a-z0-9][a-z0-9-]*$/);
 const compiledLabelSchema = z.compile(labelSchema, { strict: true });
+
+export interface AttributionProjection {
+  ownership(target: string): CardOwnership;
+  reporter(cardId: string): IdentityAttribution | null;
+  noteActor(noteId: string): IdentityAttribution | null;
+  taskOwnership(taskId: string): TaskOwnership | null;
+  owner(target: string): string | null;
+}
 
 const labelChangeSchema = z
   .object({
@@ -264,23 +273,27 @@ function parseAutoRun(attrs: ObjectValue, labels: string[]): AutoRun | null {
 }
 
 /** The compact board supplies membership; raw cards supply attributes it omits. */
-export function parseBoardCards(compact: unknown, raw: unknown): Card[] {
+export function parseBoardCards(
+  compact: unknown,
+  raw: unknown,
+  provenance: AttributionProjection,
+): Card[] {
   const rows = array(raw, 'board card attributes');
   if (rows.length > 10_000) throw new Error('Board exceeds the 10,000 card attribute limit.');
   const cards = new Map(
     rows.map((row) => {
-      const card = parseCard(row);
+      const card = parseCard(row, provenance);
       return [card.id, card];
     }),
   );
   return array(compact, 'board.cards').flatMap((row) => {
-    const membership = parseCard(row);
+    const membership = parseCard(row, provenance);
     const card = cards.get(membership.id);
     return card ? [{ ...card, epicId: membership.epicId }] : [];
   });
 }
 
-export function parseCard(value: unknown): Card {
+export function parseCard(value: unknown, provenance: AttributionProjection): Card {
   const row = parseSchema(compiledCardSchema, value, 'card');
   const attrs = row.attributes === undefined ? {} : jsonObject(row.attributes, 'card.attributes');
   const read = (key: keyof CardRow, attr = key): unknown => row[key] ?? attrs[attr];
@@ -293,6 +306,7 @@ export function parseCard(value: unknown): Card {
           .filter(([key, flag]) => key.startsWith('kanban.label/') && flag === 'true')
           .map(([key]) => key.slice('kanban.label/'.length))
       : row.labels;
+  const ownership = provenance.ownership(row.id);
   return {
     id: row.id,
     title: row.title ?? '(untitled)',
@@ -312,9 +326,11 @@ export function parseCard(value: unknown): Card {
       'card.priority',
     ),
     epicId: row.epic ?? null,
-    owner: maybeString(read('owner'), 'card.owner'),
-    branch: maybeString(read('branch'), 'card.branch'),
-    worktree: maybeString(read('worktree'), 'card.worktree'),
+    owner: ownership.current?.owner.identity ?? null,
+    reporter: provenance.reporter(row.id),
+    ownership,
+    branch: ownership.current?.branch ?? null,
+    worktree: ownership.current?.worktree ?? null,
     source: maybeString(read('source', 'kanban/source'), 'card.source'),
     outcome: maybeString(read('outcome', 'kanban/outcome'), 'card.outcome'),
     labels: sorted([...new Set(labels)]),
@@ -324,28 +340,31 @@ export function parseCard(value: unknown): Card {
   };
 }
 
-export function parseNote(value: unknown): Note {
+export function parseNote(value: unknown, provenance: AttributionProjection): Note {
   const row = parseSchema(compiledNoteSchema, value, 'note');
   return {
     id: row.id,
     text: row.note,
     at: row.at,
-    by: row.by ?? null,
+    actor: provenance.noteActor(row.id),
     kind: row.kind ?? null,
     truncated: row.truncated === true,
   };
 }
 
-export function parseTask(value: unknown): Task {
+export function parseTask(value: unknown, provenance: AttributionProjection): Task {
   const row = parseSchema(compiledTaskSchema, value, 'task');
+  const ownership = provenance.taskOwnership(row.id);
   return {
     id: row.id,
     title: row.title ?? '(untitled)',
     state: row.state,
     status: row.status,
-    owner: row.owner ?? null,
+    owner: ownership?.claim.owner.identity ?? null,
+    ownerSource: ownership?.source ?? null,
+    ownership,
     body: row.body ?? '',
-    latestNote: row['latest-note'] === undefined ? null : parseNote(row['latest-note']),
+    latestNote: row['latest-note'] === undefined ? null : parseNote(row['latest-note'], provenance),
   };
 }
 
@@ -371,7 +390,7 @@ function graphEdges(items: EdgeRow[], kind: GraphEdge['kind']): GraphEdge[] {
   return items.map((edge) => ({ kind, from: edge.from_strand_id, to: edge.to_strand_id }));
 }
 
-export function parseGraph(value: unknown): CardGraph {
+export function parseGraph(value: unknown, provenance: AttributionProjection): CardGraph {
   const row = parseSchema(compiledGraphSchema, value, 'graph');
   const nodes = row.strands.map((item): GraphNode => {
     const work = parseWork(item);
@@ -388,7 +407,7 @@ export function parseGraph(value: unknown): CardGraph {
         : taskMarker === 'true'
           ? 'task'
           : 'work';
-    return { ...work, kind };
+    return { ...work, kind, owner: provenance.owner(work.id) };
   });
   return {
     rootId: row['root-id'],

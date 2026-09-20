@@ -111,7 +111,7 @@ function QuietRow({ agent }: { agent: CockpitAgent }) {
       )}
       <AgentLogHint
         workspace={agent.workspace.id}
-        identity={agent.identity.id}
+        identityStrandId={agent.identity.strandId}
         stale={agent.stale}
       />
     </button>
@@ -190,7 +190,7 @@ export function AttentionCentre({
       {quiet.length ? (
         <div className={container}>
           {quiet.map((agent) => (
-            <QuietRow key={`${agent.workspace.id}:${agent.identity.id}`} agent={agent} />
+            <QuietRow key={`${agent.workspace.id}:${agent.identity.strandId}`} agent={agent} />
           ))}
         </div>
       ) : (
@@ -227,7 +227,7 @@ export function ActivityRail({ agents }: { agents: CockpitAgent[] }) {
       <div className="space-y-3">
         {agents.map((agent) => (
           <article
-            key={`${agent.workspace.id}:${agent.identity.id}`}
+            key={`${agent.workspace.id}:${agent.identity.strandId}`}
             className="min-w-0 overflow-hidden rounded-lg border border-border bg-card"
           >
             <button
@@ -248,7 +248,7 @@ export function ActivityRail({ agents }: { agents: CockpitAgent[] }) {
               </div>
               <AgentLogHint
                 workspace={agent.workspace.id}
-                identity={agent.identity.id}
+                identityStrandId={agent.identity.strandId}
                 stale={agent.stale}
               />
             </button>
@@ -264,6 +264,7 @@ export function ActivityRail({ agents }: { agents: CockpitAgent[] }) {
             <AgentLogButton
               workspace={agent.workspace.id}
               identity={agent.identity.id}
+              identityStrandId={agent.identity.strandId}
               disabled={agent.stale}
             />
           </article>

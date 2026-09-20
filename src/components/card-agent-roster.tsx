@@ -42,18 +42,21 @@ export function CardAgentRoster({
         className="hidden max-h-[min(14rem,30vh)] overflow-y-auto px-2 pb-2 sm:block"
       >
         {agents.map((agent) => (
-          <li key={agent.identity.id}>
+          <li key={agent.identity.strandId}>
             <Button
               variant="ghost"
               className={cn(
                 'h-auto w-full justify-start gap-2 px-2 py-2 text-left whitespace-normal',
-                selected.identity.id === agent.identity.id && 'bg-accent text-accent-foreground',
+                selected.identity.strandId === agent.identity.strandId &&
+                  'bg-accent text-accent-foreground',
               )}
-              aria-pressed={selected.identity.id === agent.identity.id}
-              onClick={() => choose(agent.identity.id)}
+              aria-pressed={selected.identity.strandId === agent.identity.strandId}
+              onClick={() => choose(agent.identity.strandId)}
             >
               <span className="flex size-4 shrink-0 items-center justify-center">
-                {selected.identity.id === agent.identity.id && <Check className="size-3!" />}
+                {selected.identity.strandId === agent.identity.strandId && (
+                  <Check className="size-3!" />
+                )}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[11px] font-medium">
@@ -81,11 +84,11 @@ export function CardAgentRoster({
         <select
           aria-label="Activity agent"
           className="w-full min-w-0 rounded border border-border bg-background p-2 text-xs text-foreground"
-          value={selected.identity.id}
+          value={selected.identity.strandId}
           onChange={(event) => choose(event.target.value)}
         >
           {agents.map((agent) => (
-            <option key={agent.identity.id} value={agent.identity.id}>
+            <option key={agent.identity.strandId} value={agent.identity.strandId}>
               {agent.identity.id} · {cardLogAgentContext(agent)} · {cardLogAgentStatus(agent)}
             </option>
           ))}

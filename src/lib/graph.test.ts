@@ -4,7 +4,16 @@ import { emptyFilter, issueSurfaceContent } from './board';
 import { graphFromCards, layoutGraph } from './graph';
 
 function node(id: string, state = 'active'): GraphNode {
-  return { id, title: id, kind: 'task', state, attributes: {}, createdAt: null, updatedAt: null };
+  return {
+    id,
+    title: id,
+    kind: 'task',
+    state,
+    owner: null,
+    attributes: {},
+    createdAt: null,
+    updatedAt: null,
+  };
 }
 
 function card(id: string, epicId: string | null = null): Card {
@@ -17,6 +26,8 @@ function card(id: string, epicId: string | null = null): Card {
     lane: 'pending',
     priority: 'p2',
     owner: null,
+    reporter: null,
+    ownership: { current: null, history: [] },
     branch: null,
     worktree: null,
     source: null,

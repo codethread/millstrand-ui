@@ -172,7 +172,7 @@ export function cockpitWork(
         stale,
         pulse: agentPulse(
           run?.status === 'running' && run.substatus !== 'requested',
-          log?.bindings?.find((binding) => binding.identity === identity.id) ?? null,
+          log?.bindings?.find((binding) => binding.identityStrandId === identity.strandId) ?? null,
           stale || log?.failed === true,
           now,
         ),

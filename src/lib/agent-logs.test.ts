@@ -36,6 +36,8 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     cwd: '/workspace',
     target: null,
     rootTargets: [],
+    participants: [],
+    continuation: null,
     createdAt: '2026-09-18',
     startedAt: null,
     finishedAt: null,
@@ -51,7 +53,8 @@ function node(id: string, kind: GraphNode['kind'] = 'task'): GraphNode {
     title: id,
     kind,
     state: 'active',
-    attributes: { owner: 'worker' },
+    owner: 'worker',
+    attributes: {},
     createdAt: null,
     updatedAt: null,
   };
@@ -91,6 +94,18 @@ describe('card agent roster', () => {
     ]);
     expect(cardLogAgentStatus(roster[1]!)).toBe('Session running');
     expect(cardLogAgentContext(roster[1]!)).toContain('(completed)');
+  });
+
+  it('keeps duplicate friendly identities separately selectable by immutable strand id', () => {
+    const first = identity('duplicate', [run({ id: 'first', target: 'feature' })]);
+    const second = {
+      ...identity('duplicate', [run({ id: 'second', target: 'feature' })]),
+      strandId: 'identity-duplicate-second',
+    };
+    const candidates = cardLogAgents([first, second], null, 'feature', []);
+    expect(cardLogRoster(candidates, 'identity-duplicate-second', false).selected?.identity).toBe(
+      second,
+    );
   });
 
   it('keeps selection inside visible rows and still opens logs when only past work exists', () => {

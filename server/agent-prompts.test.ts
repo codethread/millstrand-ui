@@ -24,9 +24,9 @@ const reviewDetail = parseReviewDetail({
   },
 });
 
-const { exec, readCardStrands } = vi.hoisted(() => ({
+const { exec, readProvenance } = vi.hoisted(() => ({
   exec: vi.fn(),
-  readCardStrands: vi.fn(),
+  readProvenance: vi.fn(),
 }));
 vi.mock('node:child_process', async () => {
   const { promisify } = await import('node:util');
@@ -34,8 +34,7 @@ vi.mock('node:child_process', async () => {
 });
 vi.mock('./workspace-database.ts', () => ({
   WorkspaceDatabase: class {
-    readAgentStrands = vi.fn();
-    readCardStrands = readCardStrands;
+    readProvenance = readProvenance;
   },
 }));
 
@@ -85,7 +84,7 @@ const reply = {
 
 beforeEach(() => {
   exec.mockReset();
-  readCardStrands.mockReset();
+  readProvenance.mockReset();
 });
 
 describe('prompt boundaries', () => {
@@ -144,15 +143,49 @@ describe('scoped launch process', () => {
     registered = [process.cwd()],
     readReview = () => reviewDetail,
   ) {
-    readCardStrands.mockResolvedValue([
-      {
-        id: 'card1',
-        title: 'Feature',
-        state: 'active',
-        created_at: '2026-09-14',
-        attributes: { worktree },
-      },
-    ]);
+    readProvenance.mockResolvedValue({
+      strands: [
+        {
+          id: 'card1',
+          title: 'Feature',
+          state: 'active',
+          created_at: '2026-09-14',
+          updated_at: '2026-09-14',
+          attributes: { 'kanban/card': 'true' },
+        },
+        {
+          id: 'task1',
+          title: 'Task',
+          state: 'active',
+          created_at: '2026-09-14',
+          updated_at: '2026-09-14',
+          attributes: { 'kanban/task': 'true' },
+        },
+        ...(worktree === null
+          ? []
+          : [
+              {
+                id: 'claim1',
+                title: 'Ownership',
+                state: 'closed',
+                created_at: '2026-09-14',
+                updated_at: '2026-09-14',
+                attributes: {
+                  'kanban/ownership-claim': 'true',
+                  'kanban/owner': 'worker',
+                  'kanban/claimed-at': '2026-09-14T00:00:00Z',
+                  worktree,
+                },
+              },
+            ]),
+      ],
+      edges: [
+        { from_strand_id: 'card1', to_strand_id: 'task1', edge_type: 'parent-of' },
+        ...(worktree === null
+          ? []
+          : [{ from_strand_id: 'claim1', to_strand_id: 'card1', edge_type: 'claims' }]),
+      ],
+    });
     exec.mockImplementation((_file, argv) => {
       if (_file === 'git')
         return Promise.resolve({

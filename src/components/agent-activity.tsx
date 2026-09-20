@@ -17,7 +17,7 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
     <div className="flex min-w-0 flex-col gap-2">
       {agents.map(({ identity, run, label, relation }) => (
         <button
-          key={identity.id}
+          key={identity.strandId}
           className="agent-link"
           onClick={() => openAgent(identity.id)}
           aria-label={`View agent ${identity.id}`}
@@ -40,7 +40,7 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
           {run?.status === 'running' && (
             <AgentLogHint
               workspace={workspace}
-              identity={identity.id}
+              identityStrandId={identity.strandId}
               stale={health.error !== null}
             />
           )}

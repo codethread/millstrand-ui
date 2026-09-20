@@ -165,12 +165,16 @@ and untracked sessions. Click an identity or an issue’s agent badge to inspect
 provider/model, effort, working directory, run history, and owned work. Identity
 details and the Agents surface have shareable URLs and support browser Back.
 
-The UI joins card/task `owner` values to `identity/id`, then resolves published
-runs carrying that identity to `harness/alias`. **Working** requires a running run
-explicitly targeting the item or its work root. **Session running** only proves
-that the owner’s tracked session is running, not that it is working on every owned
-issue. Queued, stopping, completed, failed, and untracked sessions remain distinct.
-These are Weaver’s recorded process states, not keystroke or model-token activity.
+The UI reads immutable Kanban claims and graph role edges rather than treating a
+card’s old scalar `owner` or a run’s latest `identity/id` as authority. Reporter,
+latest explicit owner, note actor, run participant, and currently executing session
+remain separate. Ownership history is ordered by `(kanban/claimed-at, claim id)`;
+an unresolved newest claim still outranks an older resolved claim. Published-run
+participants come from `performed`, while work targeting comes from `serves` and
+`serves-root`. **Working** requires a running run on one of those explicit targets.
+**Session running** only proves that an owner’s tracked session is running, not that
+it is working on every owned issue. Queued, stopping, completed, failed, and
+untracked sessions remain distinct.
 
 Agent data refreshes independently every five seconds; failed refreshes mark
 retained data as last-known rather than claiming it is live. Agents can be browsed
@@ -179,9 +183,11 @@ file-backed SQLite database through `mill weaver list`, then runs a short-lived,
 read-only SQL projection over committed persisted state. It selects identity sessions,
 identity-linked published runs, and owned work before assembling only the required
 attributes. Unrelated notes, events, artifacts, provider environment variables,
-injected prompts, and credentials are never selected. The query has a 10,000-row
-safety bound, retains every lifecycle state including completed history, and fails
-rather than truncating or accepting an unsupported storage/schema version.
+injected prompts, and credentials are never selected. The projection has explicit 10,000-strand and 50,000-role-edge safety bounds,
+retains every lifecycle state including completed claims and terminal runs, and
+fails rather than truncating or accepting an unsupported storage/schema version.
+Raw friendly identities remain visible as resolved, unresolved, or ambiguous;
+the server never picks an unlinked or conflicting registry match.
 
 Use **Prompt agent** from a card's detail panel in Board, Outline, or Graph (or a
 focused graph's strand inspector). The small compose dialog starts a headless
@@ -205,7 +211,7 @@ Standard `pnpm dev`, `pnpm build`, and `pnpm start` include agent session logs; 
 are no enable flags or separate log servers. Overview and agent surfaces show a
 compact latest-event hint, while cards and agent details provide compact tails and an
 expanded **Conversation**, **Inspector**, or **Console** viewer. Card log rosters
-combine current feature/task owners with linked runs, retain terminal work under
+combine graph-derived current feature/task owners with linked runs, retain terminal work under
 **Past work**, use a mobile selector on narrow layouts, and expose related task
 context in a popover.
 

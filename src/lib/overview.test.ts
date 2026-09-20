@@ -107,6 +107,7 @@ it('applies one custom label list across workspaces, with an empty list disablin
 it('only calls a running process quiet with fresh log evidence older than five minutes', () => {
   const binding: LogBinding = {
     identity: 'worker',
+    identityStrandId: 'identity-worker',
     source: { provider: 'pi', session: 'session' },
     activity: {
       kind: 'available',
@@ -159,6 +160,8 @@ const card: Card = {
   priority: 'p2',
   epicId: null,
   owner: null,
+  reporter: null,
+  ownership: { current: null, history: [] },
   branch: null,
   worktree: null,
   source: null,

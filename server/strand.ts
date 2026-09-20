@@ -15,6 +15,7 @@ import { promisify } from 'node:util';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { parseAgents } from './agents.ts';
+import { ProvenanceIndex } from './provenance.ts';
 import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
 import {
   agentLaunchArgs,
@@ -244,7 +245,9 @@ export class StrandData {
       const raw = object(await this.run(['kanban', 'board', '--all', 'true']), 'board');
       // Read membership first. New cards wait for the next poll; cards deleted
       // before hydration are omitted instead of failing the entire board.
-      const cards = parseBoardCards(raw['cards'], await this.database.readCardStrands());
+      const snapshot = await this.database.readProvenance();
+      const provenance = new ProvenanceIndex(snapshot);
+      const cards = parseBoardCards(raw['cards'], provenance.cardRows(), provenance);
       const counts = new Map<string, number>();
       for (const card of cards) {
         for (const label of card.labels) counts.set(label, (counts.get(label) ?? 0) + 1);
@@ -263,11 +266,13 @@ export class StrandData {
 
   agents(): Promise<AgentDirectory> {
     return this.agentDirectories.get('agents', async () => {
-      const rows = await this.database.readAgentStrands();
+      const snapshot = await this.database.readProvenance();
+      const agents = parseAgents(snapshot);
       return {
         workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
         fetchedAt: new Date().toISOString(),
-        identities: parseAgents(rows),
+        identities: agents.identities,
+        runs: agents.runs,
       };
     });
   }
@@ -397,6 +402,7 @@ export class StrandData {
         this.run(['kanban', 'card', id]),
         this.run(['notes', id]),
       ]);
+      const provenance = new ProvenanceIndex(await this.database.readProvenance());
       const raw = object(cardPayload, 'card detail');
       const cardRaw = object(raw['card'], 'card detail.card');
       const attrs = object(cardRaw['attributes'], 'card.attributes');
@@ -404,11 +410,13 @@ export class StrandData {
       if (body !== undefined && typeof body !== 'string')
         throw new Error('card body must be a string');
       return {
-        card: { ...parseCard(cardRaw), epicId: known.epicId },
+        card: { ...parseCard(cardRaw, provenance), epicId: known.epicId },
         body: body ?? '',
         attributes: attrs,
-        tasks: array(raw['tasks'], 'card detail.tasks').map(parseTask),
-        notes: reversed(array(notesPayload, 'card notes').map(parseNote)),
+        tasks: array(raw['tasks'], 'card detail.tasks').map((task) => parseTask(task, provenance)),
+        notes: reversed(
+          array(notesPayload, 'card notes').map((note) => parseNote(note, provenance)),
+        ),
         activeWork: array(raw['active-work'], 'card detail.active-work').map(parseWork),
         ready: array(raw['ready'], 'card detail.ready').map(parseWork),
         related: array(raw['related'], 'card detail.related').map(parseRelation),
@@ -419,7 +427,11 @@ export class StrandData {
   graph(id: string): Promise<CardGraph> {
     return this.graphs.get(id, async () => {
       await this.card(id);
-      return parseGraph(await this.run(['kanban-export', id]));
+      const [graph, snapshot] = await Promise.all([
+        this.run(['kanban-export', id]),
+        this.database.readProvenance(),
+      ]);
+      return parseGraph(graph, new ProvenanceIndex(snapshot));
     });
   }
 
@@ -428,7 +440,12 @@ export class StrandData {
     if (!detail.tasks.some((task) => task.id === taskId)) {
       throw new HttpError(404, 'That task does not belong to this kanban card.');
     }
-    return reversed(array(await this.run(['notes', taskId]), 'task notes').map(parseNote));
+    const [notes, snapshot] = await Promise.all([
+      this.run(['notes', taskId]),
+      this.database.readProvenance(),
+    ]);
+    const provenance = new ProvenanceIndex(snapshot);
+    return reversed(array(notes, 'task notes').map((note) => parseNote(note, provenance)));
   }
 
   async changeCard(id: string, action: CardAction): Promise<{ ok: true }> {

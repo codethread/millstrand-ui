@@ -9,7 +9,11 @@ it('retains task activity with an explicit refresh failure instead of hiding it'
         {
           id: 'note',
           text: 'Saved task progress',
-          by: 'worker',
+          actor: {
+            identity: 'worker',
+            status: 'resolved',
+            identityStrandIds: ['worker-id'],
+          },
           at: '2026-01-01',
           kind: null,
           truncated: false,
