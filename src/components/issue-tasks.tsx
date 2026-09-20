@@ -7,6 +7,7 @@ import { cn } from '../lib/utils';
 import { Markdown } from './markdown';
 import { IssueAgents } from './agent-activity';
 import { ErrorNotice, Loading, StatusIcon } from './issue-parts';
+import { AttributionName } from './card-provenance';
 
 export function Notes({ notes }: { notes: Note[] }) {
   return notes.length ? (
@@ -17,7 +18,10 @@ export function Notes({ notes }: { notes: Note[] }) {
             <MessageSquare className="size-3" />
           </span>
           <header>
-            <strong>{note.actor?.identity ?? 'Workspace note'}</strong>
+            <span className="text-xs text-muted-foreground">Note author</span>
+            <strong>
+              <AttributionName attribution={note.actor} absent="Workspace note" />
+            </strong>
             {note.kind && <span className="note-kind">{note.kind}</span>}
             <time title={note.at}>{relativeTime(note.at)}</time>
           </header>
@@ -47,7 +51,12 @@ export function TaskRow({ task, cardId }: { task: Task; cardId: string }) {
             <span className={cn('task-status', `status-${task.status}`)}>
               {task.status === 'closed' ? 'completed' : task.status}
             </span>
-            {task.owner && <span>{task.owner}</span>}
+            {task.ownership !== null && (
+              <span>
+                {task.ownership.source === 'direct' ? 'Task owner' : 'Inherited owner'}:{' '}
+                <AttributionName attribution={task.ownership.claim.owner} />
+              </span>
+            )}
           </small>
         </span>
         <ChevronDown

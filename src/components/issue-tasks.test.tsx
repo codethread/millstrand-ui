@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, it } from 'vitest';
-import { TaskActivity } from './issue-tasks';
+import { Notes, TaskActivity } from './issue-tasks';
 
 it('retains task activity with an explicit refresh failure instead of hiding it', () => {
   const html = renderToStaticMarkup(
@@ -26,6 +26,26 @@ it('retains task activity with an explicit refresh failure instead of hiding it'
   expect(html).toContain('Saved task progress');
   expect(html).toContain('Refresh failed');
   expect(html).toContain('Showing last-known task activity.');
+});
+
+it('labels canonical note attribution without presenting the author as an owner', () => {
+  const html = renderToStaticMarkup(
+    <Notes
+      notes={[
+        {
+          id: 'note',
+          text: 'Independent review comment',
+          actor: { identity: 'nonowner', status: 'unresolved', identityStrandIds: [] },
+          at: '2026-01-01',
+          kind: 'review',
+          truncated: false,
+        },
+      ]}
+    />,
+  );
+  expect(html).toContain('Note author');
+  expect(html).toContain('Unresolved identity: nonowner');
+  expect(html).not.toContain('Current owner');
 });
 
 it('distinguishes initial loading, unavailable notes and successful empty activity', () => {

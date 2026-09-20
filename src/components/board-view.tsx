@@ -6,6 +6,7 @@ import { AutoRunSummary } from './auto-run';
 import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { CardContextMenu, CardMenuButton } from './card-actions';
+import { CardOwnerSummary } from './card-provenance';
 
 function IssueCard({ card, parent: epic }: BoardCard) {
   const { openCard } = useDashboardActions();
@@ -44,6 +45,7 @@ function IssueCard({ card, parent: epic }: BoardCard) {
             </div>
           )}
           <AutoRunSummary autoRun={card.autoRun} />
+          <CardOwnerSummary card={card} />
           <ArrowUpRight className="card-open-icon" />
         </button>
         <div className="card-footer flex-col! items-stretch!">
@@ -139,6 +141,7 @@ export function OutlineView({ groups }: { groups: OutlineGroup[] }) {
                     ))}
                   </div>
                   <StatusBadge status={card.lane} />
+                  <CardOwnerSummary card={card} />
                   <span className={`priority priority-${card.priority}`}>
                     {card.priority.toUpperCase()}
                   </span>

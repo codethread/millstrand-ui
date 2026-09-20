@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import type { CardLogAgent } from '../lib/agent-logs';
 import { CardAgentRoster } from './card-agent-roster';
+
+vi.mock('../lib/navigation', () => ({
+  useDashboardActions: () => ({ openAgentRun: vi.fn() }),
+}));
 
 const taskOwner: CardLogAgent = {
   identity: {
@@ -37,6 +41,8 @@ it('renders named selectable rows and a narrow selector without implying ownersh
   expect(html).toContain('Task owner · Improve the agent roster');
   expect(html).toContain('Untracked');
   expect(html).toContain('Ownership only · activity on this work is not confirmed');
-  expect(html).toContain('Past work (2)');
+  expect(html).toContain('Card participation');
+  expect(html).toContain('Current participation');
+  expect(html).toContain('Past participation (2)');
   expect(html).toContain('aria-expanded="false"');
 });

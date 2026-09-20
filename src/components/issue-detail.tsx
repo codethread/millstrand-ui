@@ -19,6 +19,7 @@ import { Notes, TaskRow } from './issue-tasks';
 import { LabelsEditor } from './issue-labels';
 import { IssueProperties } from './issue-properties';
 import { CardAgentLog } from './card-agent-log';
+import { CardProvenance } from './card-provenance';
 
 function DetailOverview({ detail }: { detail: CardDetail }) {
   const { exploreGraph } = useDashboardActions();
@@ -34,6 +35,7 @@ function DetailOverview({ detail }: { detail: CardDetail }) {
         )}
       </section>
       <AutoRunDetails autoRun={detail.card.autoRun} />
+      <CardProvenance card={detail.card} />
       <section className="detail-section">
         <div className="flex items-center justify-between">
           <h3 className="detail-section-title">

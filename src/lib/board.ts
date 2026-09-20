@@ -66,7 +66,15 @@ export function matchesCard(card: Card, filter: ViewFilter): boolean {
   if (filter.lanes.length && !filter.lanes.includes(card.lane)) return false;
   if (filter.types.length && !filter.types.includes(card.type)) return false;
   if (filter.priorities.length && !filter.priorities.includes(card.priority)) return false;
-  const text = [card.id, card.title, card.owner, card.branch, ...card.labels]
+  const text = [
+    card.id,
+    card.title,
+    card.owner,
+    card.reporter?.identity,
+    ...card.ownership.history.map((claim) => claim.owner.identity),
+    card.branch,
+    ...card.labels,
+  ]
     .join(' ')
     .toLowerCase();
   if (
