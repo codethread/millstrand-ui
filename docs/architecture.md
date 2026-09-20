@@ -320,6 +320,14 @@ page to consume. Domain options must not import Router; navigation belongs in ho
 - Selected-workspace consumers use the disabled readers in `src/hooks/use-agents.ts`:
   `useAgentIdentities`, `useAgentSummary`, `useRelevantAgentActivity`,
   `useSelectedAgentActivity`, `useAgentRunIdentities`, and `useTargetAgentRunIds`.
+  The prompt dialog's `useConflictingPromptRuns` is also a disabled reader: it
+  selects queued/running direct targets, excluding the current request ID so an
+  unchanged retry can recover its receipt. Root-target relationships alone do not
+  reserve execution. Strand remains authoritative at dispatch and reports active
+  target conflicts as HTTP 409 with a concise diagnosis; failed prompts retain the
+  composer draft and never automatically stop, resume, or retry a run.
+  Missing or failed activity reads visibly block sending; Retry activity explicitly
+  refetches the shared query without introducing a poll owner.
   Fetch health/fetched-at is a separate `useAgentStatus` subscription. Only
   `WorkspaceResourcePolls` calls `useAgentsPoll`.
 - Import `IssueAgents` from `src/components/agent-activity.tsx` and

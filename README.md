@@ -197,6 +197,14 @@ reply when available. Each submission starts a new run; there are no stop,
 assignment, or session-resume controls. A failed run can still have a useful reply,
 which is shown alongside its failure.
 
+If the target already has an active run, the dialog links to it and pauses new
+submissions until it settles. **Prompt agent** cannot send a message into that
+running session. A conflict discovered during dispatch leaves the prompt in the
+form and identifies the existing run without dumping the CLI command. An unchanged
+retry can still recover a run created by that same submission.
+The dialog waits for agent activity to load before enabling Send and shows an
+explicit retry when that activity cannot refresh.
+
 The default alias is **tui**, saved separately for each weaver in this browser.
 Change it in the compose dialog. Choices come from that weaver's
 available headless harnesses; missing Harnesses support or an unavailable alias

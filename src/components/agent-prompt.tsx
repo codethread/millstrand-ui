@@ -2,7 +2,7 @@ import { useId, useRef } from 'react';
 import { MessageSquare, Send } from 'lucide-react';
 import type { WorkspaceOption } from '../../shared/api';
 import { useAgentPromptStore, type PromptTarget } from '../agent-prompt-store';
-import { useAgentOptions, usePromptAgent } from '../hooks/use-agents';
+import { useAgentOptions, useConflictingPromptRuns, usePromptAgent } from '../hooks/use-agents';
 import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -132,10 +132,19 @@ function ComposePrompt({ workspace }: { workspace: string }) {
   const { openAgentRun } = useDashboardActions();
   const options = useAgentOptions(workspace);
   const mutation = usePromptAgent(composer.kind === 'composing' ? composer.target.cardId : '');
+  const conflicts = useConflictingPromptRuns(
+    composer.kind === 'composing' ? composer.target.id : '',
+    composer.kind === 'composing' ? composer.requestId : '',
+  );
   const promptId = useId();
   const prompt = useRef<HTMLTextAreaElement>(null);
   if (composer.kind === 'closed') return null;
-  const ready = options.data?.some((agent) => agent.name === alias) && !options.error;
+  const ready =
+    options.data?.some((agent) => agent.name === alias) &&
+    !options.error &&
+    conflicts.data !== undefined &&
+    !conflicts.error &&
+    conflicts.data.length === 0;
   return (
     <Dialog
       open
@@ -193,6 +202,51 @@ function ComposePrompt({ workspace }: { workspace: string }) {
           }}
         >
           <AgentChoice workspace={workspace} enabled disabled={mutation.isPending} />
+          {conflicts.error ? (
+            <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+              Agent activity could not refresh. Check it before sending a new prompt.{' '}
+              <button
+                type="button"
+                className="underline"
+                disabled={conflicts.isFetching}
+                onClick={() => {
+                  void conflicts.refetch();
+                }}
+              >
+                Retry activity
+              </button>
+            </p>
+          ) : conflicts.isPending ? (
+            <p className="text-sm text-foreground">Checking for an active agent run…</p>
+          ) : null}
+          {!!conflicts.data?.length && (
+            <div
+              aria-live="polite"
+              className="space-y-2 rounded-md border border-border bg-muted p-3 text-sm"
+            >
+              <p>
+                This target already has an active agent run. Wait for it to settle before starting
+                another. Prompt agent starts a new run; it cannot message the running agent.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {conflicts.data.map((run) => (
+                  <Button
+                    key={run.id}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={mutation.isPending}
+                    onClick={() => {
+                      close();
+                      openAgentRun(null, run.id);
+                    }}
+                  >
+                    Open run {run.id}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <label htmlFor={promptId} className="text-sm font-medium">
               What would you like help with?
@@ -209,7 +263,8 @@ function ComposePrompt({ workspace }: { workspace: string }) {
             />
           </div>
           <p className="text-xs text-foreground">
-            Starts a new agent run in this weaver. Follow its progress and reply in Agents.
+            Starts a new agent run in this weaver when the target is available. Follow its progress
+            and reply in Agents.
           </p>
           {mutation.error && (
             <p

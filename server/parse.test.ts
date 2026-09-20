@@ -8,7 +8,7 @@ import {
   parseTask as parseTaskBoundary,
   parseViews,
   parseWork,
-  strandErrorMessage,
+  strandCommandError,
 } from './parse.ts';
 import { emptyProvenance } from './provenance.ts';
 
@@ -224,20 +224,20 @@ describe('workspace command failures', () => {
       message: 'Operation not found',
       details: { 'canonical-operation': 'kanban' },
     };
-    expect(strandErrorMessage(JSON.stringify(envelope), 'original diagnostic')).toContain(
+    expect(strandCommandError(JSON.stringify(envelope), 'original diagnostic').message).toContain(
       'does not publish Kanban',
     );
     expect(
-      strandErrorMessage(
+      strandCommandError(
         JSON.stringify({ ...envelope, details: { 'canonical-operation': 'notes' } }),
         'original diagnostic',
-      ),
+      ).message,
     ).toBe('original diagnostic');
   });
 
   it('explains the exact missing-workspace-configuration error', () => {
     expect(
-      strandErrorMessage(
+      strandCommandError(
         JSON.stringify({
           code: 'mill/invoke-world-failed',
           message: 'invoke world resolution failed',
@@ -247,12 +247,12 @@ describe('workspace command failures', () => {
           },
         }),
         'original diagnostic',
-      ),
+      ).message,
     ).toContain('workspace configuration is unavailable');
   });
 
   it('keeps process-level diagnostics when no structured error was emitted', () => {
-    expect(strandErrorMessage('command was terminated', 'original diagnostic')).toBe(
+    expect(strandCommandError('command was terminated', 'original diagnostic').message).toBe(
       'original diagnostic',
     );
   });

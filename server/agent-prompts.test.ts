@@ -250,6 +250,33 @@ describe('scoped launch process', () => {
     expect(last?.[2]).toMatchObject({ cwd: '/repo' });
     expect(last?.[2]).not.toHaveProperty('shell');
   });
+  it('reports an active target conflict without echoing the command or sending another run', async () => {
+    mockWorkspace();
+    const dispatch = exec.getMockImplementation();
+    exec.mockImplementation((file, argv) => {
+      if (Array.isArray(argv) && argv.includes('run'))
+        return Promise.reject(
+          Object.assign(new Error('Command failed: PRIVATE PROMPT'), {
+            stderr: JSON.stringify({
+              type: 'domain',
+              code: 'domain/error',
+              message: 'Target already has an active managed run',
+              details: { target: 'card1', runs: ['rt5jw'] },
+            }),
+          }),
+        );
+      return dispatch?.(file, argv);
+    });
+    const data = new StrandData('/repo/.millstrand');
+    await expect(data.promptAgent('card1', prompt)).rejects.toMatchObject({
+      status: 409,
+      message:
+        'This target already has an active agent run (rt5jw). Open it in Agents to inspect its progress. Wait for it to settle before starting another run; Prompt agent cannot message a running agent. Your prompt was not sent.',
+    });
+    expect(
+      exec.mock.calls.filter((call) => Array.isArray(call[1]) && call[1].includes('run')),
+    ).toHaveLength(1);
+  });
   it('dispatches a standalone review through the existing launch and retains inspectable context', async () => {
     const currentReview = { ...reviewDetail, worktree: process.cwd() };
     mockWorkspace(null, [process.cwd()], () => currentReview);
