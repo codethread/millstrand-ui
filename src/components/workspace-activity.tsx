@@ -223,7 +223,11 @@ export function WorkspaceActivity({
                       Target · {run.target}
                     </span>
                   )}
-                  <AgentLogHint workspace={workspace.id} identity={agent.id} stale={staleAgents} />
+                  <AgentLogHint
+                    workspace={workspace.id}
+                    identityStrandId={agent.strandId}
+                    stale={staleAgents}
+                  />
                 </>
               );
               return destination ? (
@@ -239,6 +243,7 @@ export function WorkspaceActivity({
                   <AgentLogButton
                     workspace={workspace.id}
                     identity={agent.id}
+                    identityStrandId={agent.strandId}
                     disabled={staleAgents}
                   />
                 </div>

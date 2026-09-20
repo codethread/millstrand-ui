@@ -11,10 +11,11 @@ import { useWorkspace } from './use-workspace';
 export function useLogActivityPoll() {
   return useQuery(logActivityOptions(useWorkspace()));
 }
-export function useLogBinding(workspace: string | null, identity: string) {
+export function useLogBinding(workspace: string | null, identityStrandId: string) {
   const select = useCallback(
-    (data: LogActivity) => data.bindings.find((binding) => binding.identity === identity) ?? null,
-    [identity],
+    (data: LogActivity) =>
+      data.bindings.find((binding) => binding.identityStrandId === identityStrandId) ?? null,
+    [identityStrandId],
   );
   return useQuery({
     ...logActivityOptions(workspace),

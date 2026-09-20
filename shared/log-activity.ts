@@ -5,6 +5,7 @@ export const logSourceSchema = z.object({ provider: providerSchema, session: z.s
 export type LogSource = z.infer<typeof logSourceSchema>;
 export const logBindingSchema = z.object({
   identity: z.string(),
+  identityStrandId: z.string(),
   source: logSourceSchema.nullable(),
   activity: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('idle') }),

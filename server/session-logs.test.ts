@@ -78,11 +78,38 @@ it.each([
 it('resolves persisted native session bindings without guessing', () => {
   expect(
     logBindings(graph([identityRow('worker', 'native-123'), identityRow('unbound')])).map(
-      ({ identity, source }) => ({ identity, source }),
+      ({ identity, identityStrandId, source }) => ({ identity, identityStrandId, source }),
     ),
   ).toEqual([
-    { identity: 'worker', source: { provider: 'pi', session: 'native-123' } },
-    { identity: 'unbound', source: null },
+    {
+      identity: 'worker',
+      identityStrandId: 'identity-worker',
+      source: { provider: 'pi', session: 'native-123' },
+    },
+    { identity: 'unbound', identityStrandId: 'identity-unbound', source: null },
+  ]);
+});
+
+it('keeps duplicate friendly identities bound to their immutable identity strands', () => {
+  const first = identityRow('duplicate', 'native-first');
+  const second = { ...identityRow('duplicate', 'native-second'), id: 'identity-duplicate-second' };
+  expect(
+    logBindings(graph([first, second])).map(({ identity, identityStrandId, source }) => ({
+      identity,
+      identityStrandId,
+      source,
+    })),
+  ).toEqual([
+    {
+      identity: 'duplicate',
+      identityStrandId: 'identity-duplicate',
+      source: { provider: 'pi', session: 'native-first' },
+    },
+    {
+      identity: 'duplicate',
+      identityStrandId: 'identity-duplicate-second',
+      source: { provider: 'pi', session: 'native-second' },
+    },
   ]);
 });
 

@@ -9,8 +9,14 @@ import { clock, eventLabel, eventText } from '../lib/session-log';
 import { useLogUiStore } from '../log-ui-store';
 import { Button } from './ui/button';
 
-export function AgentSessionLog({ identity }: { identity: string }) {
-  const binding = useLogBinding(useWorkspace(), identity);
+export function AgentSessionLog({
+  identity,
+  identityStrandId,
+}: {
+  identity: string;
+  identityStrandId: string;
+}) {
+  const binding = useLogBinding(useWorkspace(), identityStrandId);
   const source = binding.data?.source;
   return source ? (
     <section
@@ -33,7 +39,7 @@ export function CardAgentLog({ owner, target }: { owner: string | null; target: 
     selected: agent,
     historyCount,
   } = cardLogRoster(candidates, chosen, showHistory);
-  const binding = useLogBinding(useWorkspace(), agent?.identity.id ?? '');
+  const binding = useLogBinding(useWorkspace(), agent?.identity.strandId ?? '');
   return (
     <section
       className="mb-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border"

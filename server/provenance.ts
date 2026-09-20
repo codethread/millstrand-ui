@@ -410,6 +410,7 @@ export class ProvenanceIndex {
           : null;
       return {
         identity: identity.id,
+        identityStrandId: identity.strandId,
         source: running ?? native ?? candidates[0]?.source ?? null,
         activity: { kind: 'idle' as const },
       };

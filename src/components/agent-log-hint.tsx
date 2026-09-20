@@ -6,11 +6,11 @@ import { useLogUiStore } from '../log-ui-store';
 
 interface HintProps {
   workspace: string | null;
-  identity: string;
+  identityStrandId: string;
   stale?: boolean;
 }
-export function AgentLogHint({ workspace, identity, stale = false }: HintProps) {
-  const binding = useLogBinding(workspace, identity);
+export function AgentLogHint({ workspace, identityStrandId, stale = false }: HintProps) {
+  const binding = useLogBinding(workspace, identityStrandId);
   const activity = binding.data?.activity;
   return (
     <span
@@ -40,10 +40,16 @@ export function AgentLogHint({ workspace, identity, stale = false }: HintProps) 
 interface ButtonProps {
   workspace: string | null;
   identity: string;
+  identityStrandId: string;
   disabled?: boolean;
 }
-export function AgentLogButton({ workspace, identity, disabled = false }: ButtonProps) {
-  const binding = useLogBinding(workspace, identity);
+export function AgentLogButton({
+  workspace,
+  identity,
+  identityStrandId,
+  disabled = false,
+}: ButtonProps) {
+  const binding = useLogBinding(workspace, identityStrandId);
   const open = useLogUiStore((state) => state.open);
   const source = binding.data?.source;
   if (!source) return null;

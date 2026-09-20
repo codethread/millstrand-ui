@@ -40,7 +40,7 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
           {run?.status === 'running' && (
             <AgentLogHint
               workspace={workspace}
-              identity={identity.id}
+              identityStrandId={identity.strandId}
               stale={health.error !== null}
             />
           )}

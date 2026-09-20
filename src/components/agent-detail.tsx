@@ -79,7 +79,10 @@ export function AgentDetail({
                 <AgentRunReply id={runId} />
               </div>
             )}
-            <AgentSessionLog identity={activity.identity.id} />
+            <AgentSessionLog
+              identity={activity.identity.id}
+              identityStrandId={activity.identity.strandId}
+            />
             <AgentRunHistory
               identity={activity.identity}
               selectedRunId={activity.selectedRun?.id ?? null}
