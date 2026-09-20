@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronDown, RefreshCw, Search } from 'lucide-react';
+import { Check, ChevronDown, EyeOff, Pin, PinOff, RefreshCw, Search } from 'lucide-react';
 import type { Board, WorkspaceOption } from '../../shared/api';
 import { workspaceReaderOptions } from '../lib/api/workspaces';
-import { matchingWorkspaces, selectedWorkspace } from '../lib/workspaces';
+import { matchingWorkspaces, selectedWorkspace, visibleWorkspaces } from '../lib/workspaces';
+import { useWorkspacePreferenceStore } from '../workspace-preference-store';
+import { WorkspacePreferenceError } from './workspace-preferences';
 import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -51,30 +53,64 @@ function WorkspaceOptions({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const preferences = useWorkspacePreferenceStore((state) => state.preferences);
+  const setPreference = useWorkspacePreferenceStore((state) => state.setPreference);
   const select = useCallback(
-    (options: WorkspaceOption[]) => matchingWorkspaces(options, search),
-    [search],
+    (options: WorkspaceOption[]) =>
+      matchingWorkspaces(visibleWorkspaces(options, preferences), search),
+    [search, preferences],
   );
   const { data: options } = useQuery({ ...workspaceReaderOptions(), select });
   return (
     <div className="workspace-options">
       {options?.map((option) => (
-        <button
-          key={option.id}
-          className={cn('workspace-option', selectedId === option.id && 'selected')}
-          onClick={() => onSelect(option.id)}
-        >
-          <span className={cn('weaver-status', option.status)} />
-          <span>
-            <strong>{option.name}</strong>
-            <small title={option.path}>{option.path.replace(/\/\.millstrand$/, '')}</small>
-          </span>
-          {selectedId === option.id ? (
-            <Check className="ml-auto size-3.5" />
-          ) : (
-            <small className="ml-auto">{option.status === 'running' ? 'Live' : 'Offline'}</small>
-          )}
-        </button>
+        <div key={option.id} className="flex items-center gap-1">
+          <button
+            className={cn(
+              'workspace-option min-w-0 flex-1',
+              selectedId === option.id && 'selected',
+            )}
+            onClick={() => onSelect(option.id)}
+          >
+            <span className={cn('weaver-status', option.status)} />
+            <span>
+              <strong className="truncate">{option.name}</strong>
+              <small title={option.path}>{option.path.replace(/\/\.millstrand$/, '')}</small>
+            </span>
+            {selectedId === option.id ? (
+              <Check className="ml-auto size-3.5" />
+            ) : (
+              <small className="ml-auto">{option.status === 'running' ? 'Live' : 'Offline'}</small>
+            )}
+          </button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-9 shrink-0"
+            aria-label={`${preferences[option.id]?.kind === 'pinned' ? 'Unpin' : 'Pin'} ${option.name}`}
+            title={preferences[option.id]?.kind === 'pinned' ? 'Unpin weaver' : 'Pin weaver'}
+            aria-pressed={preferences[option.id]?.kind === 'pinned'}
+            onClick={() =>
+              setPreference(option, preferences[option.id]?.kind === 'pinned' ? null : 'pinned')
+            }
+          >
+            {preferences[option.id]?.kind === 'pinned' ? (
+              <PinOff className="text-primary" />
+            ) : (
+              <Pin />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-9 shrink-0"
+            aria-label={`Hide ${option.name}`}
+            title="Hide weaver and stop activity polling"
+            onClick={() => setPreference(option, 'hidden')}
+          >
+            <EyeOff />
+          </Button>
+        </div>
       ))}
       {options?.length === 0 && <p className="detail-empty px-2 py-4">No matching workspaces.</p>}
     </div>
@@ -84,12 +120,14 @@ function WorkspaceOptions({
 export function WorkspaceSwitcher({ workspace }: { workspace: Board['workspace'] | null }) {
   const { selectWorkspace } = useDashboardActions();
   const workspaceId = useWorkspaceId();
+  const preferences = useWorkspacePreferenceStore((state) => state.preferences);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const fallbackPath = workspace?.path ?? null;
   const select = useCallback(
-    (options: WorkspaceOption[]) => selectedWorkspace(options, workspaceId, fallbackPath),
-    [workspaceId, fallbackPath],
+    (options: WorkspaceOption[]) =>
+      selectedWorkspace(visibleWorkspaces(options, preferences), workspaceId, fallbackPath),
+    [workspaceId, fallbackPath, preferences],
   );
   const { data: selected } = useQuery({ ...workspaceReaderOptions(), select });
   const name = selected?.name ?? workspace?.name ?? 'Choose workspace';
@@ -105,7 +143,11 @@ export function WorkspaceSwitcher({ workspace }: { workspace: Board['workspace']
           <ChevronDown className="ml-auto size-3.5 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="workspace-menu">
+      <PopoverContent
+        align="start"
+        sideOffset={6}
+        className="workspace-menu max-w-[calc(100vw-2rem)]"
+      >
         <DiscoveryStatus />
         <div className="workspace-menu-search">
           <Search className="size-3.5" />
@@ -125,7 +167,11 @@ export function WorkspaceSwitcher({ workspace }: { workspace: Board['workspace']
             selectWorkspace(id);
           }}
         />
-        <p className="workspace-menu-hint">Local weavers · selection stays in this browser</p>
+        <WorkspacePreferenceError />
+        <p className="workspace-menu-hint">
+          Pins first · hidden weavers can be restored at the bottom of All weavers. Preferences stay
+          in this browser.
+        </p>
       </PopoverContent>
     </Popover>
   );

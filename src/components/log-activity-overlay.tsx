@@ -4,6 +4,8 @@ import type { LogSource } from '../../shared/log-activity';
 import { useLogStream } from '../hooks/use-session-log';
 import { filterEvents } from '../lib/session-log';
 import { useLogUiStore } from '../log-ui-store';
+import { useWorkspacePreferenceStore } from '../workspace-preference-store';
+import { workspaceIsHidden } from '../lib/workspaces';
 import { cn } from '../lib/utils';
 import { ConsoleView, ConversationView, InspectorView } from './session-log-views';
 import { Button } from './ui/button';
@@ -15,7 +17,13 @@ import '../session-log.css';
 export function LogActivityOverlay() {
   const overlay = useLogUiStore((state) => state.overlay);
   const close = useLogUiStore((state) => state.close);
-  if (overlay.kind === 'closed') return null;
+  const hidden = useWorkspacePreferenceStore(
+    (state) => overlay.kind === 'open' && workspaceIsHidden(overlay.workspace, state.preferences),
+  );
+  useEffect(() => {
+    if (hidden) close();
+  }, [hidden, close]);
+  if (overlay.kind === 'closed' || hidden) return null;
   return (
     <Dialog
       open

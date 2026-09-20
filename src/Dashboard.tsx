@@ -24,6 +24,8 @@ import {
   useWorkspaceId,
 } from './lib/navigation';
 import { useDashboardStore } from './store';
+import { useWorkspacePreferenceStore } from './workspace-preference-store';
+import { workspaceIsHidden } from './lib/workspaces';
 
 function resetWorkspaceState(_workspace: string | null): void {
   useDashboardStore.getState().resetWorkspace();
@@ -33,8 +35,31 @@ function resetWorkspaceState(_workspace: string | null): void {
 export function Dashboard() {
   const mode = useDashboardMode();
   const workspace = useWorkspaceId();
+  const hidden = useWorkspacePreferenceStore((state) =>
+    workspaceIsHidden(workspace, state.preferences),
+  );
+  const navigate = useNavigate({ from: '/' });
   useDashboardKeys();
-  return mode === 'overview' ? (
+  useEffect(() => {
+    if (hidden && mode !== 'overview') {
+      resetWorkspaceState(workspace);
+      void navigate({
+        search: (current) => ({
+          ...current,
+          mode: 'overview',
+          workspace: null,
+          issue: null,
+          agent: null,
+          agentRun: null,
+          review: null,
+        }),
+        replace: true,
+      });
+    }
+  }, [hidden, mode, workspace, navigate]);
+  // Guard before mounting any workspace readers, detail polls, or log streams,
+  // including direct links and Back navigation to a hidden workspace.
+  return mode === 'overview' || hidden ? (
     <>
       <Overview />
       <DashboardOverlays />

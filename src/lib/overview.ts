@@ -1,5 +1,6 @@
 import type { AgentIdentity, Card, WorkspaceOption } from '../../shared/api';
 import { emptyFilter, selectCards } from './board';
+import type { WorkspacePreferences } from './workspaces';
 
 export type ActivityHealth =
   { kind: 'loading' } | { kind: 'live' } | { kind: 'failed'; message: string };
@@ -37,7 +38,11 @@ export function workspaceActivity(
   return { workspace, board, agents, status };
 }
 
-export function overviewActivity(snapshots: WorkspaceActivityModel[]) {
+export function overviewActivity(
+  snapshots: WorkspaceActivityModel[],
+  preferences: WorkspacePreferences = {},
+) {
+  const pinned: WorkspaceActivityModel[] = [];
   const busy: WorkspaceActivityModel[] = [];
   const other: WorkspaceActivityModel[] = [];
   let cardCount = 0;
@@ -45,11 +50,17 @@ export function overviewActivity(snapshots: WorkspaceActivityModel[]) {
   for (const snapshot of snapshots) {
     const cards = snapshot.board.data?.length ?? 0;
     const agents = snapshot.agents.data?.length ?? 0;
-    (cards + agents > 0 ? busy : other).push(snapshot);
+    (preferences[snapshot.workspace.id]?.kind === 'pinned'
+      ? pinned
+      : cards + agents > 0
+        ? busy
+        : other
+    ).push(snapshot);
     cardCount += cards;
     agentCount += agents;
   }
   return {
+    pinned,
     busy,
     other,
     cardCount,

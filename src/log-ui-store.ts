@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type { LogSource } from '../shared/log-activity';
 
-type LogOverlay = { kind: 'closed' } | { kind: 'open'; identity: string; source: LogSource };
+type LogOverlay =
+  | { kind: 'closed' }
+  | { kind: 'open'; identity: string; source: LogSource; workspace: string | null };
 interface LogUiState {
   overlay: LogOverlay;
   view: 'conversation' | 'inspector' | 'console';
@@ -14,7 +16,7 @@ interface LogUiState {
   cardAgent: string | null;
   showCardAgentHistory: boolean;
   setShowCardAgentHistory: (show: boolean) => void;
-  open: (identity: string, source: LogSource) => void;
+  open: (identity: string, source: LogSource, workspace: string | null) => void;
   close: () => void;
   setView: (view: LogUiState['view']) => void;
   setPaused: (paused: boolean) => void;
@@ -33,9 +35,9 @@ export const useLogUiStore = create<LogUiState>((set) => ({
   cardAgent: null,
   showCardAgentHistory: false,
   setShowCardAgentHistory: (showCardAgentHistory) => set({ showCardAgentHistory }),
-  open: (identity, source) =>
+  open: (identity, source, workspace) =>
     set({
-      overlay: { kind: 'open', identity, source },
+      overlay: { kind: 'open', identity, source, workspace },
       paused: false,
       query: '',
       follow: true,

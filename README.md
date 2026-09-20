@@ -79,6 +79,16 @@ stored in the URL, and other browser sessions keep their current workspace. The
 server's `--workspace` option selects the initial default. Weavers without Kanban
 show an error with the workspace menu still available.
 
+Use **Pin** and **Hide** beside a weaver in the workspace menu (also available on
+All weavers). Pins appear first in the menu and above other overview activity.
+Hidden weavers disappear from both lists and counts, and their activity polling
+stops. Hiding the current weaver returns to All weavers; direct links to hidden
+weavers do not resume polling. Restore them with **Unhide** at the very bottom of
+All weavers, including when every weaver is hidden. Hiding removes a pin; restored
+weavers return to the ordinary list. Preferences persist in this browser and
+synchronize across its tabs, not across devices. Discovery still runs so other
+weavers stay current; hiding never stops the weaver process itself.
+
 ## Labels and saved views
 
 Label edits use `strand kanban label add/rm`, so they persist in the workspace

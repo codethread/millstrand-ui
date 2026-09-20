@@ -51,7 +51,7 @@ export function AgentLogButton({ workspace, identity, disabled = false }: Button
     <button
       disabled={disabled}
       className="flex w-full items-center justify-between rounded-b-lg border-t border-border bg-muted/40 px-3 py-2 text-[10px] text-primary hover:bg-accent disabled:opacity-50"
-      onClick={() => open(identity, source)}
+      onClick={() => open(identity, source, workspace)}
     >
       <span className="flex items-center gap-1.5">
         <Activity className="size-3" />

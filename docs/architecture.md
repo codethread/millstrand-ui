@@ -228,6 +228,26 @@ Infinity`, `subscribed: false`, or a new key as a substitute.
   distinct from card/agent health. See [overview composition](overview.md) for
   models, refresh semantics, examples and browser evidence.
 
+### Weaver visibility preferences
+
+`workspace-preference-store.ts` owns browser-local pin/hidden choices, parsed once
+with Zod and saved under independent `millstrand-ui-weaver:<workspace-id>` keys.
+Remembered name/path identify hidden entries even if discovery no longer lists
+them. Unhide and unpin remove the key. Storage failures retain session choices
+with visible feedback; storage events refresh other tabs.
+`src/lib/workspaces.ts` owns visibility and ordering; `useVisibleWorkspaces` is a
+disabled discovery projection shared by overview board/agent and log poll owners.
+Hidden entries never reach those owners, counts, refresh-all, or workspace menus.
+Pinned snapshots precede busy and quiet groups without duplicate counts.
+
+`Dashboard` guards hidden workspace routes before mounting the entire workspace
+subtree (including details and streams), then replaces navigation with overview.
+When hidden preferences exist, an unscoped legacy workspace URL also goes to the
+overview rather than fetching a possibly hidden server default. Expanded log
+state records its workspace so a cross-tab hide also unmounts that stream. Already
+in-flight requests can finish; no further hidden activity polls are scheduled.
+Global discovery remains active. No API, query-key, or server-state store is added.
+
 ## Shell and page seams
 
 `Dashboard` chooses overview versus a keyed workspace and owns only workspace

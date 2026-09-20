@@ -1,14 +1,16 @@
-import { GitBranch, LayoutGrid, RefreshCw } from 'lucide-react';
+import { GitBranch, LayoutGrid, Pin, RefreshCw } from 'lucide-react';
 import { useOverview } from '../hooks/use-overview';
 import { cn } from '../lib/utils';
 import { ErrorNotice, Loading } from './issue-parts';
 import { Button } from './ui/button';
 import { OverviewLogPolls } from './overview-log-polls';
 import { WorkspaceActivity } from './workspace-activity';
+import { HiddenWorkspaces, WorkspacePreferenceError } from './workspace-preferences';
+import { WorkspaceSwitcher } from './workspace-switcher';
 
 export function Overview() {
   const { discoveryHealth, options, activity, refreshSource, refreshAll } = useOverview();
-  const { busy, other, cardCount, agentCount } = activity;
+  const { pinned, busy, other, cardCount, agentCount } = activity;
   const partial = activity.partial || discoveryHealth.kind !== 'live';
   return (
     <main className="h-dvh overflow-y-auto bg-background" aria-label="All weavers overview">
@@ -32,11 +34,17 @@ export function Overview() {
               Tracked process state, not token activity.
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={refreshAll}>
-            <RefreshCw />
-            Refresh all
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-60 max-w-full [&_.workspace-picker]:m-0 [&_.workspace-picker]:w-full">
+              <WorkspaceSwitcher workspace={null} />
+            </div>
+            <Button variant="outline" size="sm" onClick={refreshAll}>
+              <RefreshCw />
+              Refresh all
+            </Button>
+          </div>
         </header>
+        <WorkspacePreferenceError />
         {discoveryHealth.kind === 'failed' && <ErrorNotice error={discoveryHealth.error} />}
         {discoveryHealth.kind === 'failed' && options.length > 0 && (
           <p className="mb-4 text-xs text-destructive">
@@ -47,7 +55,7 @@ export function Overview() {
           <Loading text="Discovering weavers…" />
         ) : discoveryHealth.kind === 'live' && options.length === 0 ? (
           <p className="rounded-xl border border-dashed border-border p-8 text-sm text-muted-foreground">
-            No local weavers discovered.
+            No visible weavers. Restore hidden weavers below, or refresh discovery.
           </p>
         ) : null}
         {options.length > 0 && (
@@ -72,6 +80,22 @@ export function Overview() {
             )}
           </div>
         )}
+        {pinned.length > 0 && (
+          <section className="mb-5" aria-label="Pinned weavers">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <Pin className="size-4" /> Pinned weavers
+            </h2>
+            <div className="grid items-start gap-5 xl:grid-cols-2">
+              {pinned.map((snapshot) => (
+                <WorkspaceActivity
+                  key={snapshot.workspace.id}
+                  activity={snapshot}
+                  onRetry={refreshSource}
+                />
+              ))}
+            </div>
+          </section>
+        )}
         <div className="grid items-start gap-5 xl:grid-cols-2">
           {busy.map((snapshot) => (
             <WorkspaceActivity
@@ -81,7 +105,7 @@ export function Overview() {
             />
           ))}
         </div>
-        {options.length > 0 && busy.length === 0 && (
+        {options.length > 0 && cardCount + agentCount === 0 && (
           <p className="mb-5 rounded-lg border border-dashed border-border p-5 text-sm text-muted-foreground">
             {partial
               ? 'No activity in the available snapshots yet. Some weavers are loading or unavailable.'
@@ -124,6 +148,7 @@ export function Overview() {
             </div>
           </section>
         )}
+        <HiddenWorkspaces />
       </div>
     </main>
   );
