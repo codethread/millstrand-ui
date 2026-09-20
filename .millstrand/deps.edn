@@ -21,7 +21,7 @@
    :deps/root "spools/workflow"}
   codethread/config
   {:git/url "https://github.com/codethread/codethread.spool.git"
-   :git/sha "fc8105cefe624f4c0cd7312e0f400d650dd7e52d"
+   :git/sha "9390164b204ceedbf025897c2fdedcb4acc823f1"
    :deps/root "spools/config"}}
  :aliases {:test {:extra-paths ["test"]
                   :main-opts ["-m" "millstrand-ui.auto-run-test"]}}}
