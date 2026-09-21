@@ -54,6 +54,7 @@ function node(id: string, kind: GraphNode['kind'] = 'task'): GraphNode {
     kind,
     state: 'active',
     owner: 'worker',
+    dependencies: { incoming: 0, outgoing: 0 },
     attributes: {},
     createdAt: null,
     updatedAt: null,

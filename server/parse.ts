@@ -3,6 +3,7 @@ import type {
   Card,
   CardGraph,
   CardOwnership,
+  DependencyCounts,
   IdentityAttribution,
   GraphEdge,
   GraphNode,
@@ -162,6 +163,7 @@ const labelSchema = z
 const compiledLabelSchema = z.compile(labelSchema, { strict: true });
 
 export interface AttributionProjection {
+  dependencies(id: string): DependencyCounts;
   ownership(target: string): CardOwnership;
   reporter(cardId: string): IdentityAttribution | null;
   noteActor(noteId: string): IdentityAttribution | null;
@@ -326,6 +328,7 @@ export function parseCard(value: unknown, provenance: AttributionProjection): Ca
       'card.priority',
     ),
     epicId: row.epic ?? null,
+    dependencies: provenance.dependencies(row.id),
     owner: ownership.current?.owner.identity ?? null,
     reporter: provenance.reporter(row.id),
     ownership,
@@ -392,7 +395,7 @@ function graphEdges(items: EdgeRow[], kind: GraphEdge['kind']): GraphEdge[] {
 
 export function parseGraph(
   value: unknown,
-  provenance: Pick<AttributionProjection, 'owner'>,
+  provenance: Pick<AttributionProjection, 'owner' | 'dependencies'>,
 ): CardGraph {
   const row = parseSchema(compiledGraphSchema, value, 'graph');
   const nodes = row.strands.map((item): GraphNode => {
@@ -410,7 +413,12 @@ export function parseGraph(
         : taskMarker === 'true'
           ? 'task'
           : 'work';
-    return { ...work, kind, owner: provenance.owner(work.id) };
+    return {
+      ...work,
+      kind,
+      owner: provenance.owner(work.id),
+      dependencies: provenance.dependencies(work.id),
+    };
   });
   return {
     rootId: row['root-id'],

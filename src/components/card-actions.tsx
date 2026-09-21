@@ -38,20 +38,16 @@ function preserveDeleteFocus(event: Event) {
 }
 
 function CardMenuItems({ card, context }: { card: Card; context: boolean }) {
-  const { viewCardDependencies } = useDashboardActions();
+  const { viewCardDependencies, exploreGraph } = useDashboardActions();
   const { pending, move, confirmDelete } = useCardMenu(card);
   const Item = context ? ContextMenuItem : DropdownMenuItem;
   const Label = context ? ContextMenuLabel : DropdownMenuLabel;
   const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
   return (
     <>
-      <Label>Graph dependencies</Label>
-      <Item onSelect={() => viewCardDependencies(card.id, 'expand')}>
-        View dependencies · add / hide
-      </Item>
-      <Item onSelect={() => viewCardDependencies(card.id, 'focus')}>
-        View dependencies · focused
-      </Item>
+      <Label>Graph</Label>
+      <Item onSelect={() => exploreGraph(card.id)}>Focus epic hierarchy</Item>
+      <Item onSelect={() => viewCardDependencies(card.id)}>View dependencies</Item>
       <Separator />
       <Label>Move to lane</Label>
       {lanes.map(({ id, title }) =>

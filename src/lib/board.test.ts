@@ -29,6 +29,7 @@ function card(id: string, labels: string[] = []): Card {
     lane: 'pending',
     priority: 'p2',
     epicId: null,
+    dependencies: { incoming: 0, outgoing: 0 },
     owner: null,
     reporter: null,
     ownership: { current: null, history: [] },

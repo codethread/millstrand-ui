@@ -14,7 +14,6 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { parseAgents } from './agents.ts';
 import { ProvenanceIndex } from './provenance.ts';
 import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
 import {
@@ -87,10 +86,13 @@ class ReadCache<T> {
 }
 
 export class StrandData {
+  private readonly provenanceReads = new ReadCache<ProvenanceIndex>();
+  private readonly notes = new ReadCache<Note[]>();
   private readonly boards = new ReadCache<Board>();
   private readonly agentDirectories = new ReadCache<AgentDirectory>();
   private readonly details = new ReadCache<CardDetail>();
   private readonly graphs = new ReadCache<CardGraph>();
+  private readonly dependencyGraphs = new ReadCache<CardGraph>();
   private readonly replies = new ReadCache<AgentReply>();
 
   private readonly reviewDirectories = new ReadCache<ReviewDirectory>();
@@ -237,13 +239,19 @@ export class StrandData {
     }
   }
 
+  provenance(): Promise<ProvenanceIndex> {
+    return this.provenanceReads.get(
+      'provenance',
+      async () => new ProvenanceIndex(await this.database.readProvenance()),
+    );
+  }
+
   board(): Promise<Board> {
     return this.boards.get('board', async () => {
       const raw = object(await this.run(['kanban', 'board', '--all', 'true']), 'board');
       // Read membership first. New cards wait for the next poll; cards deleted
       // before hydration are omitted instead of failing the entire board.
-      const snapshot = await this.database.readProvenance();
-      const provenance = new ProvenanceIndex(snapshot);
+      const provenance = await this.provenance();
       const cards = parseBoardCards(raw['cards'], provenance.cardRows(), provenance);
       const counts = new Map<string, number>();
       for (const card of cards) {
@@ -263,8 +271,7 @@ export class StrandData {
 
   agents(): Promise<AgentDirectory> {
     return this.agentDirectories.get('agents', async () => {
-      const snapshot = await this.database.readProvenance();
-      const agents = parseAgents(snapshot);
+      const agents = (await this.provenance()).agents();
       return {
         workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
         fetchedAt: new Date().toISOString(),
@@ -346,6 +353,7 @@ export class StrandData {
       await this.run(agentLaunchArgs(this.workspace, cwd, cardId, input, context)),
     );
     this.agentDirectories.clear();
+    this.provenanceReads.clear();
     return {
       ...reply,
       prompt: {
@@ -395,11 +403,8 @@ export class StrandData {
   detail(id: string): Promise<CardDetail> {
     return this.details.get(id, async () => {
       const known = await this.card(id);
-      const [cardPayload, notesPayload] = await Promise.all([
-        this.run(['kanban', 'card', id]),
-        this.run(['notes', id]),
-      ]);
-      const provenance = new ProvenanceIndex(await this.database.readProvenance());
+      const cardPayload = await this.run(['kanban', 'card', id]);
+      const provenance = await this.provenance();
       const raw = object(cardPayload, 'card detail');
       const cardRaw = object(raw['card'], 'card detail.card');
       const attrs = object(cardRaw['attributes'], 'card.attributes');
@@ -411,9 +416,6 @@ export class StrandData {
         body: body ?? '',
         attributes: attrs,
         tasks: array(raw['tasks'], 'card detail.tasks').map((task) => parseTask(task, provenance)),
-        notes: reversed(
-          array(notesPayload, 'card notes').map((note) => parseNote(note, provenance)),
-        ),
         activeWork: array(raw['active-work'], 'card detail.active-work').map(parseWork),
         ready: array(raw['ready'], 'card detail.ready').map(parseWork),
         related: array(raw['related'], 'card detail.related').map(parseRelation),
@@ -421,14 +423,31 @@ export class StrandData {
     });
   }
 
+  async cardNotes(id: string): Promise<Note[]> {
+    await this.card(id);
+    return this.readNotes(id);
+  }
+
+  private readNotes(id: string): Promise<Note[]> {
+    return this.notes.get(id, async () => {
+      const notes = await this.run(['notes', id]);
+      const provenance = await this.provenance();
+      return reversed(array(notes, 'notes').map((note) => parseNote(note, provenance)));
+    });
+  }
+
+  dependencies(): Promise<CardGraph> {
+    return this.dependencyGraphs.get('dependencies', () => this.database.readDependencies());
+  }
+
   graph(id: string): Promise<CardGraph> {
     return this.graphs.get(id, async () => {
       await this.card(id);
-      const [graph, snapshot] = await Promise.all([
+      const [graph, provenance] = await Promise.all([
         this.run(['kanban-export', id]),
-        this.database.readProvenance(),
+        this.provenance(),
       ]);
-      return parseGraph(graph, new ProvenanceIndex(snapshot));
+      return parseGraph(graph, provenance);
     });
   }
 
@@ -437,42 +456,46 @@ export class StrandData {
     if (!detail.tasks.some((task) => task.id === taskId)) {
       throw new HttpError(404, 'That task does not belong to this kanban card.');
     }
-    const [notes, snapshot] = await Promise.all([
-      this.run(['notes', taskId]),
-      this.database.readProvenance(),
-    ]);
-    const provenance = new ProvenanceIndex(snapshot);
-    return reversed(array(notes, 'task notes').map((note) => parseNote(note, provenance)));
+    return this.readNotes(taskId);
   }
 
   async changeCard(id: string, action: CardAction): Promise<{ ok: true }> {
     // Validate against a fresh board, never a potentially stale polling snapshot.
     this.boards.clear();
+    this.provenanceReads.clear();
     await this.card(id);
     try {
       await this.run(action.kind === 'delete' ? ['burn', id] : moveCardArgs(id, action.lane));
       return { ok: true };
     } finally {
       // Even a timeout may follow a committed mutation.
+      this.provenanceReads.clear();
+      this.notes.clear();
       this.boards.clear();
       this.details.clear();
       this.graphs.clear();
+      this.dependencyGraphs.clear();
       this.agentDirectories.clear();
     }
   }
 
   async changeLabels(id: string, change: LabelChange): Promise<CardDetail> {
     await this.card(id);
-    await this.run([
-      'kanban',
-      'label',
-      change.action === 'add' ? 'add' : 'rm',
-      id,
-      ...change.labels,
-    ]);
-    this.boards.clear();
-    this.details.clear();
-    this.graphs.clear();
+    try {
+      await this.run([
+        'kanban',
+        'label',
+        change.action === 'add' ? 'add' : 'rm',
+        id,
+        ...change.labels,
+      ]);
+    } finally {
+      this.provenanceReads.clear();
+      this.notes.clear();
+      this.boards.clear();
+      this.details.clear();
+      this.graphs.clear();
+    }
     return this.detail(id);
   }
 }

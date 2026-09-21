@@ -22,7 +22,7 @@ and mutation feedback stay in Query. `docs/reviews.md` maps that store to its
 controllers, pure rules, views and focused verification.
 
 These are examples, not mandatory component shapes. Focused graph, selected detail,
-review comments/replies and task notes deliberately own resource-lifetime polls;
+review comments/replies and visible card/task notes deliberately own resource-lifetime polls;
 overview owns per-workspace board/agent polls only while the selected-workspace shell
 is unmounted. Tiny leaves need no controller. The inventories below are authoritative
 for those exceptions.
@@ -128,7 +128,8 @@ parameters are URI-encoded. The only global key is discovery. No key was renamed
 | `['views', w]`               | `/views`                             | 15s             | Always in workspace dashboard                                                                   |
 | `['card', w, id]`            | `/cards/:id`                         | 5s              | While detail/inspector mounted                                                                  |
 | `['graph', w, id]`           | `/cards/:id/graph`                   | 10s             | `id !== null`                                                                                   |
-| `['dependencies', w]`        | `/dependencies`                      | 10s             | Mounted GraphView only; workspace-wide direct dependency counts and endpoints                   |
+| `['dependencies', w]`        | `/dependencies`                      | 10s             | GraphView only while explicitly expanded; workspace-wide dependency endpoints                   |
+| `['card-notes', w, id]`      | `/cards/:id/notes`                   | 5s when enabled | IssueDetail Notes tab only; disabled fetching and interval while hidden                         |
 | `['notes', w, taskId]`       | `/cards/:cardId/tasks/:taskId/notes` | 5s when enabled | Expanded task only; existing key intentionally does not include cardId                          |
 | `['reviews', w]`             | `/reviews`                           | 5s              | Workspace consumers (including sidebar)                                                         |
 | `['review', w, id]`          | `/reviews/:id`                       | 5s              | Selected detail mounted                                                                         |
@@ -188,15 +189,15 @@ for the user-facing contract.
 JSON content type and payloads are unchanged; mutations use Query's no-retry default
 unless explicitly noted. Feedback stays in Query, not local copies of pending/error.
 
-| Mutation / key              | Endpoint and input                                               | Cache, feedback and navigation semantics                                                                                                                                                                                                                                                                                                                                    |
-| --------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `['weaver-lifecycle', w]`   | POST `/workspaces/:id/lifecycle`, `{operation: WeaverOperation}` | Settled success or error **awaits** discovery and selected-workspace cache invalidation. Explicit retry false; menus lock for matching pending commands. No optimistic lifecycle state.                                                                                                                                                                                     |
-| Prompt (no mutation key)    | POST `/cards/:id/agent-runs`, `AgentPrompt`                      | Success tracks receipt for original non-null workspace even after composer unmount; seeds run reply; starts (does not await) agents invalidation. Composer controls request-ID reuse and navigation.                                                                                                                                                                        |
-| Save views (no key)         | PUT `/views`, `SavedView[]`                                      | Success replaces views cache; form owns visible error and closing behavior.                                                                                                                                                                                                                                                                                                 |
-| Labels (no key)             | PATCH `/cards/:id/labels`, `LabelChange`                         | Success seeds detail then **awaits** board invalidation; editor remains pending through refresh.                                                                                                                                                                                                                                                                            |
-| `['card-action', w]`        | PATCH `/cards/:id/lane`, `{lane}`; DELETE `/cards/:id`, no body  | **Settled success or error awaits** board/card/graph/dependencies/agents workspace-prefix invalidation. Explicit retry false. Latest mutation supplies feedback, all matching pending mutations supply lock. Successful delete clears only matching issue/graph URL selections, only if still in original workspace, with replace history; this reaction is in `use-cards`. |
-| `['review-curate', w, id]`  | PATCH `/reviews/:id/comments`, `CurateReview`                    | Success **and error** start (do not await) comment invalidation. Draft acknowledgment remains explicit in existing composition/store.                                                                                                                                                                                                                                       |
-| `['review-publish', w, id]` | POST `/reviews/:id/publish`, `PublishReview`                     | **Settled success or error awaits** comments/detail/directory invalidation. Explicit retry false. Receipts, not presumed request outcome, are authoritative; drafts untouched.                                                                                                                                                                                              |
+| Mutation / key              | Endpoint and input                                               | Cache, feedback and navigation semantics                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `['weaver-lifecycle', w]`   | POST `/workspaces/:id/lifecycle`, `{operation: WeaverOperation}` | Settled success or error **awaits** discovery and selected-workspace cache invalidation. Explicit retry false; menus lock for matching pending commands. No optimistic lifecycle state.                                                                                                                                                                                                      |
+| Prompt (no mutation key)    | POST `/cards/:id/agent-runs`, `AgentPrompt`                      | Success tracks receipt for original non-null workspace even after composer unmount; seeds run reply; starts (does not await) agents invalidation. Composer controls request-ID reuse and navigation.                                                                                                                                                                                         |
+| Save views (no key)         | PUT `/views`, `SavedView[]`                                      | Success replaces views cache; form owns visible error and closing behavior.                                                                                                                                                                                                                                                                                                                  |
+| Labels (no key)             | PATCH `/cards/:id/labels`, `LabelChange`                         | Success seeds detail then **awaits** board and matching card-notes invalidation; editor remains pending through refresh.                                                                                                                                                                                                                                                                     |
+| `['card-action', w]`        | PATCH `/cards/:id/lane`, `{lane}`; DELETE `/cards/:id`, no body  | **Settled success or error awaits** board/card/card-notes/notes/graph/dependencies/agents workspace-prefix invalidation. Explicit retry false. Latest mutation supplies feedback, all matching pending mutations supply lock. Successful delete clears only matching issue/graph URL selections, only if still in original workspace, with replace history; this reaction is in `use-cards`. |
+| `['review-curate', w, id]`  | PATCH `/reviews/:id/comments`, `CurateReview`                    | Success **and error** start (do not await) comment invalidation. Draft acknowledgment remains explicit in existing composition/store.                                                                                                                                                                                                                                                        |
+| `['review-publish', w, id]` | POST `/reviews/:id/publish`, `PublishReview`                     | **Settled success or error awaits** comments/detail/directory invalidation. Explicit retry false. Receipts, not presumed request outcome, are authoritative; drafts untouched.                                                                                                                                                                                                               |
 
 ## Poll owners versus readers
 
@@ -373,9 +374,68 @@ controllers remain in `use-cards.ts`, with cache settlement in `api/cards.ts`.
 
 ### Explicit dependency exploration
 
-`GraphView` deliberately owns the surface-lifetime `['dependencies', workspace]`
+`GraphView` deliberately owns the expansion-lifetime `['dependencies', workspace]`
 poll via `src/hooks/use-graph.ts`, in addition to the existing focused subtree poll.
 `dependencyLayout` in `src/lib/graph.ts` selects only requested one-hop incident
-edges, retaining closed neighbours, and decorates nodes with workspace-wide counts
-and hierarchy/added/focus roles. Graph menu actions are URL navigation, not data
-mutations or local copies. See `docs/graph.md` for both demos and browser evidence.
+edges, retaining closed neighbours, and decorates nodes with hierarchy/added/focus
+roles. Counts arrive in existing board and subtree responses; no dependency request
+or timer runs until an expansion is selected. The server coalesces concurrent
+dependency reads in its short-lived read cache, cleared on card mutation settlement.
+Graph menu actions are URL navigation, not data mutations or local copies. See
+`docs/graph.md` for the expansion contract and browser evidence.
+
+### Card dependency counts and hierarchy focus
+
+`Card.dependencies` and `GraphNode.dependencies` are the required incoming/outgoing
+projections from `ProvenanceIndex.dependencies`. The existing bounded provenance
+SQL also reads `depends-on` edges workspace-wide (within the existing edge bound);
+one-pass deduplication indexes counts without requiring neighbour hydration.
+`parseCard` and `parseGraph` hydrate board, detail and subtree contracts using the
+shared unique-link projection in `shared/dependencies.ts`. Existing board/detail/
+overview poll owners and failure retention apply;
+there are no count-specific requests or mirrored stores. `CardDependencyCounts`
+in `src/components/dependency-counts.tsx` is a pure-prop shared leaf across card
+surfaces with a Radix popover explaining arrow direction. `GraphDependencyCounts`
+shares the arrow markup but uses a pressed button to toggle the existing expansion
+URL action; active badges have a violet border/background.
+
+For the Graph surface, `graphRoot` remains the selected card; `graphHierarchyRoot`
+in `src/lib/graph.ts` resolves its epic to the existing `['graph', workspace, id]`
+key in `useGraphSource`. Graph-local task inspection prompts against that actual
+query root, not the selected sibling feature. `graphFocusTargets` indexes parent edges
+once for task focus, excluding dependency links. **Show all cards** is a Router
+action that clears scope and filters but preserves completed visibility. Graph
+dependency data polls only while explicit expansions are present; no cache key or
+endpoint is renamed.
+
+Graph task visibility is the `graphShowTasks` URL boolean (default true), selected
+by `useGraphShowTasks` and changed by `toggleGraphTasks`. `dependencyLayout` applies
+it to the composed nodes before layout/size checks, without changing counts or
+expanded IDs. The canvas navigation key includes it, so explicit toggles refit;
+ordinary polls still preserve the viewport. No server or query policy changes.
+
+### Shared persisted reads and lazy full notes
+
+`StrandData.provenance()` coalesces and reuses one parsed `ProvenanceIndex` per
+workspace for three seconds across board, agents, log activity, detail, graph and
+notes readers. The existing endpoint caches remain short-lived. Card mutation
+preflight clears the shared snapshot before validation; mutation settlement clears
+it and affected responses even on uncertain failure. Labels clear it on settlement,
+and successful prompt dispatch invalidates agent provenance. No failed load is
+cached as an empty success. Generation checks prevent pre-invalidation loads from
+repopulating cleared caches.
+
+The bounded provenance SQL keeps note IDs and author attribution metadata, but
+never hydrates note text/time/kind values. `ProvenanceIndex` indexes edges by source
+and target and memoizes its agent projection rather than rescanning all edges for
+every role lookup or recomputing agents twice per log summary. Log activity uses
+the workspace's shared index, not a new database client per request.
+
+`CardDetail` no longer embeds full notes. `GET /cards/:id/notes` validates card
+membership, then loads full notes on demand; task-note reads reuse the same
+short-lived server note cache after their existing membership check. IssueDetail
+owns `useCardNotes(id, tab === 'notes')` from `use-cards.ts`; its API options disable
+both fetching and polling while hidden. Notes count is displayed only after a
+successful note read. Cached notes/counts survive tab switches; failures retain
+notes with last-known feedback, never a false empty state. See [read performance
+measurements](read-performance.md) for before/after evidence and remaining costs.

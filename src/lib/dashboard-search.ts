@@ -1,4 +1,3 @@
-import type { DependencySelection } from './graph';
 import { z } from 'zod';
 import { reviewStages, type ReviewScope, type ReviewStage } from '../../shared/reviews';
 import type {
@@ -32,16 +31,15 @@ export interface DashboardSearch {
   filter: ViewFilter;
   activeViewId: string | null;
   graphRoot: string | null;
-  graphDependencies: DependencySelection;
+  graphDependencies: string[];
+  graphShowTasks: boolean;
   detailTab: DetailTab;
   agentQuery: string;
   activeAgentsOnly: boolean;
 }
 
-const dependencySelectionSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('expand'), ids: z.array(z.string().min(1)).max(150) }),
-  z.object({ kind: z.literal('focus'), id: z.string().min(1).nullable() }),
-]);
+const booleanSchema = z.compile(z.boolean(), { strict: true });
+const graphDependenciesSchema = z.compile(z.array(z.string().min(1)).max(150), { strict: true });
 
 const recordSchema = z.compile(z.object({}).loose(), { strict: true });
 const textSchema = z.compile(z.string().min(1), { strict: true });
@@ -125,10 +123,10 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
     filter,
     activeViewId: text(search.activeViewId),
     graphRoot: text(search.graphRoot),
-    graphDependencies: parseOptional(dependencySelectionSchema, search.graphDependencies) ?? {
-      kind: 'expand',
-      ids: [],
-    },
+    graphShowTasks: parseOptional(booleanSchema, search.graphShowTasks) ?? true,
+    graphDependencies: [
+      ...new Set(parseOptional(graphDependenciesSchema, search.graphDependencies) ?? []),
+    ],
     detailTab: parseOptional(detailTabSchema, search.detailTab) ?? 'overview',
     agentQuery: text(search.agentQuery) ?? '',
     activeAgentsOnly: parseOptional(trueSchema, search.activeAgentsOnly) ?? false,
@@ -150,7 +148,8 @@ export const dashboardSearchDefaults = {
   filter: emptyFilter(),
   activeViewId: null,
   graphRoot: null,
-  graphDependencies: { kind: 'expand', ids: [] },
+  graphDependencies: [],
+  graphShowTasks: true,
   detailTab: 'overview',
   agentQuery: '',
   activeAgentsOnly: false,
@@ -167,6 +166,16 @@ export function pinnableWorkspaceId(
   );
 }
 
+/** Leave hierarchy focus and dependency expansion without retaining hidden board narrowing. */
+export function allGraphCardsSearch(search: DashboardSearch): Partial<DashboardSearch> {
+  return {
+    graphRoot: null,
+    graphDependencies: [],
+    filter: { ...emptyFilter(), includeClosed: search.filter.includeClosed },
+    activeViewId: null,
+  };
+}
+
 /** Manual filter edits no longer represent the selected saved view snapshot. */
 export function manualFilterSearch(
   search: DashboardSearch,
@@ -176,7 +185,7 @@ export function manualFilterSearch(
     filter,
     activeViewId: null,
     graphRoot: null,
-    graphDependencies: { kind: 'expand', ids: [] },
+    graphDependencies: [],
     mode: search.mode === 'agents' || search.mode === 'reviews' ? 'board' : search.mode,
   };
 }
@@ -193,7 +202,7 @@ export function savedViewSearch(
     filter: view?.filter ?? emptyFilter(),
     activeViewId: view?.id ?? null,
     graphRoot: null,
-    graphDependencies: { kind: 'expand', ids: [] },
+    graphDependencies: [],
     mode:
       search.mode === 'agents' ||
       search.mode === 'reviews' ||
@@ -216,7 +225,7 @@ export function workspaceViewSearch(
     agentRun: null,
     activeViewId: null,
     graphRoot: null,
-    graphDependencies: { kind: 'expand', ids: [] },
+    graphDependencies: [],
     mode:
       view === 'completed'
         ? 'completed'

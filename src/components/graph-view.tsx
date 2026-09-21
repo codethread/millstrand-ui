@@ -2,11 +2,18 @@ import { useMemo } from 'react';
 import { Network } from 'lucide-react';
 import type { Card } from '../../shared/api';
 import { useDependencies, useGraphSource } from '../hooks/use-graph';
-import { dependencyLayout, type GraphSource, type GraphLayout } from '../lib/graph';
+import {
+  dependencyLayout,
+  graphFocusTargets,
+  graphHierarchyRoot,
+  type GraphSource,
+  type GraphLayout,
+} from '../lib/graph';
 import {
   useDashboardActions,
   useGraphDependencies,
   useGraphRoot,
+  useGraphShowTasks,
   useIssueFilter,
 } from '../lib/navigation';
 import { ErrorNotice, Loading } from './issue-parts';
@@ -16,20 +23,35 @@ import { Button } from './ui/button';
 export default function GraphView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
   const root = useGraphRoot();
   const filter = useIssueFilter();
-  const selection = useGraphDependencies();
-  const dependencies = useDependencies();
-  const dependencyGraph = dependencies.data ?? null;
-  const { setGraphRoot, openCard, setGraphDependencies, toggleGraphDependencies } =
-    useDashboardActions();
+  const showTasks = useGraphShowTasks();
+  const expanded = useGraphDependencies();
+  const dependencies = useDependencies(expanded.length > 0);
+  const dependencyGraph = expanded.length > 0 ? (dependencies.data ?? null) : null;
+  const {
+    setGraphRoot,
+    toggleGraphTasks,
+    openCard,
+    clearGraphDependencies,
+    toggleGraphDependencies,
+    showAllGraphCards,
+  } = useDashboardActions();
   const source = useGraphSource(root, cards, allCards);
   const graph = source.kind === 'ready' ? source.graph : null;
   const layout = useMemo(
     () =>
       graph === null
         ? null
-        : dependencyLayout(graph, dependencyGraph, selection, filter.includeClosed),
-    [graph, dependencyGraph, selection, filter.includeClosed],
+        : dependencyLayout(graph, dependencyGraph, expanded, {
+            includeClosed: filter.includeClosed,
+            showTasks,
+          }),
+    [graph, dependencyGraph, expanded, filter.includeClosed, showTasks],
   );
+  const focusTargets = useMemo(
+    () => (graph === null ? new Map<string, string>() : graphFocusTargets(graph, allCards)),
+    [graph, allCards],
+  );
+  const promptIds = useMemo(() => graph?.nodes.map((node) => node.id) ?? [], [graph]);
   return (
     <div className="graph-workspace">
       <div className="graph-toolbar flex-wrap">
@@ -43,13 +65,13 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
           )}
         </div>
         <label>
-          Focus
+          Focus card
           <select
             aria-label="Graph focus"
             value={root ?? ''}
             onChange={(event) => setGraphRoot(event.target.value || null)}
           >
-            <option value="">All filtered issues</option>
+            <option value="">All filtered cards</option>
             {allCards.map((card) => (
               <option key={card.id} value={card.id}>
                 {card.id} · {card.title}
@@ -57,58 +79,38 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
             ))}
           </select>
         </label>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={showAllGraphCards}
+          title="Clear hierarchy focus, dependencies and filters; completed visibility stays unchanged"
+        >
+          Show all cards
+        </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-        <span>Dependency demo</span>
         <Button
           size="sm"
-          variant={selection.kind === 'expand' ? 'secondary' : 'ghost'}
-          onClick={() =>
-            setGraphDependencies({
-              kind: 'expand',
-              ids: selection.kind === 'focus' && selection.id ? [selection.id] : [],
-            })
-          }
+          variant={showTasks ? 'secondary' : 'outline'}
+          aria-pressed={showTasks}
+          onClick={toggleGraphTasks}
         >
-          1 · Add / hide in place
-        </Button>
-        <Button
-          size="sm"
-          variant={selection.kind === 'focus' ? 'secondary' : 'ghost'}
-          onClick={() =>
-            setGraphDependencies({
-              kind: 'focus',
-              id: selection.kind === 'expand' ? (selection.ids[0] ?? null) : selection.id,
-            })
-          }
-        >
-          2 · Focus one card
+          Show tasks
         </Button>
         <Button
           size="sm"
           variant="ghost"
-          onClick={() =>
-            setGraphDependencies(
-              selection.kind === 'expand'
-                ? { kind: 'expand', ids: [] }
-                : { kind: 'focus', id: null },
-            )
-          }
+          disabled={expanded.length === 0}
+          onClick={clearGraphDependencies}
         >
           Reset dependencies
         </Button>
-        <span>
-          {selection.kind === 'expand'
-            ? `${selection.ids.length} expanded`
-            : selection.id
-              ? `Focused on ${selection.id}`
-              : 'Choose a card’s dependency menu'}
-        </span>
-        <span>Solid: hierarchy · Dashed: added card · Counts include closed cards</span>
+        <span>{expanded.length} expanded</span>
+        <span>Solid: hierarchy · Dashed: added card · Counts include hidden work</span>
       </div>
-      {selection.kind === 'expand' && selection.ids.length > 0 && (
+      {expanded.length > 0 && (
         <div className="flex flex-wrap gap-2 px-4 pb-2">
-          {selection.ids.map((id) => (
+          {expanded.map((id) => (
             <Button
               key={id}
               size="sm"
@@ -122,31 +124,33 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
         </div>
       )}
       <GraphSourceNotice source={source} />
-      {dependencies.isPending && (
+      {expanded.length > 0 && dependencies.isPending && (
         <p className="px-4 py-2 text-xs text-muted-foreground">
-          Loading dependency counts and relationships…
+          Loading direct dependency relationships…
         </p>
       )}
-      {dependencies.error && (
+      {expanded.length > 0 && dependencies.error && (
         <div>
           <ErrorNotice error={dependencies.error} />
           <p className="px-4 text-xs text-muted-foreground">
             {dependencyGraph
-              ? 'Showing last-known dependencies and counts.'
-              : 'Dependency counts and expansion are unavailable.'}
+              ? 'Showing last-known dependency relationships.'
+              : 'Dependency expansion is unavailable.'}
           </p>
         </div>
       )}
 
       {layout?.kind === 'ready' ? (
         <GraphCanvas
-          key={JSON.stringify([root, filter, selection])}
+          // Fit the first lazy expansion when its snapshot arrives, not just the old hierarchy.
+          key={JSON.stringify([root, filter, showTasks, dependencyGraph === null ? [] : expanded])}
           layout={layout}
-          root={root}
+          root={graphHierarchyRoot(root, allCards)}
           openCard={openCard}
-          dependencyMode={selection.kind}
-          promptIds={graph?.nodes.map((node) => node.id) ?? []}
+          promptIds={promptIds}
           toggleDependencies={toggleGraphDependencies}
+          focusTargets={focusTargets}
+          focusHierarchy={setGraphRoot}
         />
       ) : layout !== null ? (
         <GraphEmpty layout={layout} />

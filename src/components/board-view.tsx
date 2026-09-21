@@ -1,3 +1,4 @@
+import { CardDependencyCounts } from './dependency-counts';
 import { ArrowUpRight, Inbox, Layers } from 'lucide-react';
 import type { BoardCard, BoardColumn, OutlineGroup } from '../lib/board';
 import { useDashboardActions } from '../lib/navigation';
@@ -49,8 +50,9 @@ function IssueCard({ card, parent: epic }: BoardCard) {
           <ArrowUpRight className="card-open-icon" />
         </button>
         <div className="card-footer flex-col! items-stretch!">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <IssueAgents owner={card.owner} target={card.id} />
+            <CardDependencyCounts counts={card.dependencies} />
             <CardMenuButton card={card} />
           </div>
         </div>
@@ -110,6 +112,7 @@ export function OutlineView({ groups }: { groups: OutlineGroup[] }) {
             )}
             <span className="column-count">{group.cards.length}</span>
             {group.context && <span className="text-xs text-muted-foreground">Parent context</span>}
+            {group.parent && <CardDependencyCounts counts={group.parent.dependencies} />}
             {group.parent && <CardMenuButton card={group.parent} />}
             {group.parent && (
               <Button
@@ -146,6 +149,7 @@ export function OutlineView({ groups }: { groups: OutlineGroup[] }) {
                     {card.priority.toUpperCase()}
                   </span>
                 </button>
+                <CardDependencyCounts counts={card.dependencies} />
                 <CardMenuButton card={card} />
                 <div className="min-w-0 max-w-full px-3 pb-2">
                   <IssueAgents owner={card.owner} target={card.id} />

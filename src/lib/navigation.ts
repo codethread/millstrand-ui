@@ -1,4 +1,3 @@
-import type { DependencySelection } from './graph';
 import { useAttentionStore } from '../attention-store';
 import { useCockpitStore } from '../cockpit-store';
 import type { ReviewScope, ReviewStage } from '../../shared/reviews';
@@ -11,6 +10,7 @@ import { useAgentPromptStore } from '../agent-prompt-store';
 import type { CardType, Lane, Priority, SavedView, ViewFilter } from '../../shared/api';
 import { emptyFilter, type WorkspaceView } from './board';
 import {
+  allGraphCardsSearch,
   manualFilterSearch,
   parseDashboardSearch,
   savedViewSearch,
@@ -34,6 +34,7 @@ const selectReviewStage = (search: DashboardSearch) => search.reviewStage;
 const selectFilter = (search: DashboardSearch) => search.filter;
 const selectActiveViewId = (search: DashboardSearch) => search.activeViewId;
 const selectGraphDependencies = (search: DashboardSearch) => search.graphDependencies;
+const selectGraphShowTasks = (search: DashboardSearch) => search.graphShowTasks;
 const selectGraphRoot = (search: DashboardSearch) => search.graphRoot;
 const selectDetailTab = (search: DashboardSearch) => search.detailTab;
 const selectAgentQuery = (search: DashboardSearch) => search.agentQuery;
@@ -88,6 +89,9 @@ export function useActiveViewId() {
 }
 export function useGraphDependencies() {
   return useSearch({ from: '/', select: selectGraphDependencies });
+}
+export function useGraphShowTasks() {
+  return useSearch({ from: '/', select: selectGraphShowTasks });
 }
 export function useGraphRoot() {
   return useSearch({ from: '/', select: selectGraphRoot });
@@ -182,34 +186,34 @@ export function useDashboardActions() {
     openAgents: () =>
       update({ mode: 'agents', issue: null, agent: null, agentRun: null, activeAgentsOnly: true }),
     setMode: (mode: Presentation) => update({ mode, issue: null, agent: null, agentRun: null }),
-    viewCardDependencies: (id: string, kind: DependencySelection['kind']) =>
+    viewCardDependencies: (id: string) =>
       update({
         graphRoot: id,
         mode: 'graph',
         issue: null,
         agent: null,
         agentRun: null,
-        graphDependencies: kind === 'expand' ? { kind, ids: [id] } : { kind, id },
+        graphDependencies: [id],
       }),
-    setGraphDependencies: (graphDependencies: DependencySelection) => update({ graphDependencies }),
+    showAllGraphCards: () => updateCurrent(allGraphCardsSearch),
+    toggleGraphTasks: () =>
+      updateCurrent((current) => ({ graphShowTasks: !current.graphShowTasks })),
+    clearGraphDependencies: () => update({ graphDependencies: [] }),
     toggleGraphDependencies: (id: string) =>
       updateCurrent((current) => ({
-        graphDependencies:
-          current.graphDependencies.kind === 'expand'
-            ? { kind: 'expand', ids: toggle(current.graphDependencies.ids, id) }
-            : { kind: 'focus', id: current.graphDependencies.id === id ? null : id },
+        graphDependencies: toggle(current.graphDependencies, id),
       })),
     exploreGraph: (graphRoot: string) =>
       update({
         graphRoot,
-        graphDependencies: { kind: 'expand', ids: [] },
+        graphDependencies: [],
         mode: 'graph',
         issue: null,
         agent: null,
         agentRun: null,
       }),
     setGraphRoot: (graphRoot: string | null) =>
-      update({ graphRoot, graphDependencies: { kind: 'expand', ids: [] } }),
+      update({ graphRoot, graphDependencies: [], issue: null }),
     setDetailTab: (detailTab: DetailTab) => update({ detailTab }),
     setAgentQuery: (agentQuery: string) => update({ agentQuery }, true),
     resetAgentFilters: () => update({ agentQuery: '', activeAgentsOnly: false }),
@@ -241,7 +245,7 @@ export function useDashboardActions() {
         filter: emptyFilter(),
         activeViewId: null,
         graphRoot: null,
-        graphDependencies: { kind: 'expand', ids: [] },
+        graphDependencies: [],
       }),
     selectWorkspaceView: (view: WorkspaceView) => {
       useDashboardStore.getState().setSidebarOpen(false);

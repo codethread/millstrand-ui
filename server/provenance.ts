@@ -1,9 +1,11 @@
+import { countDependencies } from '../shared/dependencies.ts';
 import { z } from 'zod';
 import type {
   AgentIdentity,
   AgentRun,
   AgentWork,
   CardOwnership,
+  DependencyCounts,
   IdentityAttribution,
   LogContinuation,
   OwnershipClaim,
@@ -34,6 +36,7 @@ const edgeKinds = [
   'resumes',
   'continues',
   'parent-of',
+  'depends-on',
 ] as const;
 const edgeSchema = z.object({
   from_strand_id: z.string(),
@@ -99,6 +102,7 @@ const claimAttributesSchema = z
   })
   .loose();
 
+type AgentProjection = { identities: AgentIdentity[]; runs: AgentRun[] };
 type Strand = z.infer<typeof strandSchema>;
 type EdgeKind = (typeof edgeKinds)[number];
 type Edge = z.infer<typeof edgeSchema>;
@@ -124,16 +128,31 @@ function unique(values: string[]): string[] {
 /** Parsed once from the selective persisted graph read. All role projections use durable records/edges. */
 export class ProvenanceIndex {
   private readonly strands: Map<string, Strand>;
-  private readonly edges: Edge[];
+  private readonly edgesBySource = new Map<string, Edge[]>();
+  private readonly edgesByTarget = new Map<string, Edge[]>();
+  private agentProjection: AgentProjection | null = null;
   private readonly identities: IdentityRecord[];
   private readonly identitiesByFriendly = new Map<string, IdentityRecord[]>();
   private readonly runs: RunRecord[];
   private readonly cardOwnership = new Map<string, CardOwnership>();
+  private readonly dependencyCounts: Map<string, DependencyCounts>;
 
   constructor(value: unknown) {
     const snapshot = parseSchema(snapshotSchema, value, 'persisted provenance');
     this.strands = new Map(snapshot.strands.map((strand) => [strand.id, strand]));
-    this.edges = snapshot.edges;
+    for (const edge of snapshot.edges) {
+      const outgoing = this.edgesBySource.get(edge.from_strand_id) ?? [];
+      outgoing.push(edge);
+      this.edgesBySource.set(edge.from_strand_id, outgoing);
+      const incoming = this.edgesByTarget.get(edge.to_strand_id) ?? [];
+      incoming.push(edge);
+      this.edgesByTarget.set(edge.to_strand_id, incoming);
+    }
+    this.dependencyCounts = countDependencies(
+      snapshot.edges
+        .filter((edge) => edge.edge_type === 'depends-on')
+        .map((edge) => ({ from: edge.from_strand_id, to: edge.to_strand_id })),
+    );
     this.identities = snapshot.strands
       .filter((strand) => strand.attributes['identity/session'] === 'true')
       .map((strand) => ({
@@ -165,16 +184,16 @@ export class ProvenanceIndex {
 
   private outgoing(id: string, kind: EdgeKind): string[] {
     return unique(
-      this.edges
-        .filter((edge) => edge.from_strand_id === id && edge.edge_type === kind)
+      (this.edgesBySource.get(id) ?? [])
+        .filter((edge) => edge.edge_type === kind)
         .map((edge) => edge.to_strand_id),
     );
   }
 
   private incoming(id: string, kind: EdgeKind): string[] {
     return unique(
-      this.edges
-        .filter((edge) => edge.to_strand_id === id && edge.edge_type === kind)
+      (this.edgesByTarget.get(id) ?? [])
+        .filter((edge) => edge.edge_type === kind)
         .map((edge) => edge.from_strand_id),
     );
   }
@@ -246,6 +265,10 @@ export class ProvenanceIndex {
     const ownership = { current: ordered.at(-1) ?? null, history: ordered };
     this.cardOwnership.set(target, ownership);
     return ownership;
+  }
+
+  dependencies(id: string): DependencyCounts {
+    return this.dependencyCounts.get(id) ?? { incoming: 0, outgoing: 0 };
   }
 
   cardRows(): unknown[] {
@@ -342,7 +365,8 @@ export class ProvenanceIndex {
     };
   }
 
-  agents(): { identities: AgentIdentity[]; runs: AgentRun[] } {
+  agents(): AgentProjection {
+    if (this.agentProjection !== null) return this.agentProjection;
     const runs = sorted(
       this.runs.map((run) => this.agentRun(run)),
       (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
@@ -384,7 +408,8 @@ export class ProvenanceIndex {
         work: currentWork.get(strandId) ?? [],
       };
     });
-    return { identities, runs };
+    this.agentProjection = { identities, runs };
+    return this.agentProjection;
   }
 
   logBindings(): LogBinding[] {

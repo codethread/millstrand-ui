@@ -10,7 +10,7 @@ import {
   parseWork,
   strandCommandError,
 } from './parse.ts';
-import { emptyProvenance } from './provenance.ts';
+import { emptyProvenance, ProvenanceIndex } from './provenance.ts';
 
 const provenance = emptyProvenance();
 const parseCard = (value: unknown) => parseCardBoundary(value, provenance);
@@ -102,6 +102,30 @@ describe('strand projection boundaries', () => {
       { kind: 'parent-of', from: 'abc12', to: 'task1' },
       { kind: 'depends-on', from: 'task1', to: 'task2' },
     ]);
+  });
+
+  it('projects full dependency counts onto unmarked graph work without hydrating external endpoints', () => {
+    const counts = new ProvenanceIndex({
+      strands: [],
+      edges: [
+        { edge_type: 'depends-on', from_strand_id: 'work', to_strand_id: 'external' },
+        { edge_type: 'depends-on', from_strand_id: 'outside', to_strand_id: 'work' },
+      ],
+    });
+    const graph = parseGraphBoundary(
+      {
+        'root-id': 'work',
+        strands: [{ ...entity, id: 'work', attributes: {} }],
+        'parent-of-edges': [],
+        'depends-on-edges': [],
+      },
+      counts,
+    );
+    expect(graph.nodes[0]).toMatchObject({
+      kind: 'work',
+      dependencies: { incoming: 1, outgoing: 1 },
+    });
+    expect(graph.edges).toEqual([]);
   });
 
   it('reads labels exactly as the spool does and keeps a closed lifecycle above stale lane data', () => {

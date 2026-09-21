@@ -14,6 +14,7 @@ import { X } from 'lucide-react';
 import type { GraphNode } from '../../shared/api';
 import { graphBody, type ReadyGraphLayout, type IssueGraphNode } from '../lib/graph';
 import { Button } from './ui/button';
+import { GraphDependencyCounts } from './dependency-counts';
 import { Markdown } from './markdown';
 import { PromptAgentButton } from './agent-prompt';
 import {
@@ -23,13 +24,16 @@ import {
 } from './graph-dependency-menu';
 import '@xyflow/react/dist/style.css';
 
-type InteractiveGraphNode = Node<IssueGraphNode['data'] & { action: DependencyAction }, 'issue'>;
+type InteractiveGraphNode = Node<
+  IssueGraphNode['data'] & { action: DependencyAction; focus: DependencyAction },
+  'issue'
+>;
 
 function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
   return (
-    <GraphDependencyMenu action={data.action}>
+    <GraphDependencyMenu action={data.action} focus={data.focus}>
       <div
-        className={`graph-node graph-kind-${data.item.kind} ${data.context === 'dependency' ? 'border-dashed! border-2! border-amber-500/60!' : 'border-2! border-violet-400/60!'} ${data.context === 'focus' ? 'ring-2 ring-violet-500 ring-offset-2 ring-offset-background' : ''}`}
+        className={`graph-node graph-kind-${data.item.kind} ${data.context === 'dependency' ? 'border-dashed! border-2! border-amber-500/60!' : 'border-2! border-violet-400/60!'} ${data.context === 'hierarchy-focus' ? 'outline-2 outline-violet-500 outline-offset-2' : ''}`}
       >
         <Handle type="target" position={Position.Left} />
         <Handle type="source" position={Position.Left} id="dependency-source" />
@@ -46,28 +50,19 @@ function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
           <span>
             {data.context === 'dependency'
               ? 'Added dependency'
-              : data.context === 'focus'
-                ? 'Dependency focus'
+              : data.context === 'hierarchy-focus'
+                ? 'Hierarchy focus'
                 : 'Hierarchy'}
           </span>
         </div>
         <div className="mt-2 flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
-          <span>
-            {data.dependencies === null ? (
-              'Dependencies unavailable'
-            ) : (
-              <>
-                <span title="Outgoing dependencies: prerequisites">
-                  Depends on <b>{data.dependencies.outgoing}</b>
-                </span>
-                {' · '}
-                <span title="Incoming dependencies: dependents">
-                  Required by <b>{data.dependencies.incoming}</b>
-                </span>
-              </>
-            )}
-          </span>
-          <GraphDependencyButton id={data.item.id} action={data.action} />
+          <GraphDependencyCounts
+            id={data.item.id}
+            counts={data.item.dependencies}
+            expanded={data.expanded}
+            onToggle={data.action.run}
+          />
+          <GraphDependencyButton id={data.item.id} action={data.action} focus={data.focus} />
         </div>
         <Handle type="source" position={Position.Right} />
         <Handle type="target" position={Position.Right} id="dependency-target" />
@@ -82,16 +77,18 @@ export function GraphCanvas({
   layout,
   root,
   openCard,
-  dependencyMode,
   promptIds,
   toggleDependencies,
+  focusTargets,
+  focusHierarchy,
 }: {
   layout: ReadyGraphLayout;
   root: string | null;
   openCard: (id: string) => void;
-  dependencyMode: 'expand' | 'focus';
   promptIds: string[];
   toggleDependencies: (id: string) => void;
+  focusTargets: ReadonlyMap<string, string>;
+  focusHierarchy: (id: string) => void;
 }) {
   const nodes = useMemo(
     () =>
@@ -99,21 +96,24 @@ export function GraphCanvas({
         ...node,
         data: {
           ...node.data,
+          focus: {
+            label: 'Focus epic hierarchy',
+            disabled: focusTargets.get(node.id) === undefined,
+            run: () => {
+              const target = focusTargets.get(node.id);
+              if (target !== undefined) focusHierarchy(target);
+            },
+          },
           action: {
-            label: node.data.expanded
-              ? 'Hide dependencies'
-              : dependencyMode === 'expand'
-                ? 'View dependencies · add here'
-                : 'View dependencies · focus here',
+            label: node.data.expanded ? 'Hide dependencies' : 'View dependencies',
             disabled:
               !node.data.expanded &&
-              (node.data.dependencies === null ||
-                node.data.dependencies.incoming + node.data.dependencies.outgoing === 0),
+              node.data.item.dependencies.incoming + node.data.item.dependencies.outgoing === 0,
             run: () => toggleDependencies(node.id),
           },
         },
       })),
-    [layout.nodes, dependencyMode, toggleDependencies],
+    [layout.nodes, toggleDependencies, focusTargets, focusHierarchy],
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = layout.nodes.find((node) => node.id === selectedId)?.data.item ?? null;
@@ -149,7 +149,11 @@ export function GraphCanvas({
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
-        onNodeClick={(_event, node) => selectNode(node.data.item)}
+        onNodeClick={(event, node) => {
+          if (event.target instanceof Element && event.target.closest('button, [role=menu]'))
+            return;
+          selectNode(node.data.item);
+        }}
         onPaneClick={() => setSelectedId(null)}
         proOptions={{ hideAttribution: true }}
       >
@@ -168,7 +172,7 @@ export function GraphCanvas({
         </span>
       </div>
       <div className="graph-help">
-        Scroll to zoom · drag to pan · right-click or … for dependencies
+        Scroll to zoom · drag to pan · click ↑ / ↓ to toggle dependencies
       </div>
       {selected && (
         <aside className="graph-inspector">

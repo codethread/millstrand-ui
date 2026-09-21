@@ -88,6 +88,12 @@ it('runs one bounded selective graph read without interpolating the workspace', 
   expect(parameters).toContain('kanban/ownership-claim');
   expect(parameters).toContain('performed');
   expect(parameters).toContain('serves-root');
+  expect(parameters).toContain('depends-on');
+  expect(sql).toContain("strand_edges.edge_type = 'depends-on'");
+  expect(parameters).not.toContain('note/text');
+  expect(parameters).not.toContain('note/at');
+  expect(parameters).not.toContain('note/kind');
+  expect(parameters).toContain('identity/by-identity');
   expect(parameters).not.toContain('harness/env');
   expect(parameters).not.toContain('harness/prompt');
 });
@@ -154,7 +160,12 @@ it('reads dependency endpoints with display-only metadata and directed links', a
     () => database,
   );
   const graph = await reader.readDependencies();
-  expect(graph.nodes[0]).toMatchObject({ id: 'strand1', kind: 'feature', owner: null });
+  expect(graph.nodes[0]).toMatchObject({
+    id: 'strand1',
+    kind: 'feature',
+    owner: null,
+    dependencies: { incoming: 0, outgoing: 1 },
+  });
   expect(graph.edges).toEqual([{ kind: 'depends-on', from: 'strand1', to: 'outside' }]);
   expect(database.close).toHaveBeenCalledOnce();
   const [sql] = database.all.mock.calls[0]!;

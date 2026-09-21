@@ -6,7 +6,7 @@ board-error feedback stay in the shell. An empty filtered board still mounts the
 graph toolbar, so a focused graph is reachable.
 
 - `src/hooks/use-graph.ts`: `useGraphSource` composes board `graphFromCards` or
-  the focused `useGraph` query (`graphQueryOptions` in `src/lib/api/cards.ts`).
+  the owning epic’s focused `useGraph` query (or the standalone card’s query) (`graphQueryOptions` in `src/lib/api/cards.ts`).
   The mounted graph is the focused query's 10-second poll owner. There is no new
   key, cache, timer or mirrored snapshot. `GraphSource` distinguishes loading,
   unavailable, and successful data with nullable refresh error. A failed refresh
@@ -27,8 +27,10 @@ graph toolbar, so a focused graph is reachable.
 
 ## Deliberate lifecycle
 
-The canvas key is serialized **URL focus, dependency exploration and filter values**, not graph membership
-or object identity. Focus/filter navigation (including Back) resets local inspector
+The canvas key is serialized **URL focus, task visibility, dependency exploration and filter values**, not graph membership
+or object identity. The first lazy expansion enters that key only when its first
+snapshot arrives, so fit-to-view includes the requested neighbours rather than
+fitting the old hierarchy before the request completes. Focus/filter navigation (including Back) resets local inspector
 selection and fits the new graph. Workspace/page unmount also resets it. Unchanged
 polls, refresh health, prompt drafts and ordinary data updates do not remount the
 canvas or refit pan/zoom. Membership changes from a poll update the controlled
@@ -75,59 +77,172 @@ Browser checks used real local workspace reads at 1440×1000 and 390×844:
 - Narrow canvas/inspector controls remained usable with document width equal to the
   390px viewport. Browser reported no uncaught page errors.
 
-## Direct dependency demos (jy52w)
+## Explicit dependency expansion
 
-Right-click a Graph card or use its **…** button. Board/Outline card menus also
-open either dependency demo directly. Each graph card shows **Depends on**
-(outgoing prerequisites) and **Required by** (incoming dependents), counted across
-the workspace including closed work, never just the visible graph.
+Click a Graph card’s **↑ / ↓** counts to show or hide its direct dependencies.
+The badge has a violet active state and `aria-pressed` while expanded; clicking
+again collapses that expansion. Right-click and **…** menus offer the same action.
+Board/Outline menus open this graph action directly. Counts are workspace-wide:
+**↑ Depends on** (outgoing prerequisites), **↓ Required by** (incoming dependents),
+including closed work and hidden tasks. Badge clicks never open the card inspector.
 
-- **1 · Add / hide in place** unions the direct neighbours of explicitly expanded
-  cards with the current hierarchy. Expand another card to add another hop. Hide
-  it from its menu or the removable ID chips; shared nodes/edges remain when another
-  expanded card still needs them. Reset removes all expansions.
-- **2 · Focus one card** shows only that card and its direct prerequisites/dependents.
-  Choosing another card replaces the neighbourhood. Hide/Reset restores the original
-  hierarchy. Browser Back restores earlier neighbourhoods.
-- Solid violet borders and **Hierarchy** mean membership in the original graph;
-  dashed amber borders and **Added dependency** identify added cards. The focused
-  card has a ring and **Dependency focus** label. This is hierarchy membership,
-  not a claim that every added card belongs to a different epic.
-- Closed dependency neighbours remain visible even when **Include completed** is
-  off, because the user explicitly requested those relationships. Counts stay
-  independent of all filters. No recursive expansion occurs automatically.
-- `graphDependencies` is a URL discriminated union: `expand` with IDs or `focus`
-  with a nullable ID. Focus/filter changes clear exploration. Discrete exploration
-  refits the canvas; ordinary polls retain pan/zoom and selection.
+- **Add / hide in place** unions the direct neighbours of explicitly expanded
+  cards with the current hierarchy. Expand another card to add another hop.
+  Hide it from its menu or removable ID chip; shared nodes/edges remain when
+  another expanded card still needs them. **Reset dependencies** restores the
+  hierarchy. There is no dependency-only mode.
+- Solid violet borders mark the original hierarchy; dashed amber borders and
+  **Added dependency** identify added cards. This denotes graph membership, not
+  a claim that every added card belongs to another epic. The selected hierarchy
+  card has a ring and **Hierarchy focus** label.
+- Closed dependency neighbours stay visible even with **Include completed** off.
+  Counts are independent of filters; expansion never recurses automatically.
+  Zero-count cards have a disabled expansion action unless already expanded,
+  so an expansion can still be cleared after its relationships disappear.
+- `graphDependencies` is a URL array of unique expanded IDs. Focus/filter changes
+  clear it. Back/reload restore it. Discrete exploration refits the canvas;
+  ordinary polls retain pan/zoom and selection.
 
-`GET /api/dependencies` returns a `CardGraph` containing workspace-wide dependency
-edges and only their endpoints. `WorkspaceDatabase.readDependencies` uses one
-read-only, bounded SQL snapshot discovered through `mill weaver list`, with the
-existing schema/storage validation and 10,000-node / 50,000-edge overflow failures.
-Only identity, title, lifecycle, timestamps and allowlisted kind/lane metadata are
+Counts arrive on `Card.dependencies` and `GraphNode.dependencies` through the
+existing board/detail/subtree reads. Merely opening Graph, reading counts or
+focusing an epic does **not** request the workspace dependency graph.
+
+`GET /api/dependencies` returns a `CardGraph` of workspace-wide dependency edges
+and their endpoints. `WorkspaceDatabase.readDependencies` uses one read-only,
+bounded SQL snapshot discovered through `mill weaver list`, with existing
+schema/storage validation and 10,000-node / 50,000-edge overflow failures. Only
+identity, title, lifecycle, timestamps and allowlisted kind/lane metadata are
 selected; no arbitrary attributes or agent payloads. No Strand mutations occur.
-The mounted `GraphView` owns `['dependencies', workspace]` through `useDependencies`
-at 10 seconds. No per-node requests or polling owners are added. Missing data shows
-unavailable counts, not zeros; refresh failures retain data with visible last-known
-feedback. Card mutations await invalidation of this key too.
+`StrandData` coalesces concurrent reads and caches a successful snapshot for three
+seconds; card mutation settlement invalidates it, including uncertain failures.
+
+`GraphView` owns `['dependencies', workspace]` through `useDependencies` only while
+at least one card is explicitly expanded, polling every 10 seconds. Removing the
+last expansion disables both fetching and polling, including invalidation reads.
+Refresh failures retain the snapshot with last-known feedback; initial expansion
+failure leaves the hierarchy and its authoritative counts visible. No per-card
+requests or polling owners are added. Card mutations await invalidation of this
+key too. `shared/dependencies.ts` provides one unique-link counting projection for
+both persisted reads; layout uses indexed blocking/focus lookups, not repeated
+node scans or per-node hierarchy traversals.
+
+## Hierarchy focus and counts on all card surfaces (s0c9b)
+
+Use **Focus epic hierarchy** from a graph node’s right-click or **…** menu,
+from Board/Outline card menus, or choose **Focus card** in the graph toolbar.
+The URL retains the chosen card (`graphRoot`); `graphHierarchyRoot` resolves its
+owning epic for the existing subtree query. The graph shows that epic’s family,
+including sibling features and tasks, with the chosen card outlined and labelled
+**Hierarchy focus**. A standalone card loads its own task subtree. Task nodes
+focus through their nearest card; unrelated non-card work cannot invent an epic.
+The focused card and its ancestors remain visible even when closed; other closed
+work still follows **Include completed**.
+
+**Show all cards** clears the hierarchy focus, dependency exploration, search,
+label/status/type/priority filters and saved-view selection. It preserves
+**Include completed**. The existing **Fit View** control fits the visible graph.
+Hierarchy focus narrows to a card’s family; **Add / hide in place** then adds its
+direct dependency neighbours without replacing that context. Both are explicit
+opt-in. Back/reload restore the selected scope.
+
+`Card.dependencies` contains required `{ incoming, outgoing }` counts from the
+existing persisted board/detail read. `ProvenanceIndex` indexes unique `depends-on`
+edges in one pass, including closed neighbours and endpoints outside the hydrated
+card/task set. The bounded SQL reads workspace-wide dependency edges so unmarked
+work in an exported subtree also receives complete counts. Parent edges do not count. The existing SQL
+projection now allowlists `depends-on`; no extra endpoints, cache keys, per-card
+requests, or poll owners are introduced for these badges. Board/overview health
+continues to mark retained data after a failed refresh.
+
+`CardDependencyCounts` is a query-independent shared leaf used by Board, Outline
+(including epic headings), Completed, overview card/target rows, and issue details.
+**↑** is outgoing **Depends on**, **↓** incoming **Required by**. Zero is explicit;
+click/tap or keyboard-activate the badge for an accessible explanation. Graph keeps
+the same arrow/count presentation, but its badge toggles expansion instead of
+opening a popover. No data mutations are attached to these controls.
 
 ### Verification
 
-`pnpm quality` passes (365 tests). Pure tests cover one-hop expansion, closed/external
-nodes, shared-link hiding, full incident counts, focus replacement, URL round trips,
-filter resets and the existing 150-node layout limit. Persisted-read tests cover the
-bounded projection and directed mapping.
+`pnpm quality`: 369 tests, strict TypeScript, zero-warning Oxlint, formatting and
+build pass. Added coverage for epic/standalone/task focus, selected closed card
+retention, direction/deduplication/external-endpoint counts, and accessible zero
+badges. Existing graph and persisted-read safety tests still pass.
 
-Browser verification used real `codethread.spool` card **hqqrk**: four prerequisites
-(69845, 7l93k, dmpd1, e5rrk) and one dependent (s7bec). Both closed prerequisites
-remain visible. In-place shows eight nodes including two tasks; focus shows six.
-Verified right-click, … menu, keyboard menu activation, adding 7l93k, hiding hqqrk
-while preserving shared links, focusing dmpd1, Back/reload, 390px layout without
-horizontal page overflow, Fit View, and both colour themes. An aborted dependency
-refresh retained all six nodes, the same viewport element and exact transform,
-with last-known feedback. The browser route override was removed; no real data was
-changed. No uncaught browser errors.
+Browser checks on real Codethread data:
 
-![In-place expansion](evidence/graph-dependencies/expanded-dark.png)
-![Focused direct dependencies](evidence/graph-dependencies/focused-dark.png)
-![Narrow light theme](evidence/graph-dependencies/focused-narrow-light.png)
+- `pbjt3` resolves to epic `wdp2p`: all 21 family nodes with completed work enabled;
+  expansion adds its one direct external dependent (22). With completed hidden,
+  the selected closed card and closed epic remain (two), then expansion gives three.
+- Show all cards restores the broad graph and clears search; Back restores focus
+  and expansion. Reload, standalone focus, keyboard menu activation, card inspection
+  and dependency expansion were exercised. A failed epic query retained the same
+  viewport and graph with visible last-known feedback; the abort route was removed.
+- `hqqrk` displays **↑4 ↓1** in Board, Outline and details, consistent with Graph.
+  Completed and overview surfaces also render counts. Badge popovers work by pointer
+  and Enter; 390px Outline/Graph layouts have no horizontal document overflow.
+  Desktop/light and narrow/dark evidence below. No uncaught browser errors.
+
+![Hierarchy plus direct dependencies](evidence/graph-focus/hierarchy-and-dependencies.png)
+![Board dependency counts](evidence/graph-focus/board-counts.png)
+![Narrow Outline counts and explanation](evidence/graph-focus/outline-counts-narrow.png)
+
+## Expansion-only cleanup verification (v5yf5)
+
+The dependency-only option and its selection/layout branches are removed; epic
+hierarchy focus remains. `pnpm quality` passes: 374 tests, strict TypeScript,
+zero-warning Oxlint, formatting and production build. Regression checks cover
+unique directed counts, unhydrated graph endpoints, one-hop/shared-link expansion,
+URL arrays and removal of the old mode, disabled dependency queries, retained
+refresh errors, coalesced server reads, and success/failure cache invalidation.
+
+Real Codethread browser checks at 1440×1000/light and 390×844/dark:
+
+- Unexpanded `hqqrk` shows three hierarchy nodes and **Depends on 4 · Required by 1**
+  with **zero** `/api/dependencies` requests. First expansion loads five neighbours
+  and fits all eight nodes after the lazy response arrives.
+- Right-click expansion of `7l93k`, then hiding `hqqrk`, retains six nodes including
+  shared relationships. Reset restores three nodes; over the next 11 seconds and
+  two board polls, **zero** further dependency requests occur.
+- Back/reload restore expanded IDs. Ordinary polling and an aborted dependency
+  refresh retain the exact viewport element/transform. Initial expansion failure
+  retains the hierarchy and its counts; removing the browser route override lets
+  polling recover without a server restart.
+- Epic focus on closed `pbjt3` retains it and `wdp2p` with completed hidden (two
+  nodes); explicit expansion adds its neighbour (three). Show all cards clears scope.
+- Keyboard and pointer menus, Board → dependency graph navigation, and Board counts
+  remain correct. No dependency-only action remains. Narrow document width equals
+  the 390px viewport. No uncaught browser errors; no workspace mutations were used
+  for browser checks. All request overrides were removed.
+
+![Expansion-only graph, light](evidence/graph-focus/expansion-light.png)
+![Expansion-only graph, narrow dark](evidence/graph-focus/expansion-narrow-dark.png)
+
+## Task visibility and direct count toggles (oyu89, qnk5d)
+
+**Show tasks** is on by default. Turning it off removes task nodes and incident
+edges from both the hierarchy and dependency expansions before the 150-node limit
+and layout. It does not clear focus, expanded IDs, or change full dependency counts;
+turning it on restores tasks subject to the existing completed-work rules.
+`graphShowTasks` is a parsed URL boolean, restored by Back/reload. **Show all cards**
+preserves this display choice. No new requests or polling owners are introduced.
+The redundant dependency-mode heading is removed.
+
+`CardDependencyCounts` and `GraphDependencyCounts` share arrow markup. Graph uses
+an accessible pressed button with a violet border/background for active expansion;
+other card views retain the explanation popover. Pointer and Enter/Space activation
+share the existing URL expansion action, not a second state store.
+
+Verification: `pnpm quality` passes 380 tests. Pure tests cover hidden hierarchy
+and dependency tasks, unchanged counts/expansions, restoration and the size limit;
+URL tests cover defaults, malformed fields and round trips. Render checks cover
+pressed names, both arrows and zero-count collapse.
+
+Real `hqqrk` browser checks: hiding tasks takes three nodes to one without a
+dependency request; badge expansion yields six cards, and clicking again returns
+to one. Showing tasks restores eight nodes while expanded. Back/reload preserve
+both toggles. Multiple active badges remain distinct, and hiding one expansion
+preserves shared links. Pointer, Enter and Space never open card details. Desktop
+light and 390px dark layouts have no document overflow or uncaught page errors.
+
+![Active arrow count toggles, tasks hidden](evidence/graph-focus/arrow-toggles-light.png)
+![Narrow task visibility and arrow toggle](evidence/graph-focus/arrow-toggles-narrow-dark.png)

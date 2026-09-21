@@ -8,10 +8,9 @@ export function logBindings(snapshot: unknown): LogBinding[] {
 }
 
 export async function readLogActivity(
-  snapshot: unknown,
+  provenance: ProvenanceIndex,
   reader: SessionLogReader,
 ): Promise<LogActivity> {
-  const provenance = new ProvenanceIndex(snapshot);
   const { identities } = provenance.agents();
   const active = new Set(
     identities

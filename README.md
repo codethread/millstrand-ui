@@ -281,19 +281,27 @@ Use Board for lanes, Outline for epic/feature context, and Graph for relationshi
 The optional **In production** column appears after **In review** when matching
 cards use the spool's `in_production` lane. It supports filters and saved views
 and keeps production observation work available in workspace views.
-Choose a graph focus to load one card's task subtree and dependencies. Solid arrows
+Choose a graph focus to load a card’s epic hierarchy or standalone task subtree. Solid arrows
 point from parent to child; dashed arrows point from a dependent to its prerequisite.
-Right-click a graph card or use **…** to explicitly view its direct dependencies.
-Compare **Add / hide in place** (accumulate neighbourhoods) with **Focus one card**
-(replace the neighbourhood). Graph cards show workspace-wide **Depends on** and
-**Required by** counts. Solid borders mark the original hierarchy; dashed amber
+Click a graph card’s **↑ / ↓** count badge to show or hide its direct dependencies;
+a violet active badge marks an expanded card. Right-click and **…** menus offer
+the same action. **Show tasks** toggles task nodes without clearing expansions.
+Use **Focus epic hierarchy** to view a card’s epic, sibling features and tasks;
+**Show all cards** clears focus and filters while preserving completed visibility.
+**Add / hide in place** accumulates only explicitly requested direct neighbours;
+hide them individually or reset all expansions. Graph cards show workspace-wide
+**↑** prerequisite / **↓** dependent counts, including hidden tasks. Solid borders mark the original hierarchy; dashed amber
 borders mark added cards, including closed dependencies. Board/Outline menus can
-open either demo directly. See [graph demos and screenshots](docs/graph.md).
+open dependency expansion or hierarchy focus directly. Board, Outline, Completed,
+overview and details also show compact **↑** prerequisite / **↓** dependent counts;
+activate the badge for the explanation. See [graph guide and screenshots](docs/graph.md).
 Scroll to zoom, drag to pan, and click a node to inspect it. Views above 150 nodes
 ask you to narrow the filters or choose a smaller focus. Changing a filter or
 saved view returns the graph to the filtered board.
 
 Click any card for its description, task status, full notes, labels, and attributes.
+Full notes load and refresh only while the **Notes** tab is open; closing it stops
+those requests while retaining the last notes and count.
 Workspace, layout, issue/agent selection, issue detail tab, graph focus, board
 filters, agent search/active-only, and selected saved view all live in the URL.
 Reload, shared links, and browser Back restore that navigation state. Saved-view
