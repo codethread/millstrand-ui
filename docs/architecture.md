@@ -394,7 +394,9 @@ shared unique-link projection in `shared/dependencies.ts`. Existing board/detail
 overview poll owners and failure retention apply;
 there are no count-specific requests or mirrored stores. `CardDependencyCounts`
 in `src/components/dependency-counts.tsx` is a pure-prop shared leaf across card
-surfaces with a Radix popover explaining arrow direction.
+surfaces with a Radix popover explaining arrow direction. `GraphDependencyCounts`
+shares the arrow markup but uses a pressed button to toggle the existing expansion
+URL action; active badges have a violet border/background.
 
 For the Graph surface, `graphRoot` remains the selected card; `graphHierarchyRoot`
 in `src/lib/graph.ts` resolves its epic to the existing `['graph', workspace, id]`
@@ -404,3 +406,9 @@ once for task focus, excluding dependency links. **Show all cards** is a Router
 action that clears scope and filters but preserves completed visibility. Graph
 dependency data polls only while explicit expansions are present; no cache key or
 endpoint is renamed.
+
+Graph task visibility is the `graphShowTasks` URL boolean (default true), selected
+by `useGraphShowTasks` and changed by `toggleGraphTasks`. `dependencyLayout` applies
+it to the composed nodes before layout/size checks, without changing counts or
+expanded IDs. The canvas navigation key includes it, so explicit toggles refit;
+ordinary polls still preserve the viewport. No server or query policy changes.

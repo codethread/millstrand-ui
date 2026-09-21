@@ -177,19 +177,25 @@ describe('explicit direct dependency exploration', () => {
     ],
   };
   it('uses authoritative node counts without needing the workspace dependency response', () => {
-    const result = dependencyLayout(base, dependencies, [], false);
+    const result = dependencyLayout(base, dependencies, [], {
+      includeClosed: false,
+      showTasks: true,
+    });
     if (result.kind !== 'ready') throw new Error('Expected layout');
     expect(result.nodes.map((n) => n.id)).toEqual(['root', 'task']);
     expect(result.nodes[0]?.data.item.dependencies).toEqual({ incoming: 1, outgoing: 1 });
     expect(result.edges).toHaveLength(1);
-    const missing = dependencyLayout(base, null, [], false);
+    const missing = dependencyLayout(base, null, [], { includeClosed: false, showTasks: true });
     expect(missing.kind === 'ready' && missing.nodes[0]?.data.item.dependencies).toEqual({
       incoming: 1,
       outgoing: 1,
     });
   });
   it('expands only direct neighbours, including closed external cards, with explicit distinction', () => {
-    const result = dependencyLayout(base, dependencies, ['root'], false);
+    const result = dependencyLayout(base, dependencies, ['root'], {
+      includeClosed: false,
+      showTasks: true,
+    });
     if (result.kind !== 'ready') throw new Error('Expected layout');
     expect(
       sorted(
@@ -205,10 +211,16 @@ describe('explicit direct dependency exploration', () => {
     expect(result.edges.map((e) => [e.source, e.target])).toContainEqual(['incoming', 'root']);
   });
   it('keeps shared edges when one root is hidden and removes unrequested second hops', () => {
-    const expanded = dependencyLayout(base, dependencies, ['root', 'outside'], false);
+    const expanded = dependencyLayout(base, dependencies, ['root', 'outside'], {
+      includeClosed: false,
+      showTasks: true,
+    });
     if (expanded.kind !== 'ready') throw new Error('Expected layout');
     expect(expanded.edges).toHaveLength(4);
-    const hidden = dependencyLayout(base, dependencies, ['outside'], false);
+    const hidden = dependencyLayout(base, dependencies, ['outside'], {
+      includeClosed: false,
+      showTasks: true,
+    });
     if (hidden.kind !== 'ready') throw new Error('Expected layout');
     expect(
       sorted(
@@ -219,7 +231,10 @@ describe('explicit direct dependency exploration', () => {
     expect(hidden.edges.map((e) => [e.source, e.target])).toContainEqual(['root', 'outside']);
   });
   it('resetting expansions restores only the original hierarchy', () => {
-    const result = dependencyLayout(base, dependencies, [], false);
+    const result = dependencyLayout(base, dependencies, [], {
+      includeClosed: false,
+      showTasks: true,
+    });
     expect(result.kind === 'ready' && result.nodes.map((n) => n.id)).toEqual(['root', 'task']);
   });
 });
@@ -252,9 +267,77 @@ it('focuses a feature through its epic and a task through its owning card, not d
     rootId: 'feature',
     nodes: graph.nodes.map((n) => (n.id === 'feature' ? { ...n, state: 'closed' } : n)),
   };
-  const result = dependencyLayout(focused, null, [], false);
+  const result = dependencyLayout(focused, null, [], { includeClosed: false, showTasks: true });
   if (result.kind !== 'ready') throw new Error('Expected layout');
   expect(result.nodes.map((n) => n.id)).toContain('sibling');
   expect(result.nodes.find((n) => n.id === 'feature')?.data.context).toBe('hierarchy-focus');
   expect(result.nodes.find((n) => n.id === 'epic')?.data.context).toBe('hierarchy');
+});
+
+it('hides hierarchy and dependency tasks without clearing expansions or changing full counts', () => {
+  const root: GraphNode = {
+    ...node('root'),
+    kind: 'feature',
+    dependencies: { incoming: 0, outgoing: 2 },
+  };
+  const base: CardGraph = {
+    rootId: 'root',
+    nodes: [root, node('child')],
+    edges: [{ kind: 'parent-of', from: 'root', to: 'child' }],
+  };
+  const dependencies: CardGraph = {
+    rootId: '',
+    nodes: [
+      root,
+      node('outside-task', 'closed'),
+      { ...node('outside-card', 'closed'), kind: 'feature' },
+    ],
+    edges: [
+      { kind: 'depends-on', from: 'root', to: 'outside-task' },
+      { kind: 'depends-on', from: 'root', to: 'outside-card' },
+    ],
+  };
+  for (const includeClosed of [false, true]) {
+    const hidden = dependencyLayout(base, dependencies, ['root'], {
+      includeClosed,
+      showTasks: false,
+    });
+    if (hidden.kind !== 'ready') throw new Error('Expected layout');
+    expect(hidden.nodes.map((item) => item.id)).toEqual(['root', 'outside-card']);
+    expect(hidden.edges.map((edge) => [edge.source, edge.target])).toEqual([
+      ['root', 'outside-card'],
+    ]);
+    expect(hidden.nodes[0]?.data).toMatchObject({
+      expanded: true,
+      item: { dependencies: root.dependencies },
+    });
+    const shown = dependencyLayout(base, dependencies, ['root'], {
+      includeClosed,
+      showTasks: true,
+    });
+    expect(
+      shown.kind === 'ready' &&
+        sorted(
+          shown.nodes.map((item) => item.id),
+          (a, b) => a.localeCompare(b),
+        ),
+    ).toEqual(['child', 'outside-card', 'outside-task', 'root']);
+  }
+});
+
+it('applies task visibility before the graph size limit', () => {
+  const base: CardGraph = {
+    rootId: 'root',
+    nodes: [
+      { ...node('root'), kind: 'feature' },
+      ...Array.from({ length: 150 }, (_, index) => node(`task-${index}`)),
+    ],
+    edges: [],
+  };
+  expect(dependencyLayout(base, null, [], { includeClosed: true, showTasks: true })).toEqual({
+    kind: 'too-large',
+    count: 151,
+  });
+  const hidden = dependencyLayout(base, null, [], { includeClosed: true, showTasks: false });
+  expect(hidden.kind === 'ready' && hidden.nodes.map((item) => item.id)).toEqual(['root']);
 });

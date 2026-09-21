@@ -13,6 +13,7 @@ import {
   useDashboardActions,
   useGraphDependencies,
   useGraphRoot,
+  useGraphShowTasks,
   useIssueFilter,
 } from '../lib/navigation';
 import { ErrorNotice, Loading } from './issue-parts';
@@ -22,11 +23,13 @@ import { Button } from './ui/button';
 export default function GraphView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
   const root = useGraphRoot();
   const filter = useIssueFilter();
+  const showTasks = useGraphShowTasks();
   const expanded = useGraphDependencies();
   const dependencies = useDependencies(expanded.length > 0);
   const dependencyGraph = expanded.length > 0 ? (dependencies.data ?? null) : null;
   const {
     setGraphRoot,
+    toggleGraphTasks,
     openCard,
     clearGraphDependencies,
     toggleGraphDependencies,
@@ -38,8 +41,11 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
     () =>
       graph === null
         ? null
-        : dependencyLayout(graph, dependencyGraph, expanded, filter.includeClosed),
-    [graph, dependencyGraph, expanded, filter.includeClosed],
+        : dependencyLayout(graph, dependencyGraph, expanded, {
+            includeClosed: filter.includeClosed,
+            showTasks,
+          }),
+    [graph, dependencyGraph, expanded, filter.includeClosed, showTasks],
   );
   const focusTargets = useMemo(
     () => (graph === null ? new Map<string, string>() : graphFocusTargets(graph, allCards)),
@@ -83,7 +89,14 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-        <span className="font-medium">Dependencies · add / hide in place</span>
+        <Button
+          size="sm"
+          variant={showTasks ? 'secondary' : 'outline'}
+          aria-pressed={showTasks}
+          onClick={toggleGraphTasks}
+        >
+          Show tasks
+        </Button>
         <Button
           size="sm"
           variant="ghost"
@@ -93,7 +106,7 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
           Reset dependencies
         </Button>
         <span>{expanded.length} expanded</span>
-        <span>Solid: hierarchy · Dashed: added card · Counts include closed cards</span>
+        <span>Solid: hierarchy · Dashed: added card · Counts include hidden work</span>
       </div>
       {expanded.length > 0 && (
         <div className="flex flex-wrap gap-2 px-4 pb-2">
@@ -130,7 +143,7 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
       {layout?.kind === 'ready' ? (
         <GraphCanvas
           // Fit the first lazy expansion when its snapshot arrives, not just the old hierarchy.
-          key={JSON.stringify([root, filter, dependencyGraph === null ? [] : expanded])}
+          key={JSON.stringify([root, filter, showTasks, dependencyGraph === null ? [] : expanded])}
           layout={layout}
           root={graphHierarchyRoot(root, allCards)}
           openCard={openCard}

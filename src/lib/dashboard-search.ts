@@ -32,11 +32,13 @@ export interface DashboardSearch {
   activeViewId: string | null;
   graphRoot: string | null;
   graphDependencies: string[];
+  graphShowTasks: boolean;
   detailTab: DetailTab;
   agentQuery: string;
   activeAgentsOnly: boolean;
 }
 
+const booleanSchema = z.compile(z.boolean(), { strict: true });
 const graphDependenciesSchema = z.compile(z.array(z.string().min(1)).max(150), { strict: true });
 
 const recordSchema = z.compile(z.object({}).loose(), { strict: true });
@@ -121,6 +123,7 @@ export function parseDashboardSearch(search: Record<string, unknown>): Dashboard
     filter,
     activeViewId: text(search.activeViewId),
     graphRoot: text(search.graphRoot),
+    graphShowTasks: parseOptional(booleanSchema, search.graphShowTasks) ?? true,
     graphDependencies: [
       ...new Set(parseOptional(graphDependenciesSchema, search.graphDependencies) ?? []),
     ],
@@ -146,6 +149,7 @@ export const dashboardSearchDefaults = {
   activeViewId: null,
   graphRoot: null,
   graphDependencies: [],
+  graphShowTasks: true,
   detailTab: 'overview',
   agentQuery: '',
   activeAgentsOnly: false,

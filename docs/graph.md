@@ -27,7 +27,7 @@ graph toolbar, so a focused graph is reachable.
 
 ## Deliberate lifecycle
 
-The canvas key is serialized **URL focus, dependency exploration and filter values**, not graph membership
+The canvas key is serialized **URL focus, task visibility, dependency exploration and filter values**, not graph membership
 or object identity. The first lazy expansion enters that key only when its first
 snapshot arrives, so fit-to-view includes the requested neighbours rather than
 fitting the old hierarchy before the request completes. Focus/filter navigation (including Back) resets local inspector
@@ -79,10 +79,12 @@ Browser checks used real local workspace reads at 1440×1000 and 390×844:
 
 ## Explicit dependency expansion
 
-Right-click a Graph card or use its **…** button to **View dependencies** or
-**Hide dependencies**. Board/Outline menus open this graph action directly.
-Each card shows workspace-wide **Depends on** (outgoing prerequisites) and
-**Required by** (incoming dependents), including closed work.
+Click a Graph card’s **↑ / ↓** counts to show or hide its direct dependencies.
+The badge has a violet active state and `aria-pressed` while expanded; clicking
+again collapses that expansion. Right-click and **…** menus offer the same action.
+Board/Outline menus open this graph action directly. Counts are workspace-wide:
+**↑ Depends on** (outgoing prerequisites), **↓ Required by** (incoming dependents),
+including closed work and hidden tasks. Badge clicks never open the card inspector.
 
 - **Add / hide in place** unions the direct neighbours of explicitly expanded
   cards with the current hierarchy. Expand another card to add another hop.
@@ -95,7 +97,8 @@ Each card shows workspace-wide **Depends on** (outgoing prerequisites) and
   card has a ring and **Hierarchy focus** label.
 - Closed dependency neighbours stay visible even with **Include completed** off.
   Counts are independent of filters; expansion never recurses automatically.
-  Zero-count cards have a disabled expansion action.
+  Zero-count cards have a disabled expansion action unless already expanded,
+  so an expansion can still be cleared after its relationships disappear.
 - `graphDependencies` is a URL array of unique expanded IDs. Focus/filter changes
   clear it. Back/reload restore it. Discrete exploration refits the canvas;
   ordinary polls retain pan/zoom and selection.
@@ -155,7 +158,8 @@ continues to mark retained data after a failed refresh.
 (including epic headings), Completed, overview card/target rows, and issue details.
 **↑** is outgoing **Depends on**, **↓** incoming **Required by**. Zero is explicit;
 click/tap or keyboard-activate the badge for an accessible explanation. Graph keeps
-its full-text counts. No data mutations are attached to these controls.
+the same arrow/count presentation, but its badge toggles expansion instead of
+opening a popover. No data mutations are attached to these controls.
 
 ### Verification
 
@@ -212,3 +216,33 @@ Real Codethread browser checks at 1440×1000/light and 390×844/dark:
 
 ![Expansion-only graph, light](evidence/graph-focus/expansion-light.png)
 ![Expansion-only graph, narrow dark](evidence/graph-focus/expansion-narrow-dark.png)
+
+## Task visibility and direct count toggles (oyu89, qnk5d)
+
+**Show tasks** is on by default. Turning it off removes task nodes and incident
+edges from both the hierarchy and dependency expansions before the 150-node limit
+and layout. It does not clear focus, expanded IDs, or change full dependency counts;
+turning it on restores tasks subject to the existing completed-work rules.
+`graphShowTasks` is a parsed URL boolean, restored by Back/reload. **Show all cards**
+preserves this display choice. No new requests or polling owners are introduced.
+The redundant dependency-mode heading is removed.
+
+`CardDependencyCounts` and `GraphDependencyCounts` share arrow markup. Graph uses
+an accessible pressed button with a violet border/background for active expansion;
+other card views retain the explanation popover. Pointer and Enter/Space activation
+share the existing URL expansion action, not a second state store.
+
+Verification: `pnpm quality` passes 380 tests. Pure tests cover hidden hierarchy
+and dependency tasks, unchanged counts/expansions, restoration and the size limit;
+URL tests cover defaults, malformed fields and round trips. Render checks cover
+pressed names, both arrows and zero-count collapse.
+
+Real `hqqrk` browser checks: hiding tasks takes three nodes to one without a
+dependency request; badge expansion yields six cards, and clicking again returns
+to one. Showing tasks restores eight nodes while expanded. Back/reload preserve
+both toggles. Multiple active badges remain distinct, and hiding one expansion
+preserves shared links. Pointer, Enter and Space never open card details. Desktop
+light and 390px dark layouts have no document overflow or uncaught page errors.
+
+![Active arrow count toggles, tasks hidden](evidence/graph-focus/arrow-toggles-light.png)
+![Narrow task visibility and arrow toggle](evidence/graph-focus/arrow-toggles-narrow-dark.png)

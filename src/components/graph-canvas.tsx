@@ -14,6 +14,7 @@ import { X } from 'lucide-react';
 import type { GraphNode } from '../../shared/api';
 import { graphBody, type ReadyGraphLayout, type IssueGraphNode } from '../lib/graph';
 import { Button } from './ui/button';
+import { GraphDependencyCounts } from './dependency-counts';
 import { Markdown } from './markdown';
 import { PromptAgentButton } from './agent-prompt';
 import {
@@ -55,15 +56,12 @@ function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
           </span>
         </div>
         <div className="mt-2 flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
-          <span>
-            <span title="Outgoing dependencies: prerequisites">
-              Depends on <b>{data.item.dependencies.outgoing}</b>
-            </span>
-            {' · '}
-            <span title="Incoming dependencies: dependents">
-              Required by <b>{data.item.dependencies.incoming}</b>
-            </span>
-          </span>
+          <GraphDependencyCounts
+            id={data.item.id}
+            counts={data.item.dependencies}
+            expanded={data.expanded}
+            onToggle={data.action.run}
+          />
           <GraphDependencyButton id={data.item.id} action={data.action} focus={data.focus} />
         </div>
         <Handle type="source" position={Position.Right} />
@@ -174,7 +172,7 @@ export function GraphCanvas({
         </span>
       </div>
       <div className="graph-help">
-        Scroll to zoom · drag to pan · right-click or … for dependencies
+        Scroll to zoom · drag to pan · click ↑ / ↓ to toggle dependencies
       </div>
       {selected && (
         <aside className="graph-inspector">

@@ -34,6 +34,7 @@ const selectReviewStage = (search: DashboardSearch) => search.reviewStage;
 const selectFilter = (search: DashboardSearch) => search.filter;
 const selectActiveViewId = (search: DashboardSearch) => search.activeViewId;
 const selectGraphDependencies = (search: DashboardSearch) => search.graphDependencies;
+const selectGraphShowTasks = (search: DashboardSearch) => search.graphShowTasks;
 const selectGraphRoot = (search: DashboardSearch) => search.graphRoot;
 const selectDetailTab = (search: DashboardSearch) => search.detailTab;
 const selectAgentQuery = (search: DashboardSearch) => search.agentQuery;
@@ -88,6 +89,9 @@ export function useActiveViewId() {
 }
 export function useGraphDependencies() {
   return useSearch({ from: '/', select: selectGraphDependencies });
+}
+export function useGraphShowTasks() {
+  return useSearch({ from: '/', select: selectGraphShowTasks });
 }
 export function useGraphRoot() {
   return useSearch({ from: '/', select: selectGraphRoot });
@@ -192,6 +196,8 @@ export function useDashboardActions() {
         graphDependencies: [id],
       }),
     showAllGraphCards: () => updateCurrent(allGraphCardsSearch),
+    toggleGraphTasks: () =>
+      updateCurrent((current) => ({ graphShowTasks: !current.graphShowTasks })),
     clearGraphDependencies: () => update({ graphDependencies: [] }),
     toggleGraphDependencies: (id: string) =>
       updateCurrent((current) => ({

@@ -158,9 +158,9 @@ export function dependencyLayout(
   base: CardGraph,
   dependencies: CardGraph | null,
   expandedIds: string[],
-  includeClosed: boolean,
+  visibility: { includeClosed: boolean; showTasks: boolean },
 ): GraphLayout {
-  const hierarchy = visibleGraph(base, includeClosed);
+  const hierarchy = visibleGraph(base, visibility.includeClosed);
   const roots = new Set(expandedIds);
   const nodes = new Map(
     [...(dependencies?.nodes ?? []), ...base.nodes].map((node) => [node.id, node]),
@@ -177,7 +177,9 @@ export function dependencyLayout(
   const result = layoutGraph(
     {
       rootId: base.rootId,
-      nodes: [...nodes.values()].filter((node) => ids.has(node.id)),
+      nodes: [...nodes.values()].filter(
+        (node) => ids.has(node.id) && (visibility.showTasks || node.kind !== 'task'),
+      ),
       edges: [...base.edges.filter((edge) => edge.kind === 'parent-of'), ...edges],
     },
     true,

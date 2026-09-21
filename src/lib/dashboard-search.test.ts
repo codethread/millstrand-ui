@@ -282,3 +282,20 @@ it('shows all graph cards by clearing scope and filters but retaining completed 
     filter: { ...parseDashboardSearch({}).filter, includeClosed: true },
   });
 });
+
+it('shares task visibility independently of hierarchy, expansion and filters', () => {
+  expect(parseDashboardSearch({}).graphShowTasks).toBe(true);
+  expect(parseDashboardSearch({ graphShowTasks: 'invalid' }).graphShowTasks).toBe(true);
+  const state = parseDashboardSearch({
+    mode: 'graph',
+    graphShowTasks: false,
+    graphRoot: 'root',
+    graphDependencies: ['root'],
+  });
+  expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(state)))).toEqual(state);
+  expect({ ...state, ...allGraphCardsSearch(state) }).toMatchObject({
+    graphShowTasks: false,
+    graphRoot: null,
+    graphDependencies: [],
+  });
+});
