@@ -11,7 +11,7 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
   const activity = useRelevantAgentActivity(owner, target);
   const health = useAgentStatus();
   const workspace = useWorkspace();
-  const { openAgent } = useDashboardActions();
+  const { openAgent, openAgentRun } = useDashboardActions();
   const agents = activity.data ?? [];
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -19,7 +19,7 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
         <button
           key={identity.strandId}
           className="agent-link"
-          onClick={() => openAgent(identity.id)}
+          onClick={() => (run ? openAgentRun(identity.id, run.id) : openAgent(identity.id))}
           aria-label={`View agent ${identity.id}`}
           title={`${identity.id} · ${run?.alias ?? identity.harness}. ${health.error ? 'Activity refresh failed; last known status. ' : ''}${relation === 'owner-session' ? 'Owner’s session is running; work on this issue is not confirmed.' : label}`}
         >

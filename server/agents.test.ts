@@ -76,6 +76,47 @@ describe('agent directory boundary', () => {
     expect(JSON.stringify(result)).not.toContain('stale-target');
   });
 
+  it('links a workflow-gate reviewer only to a feature in the same workspace snapshot', () => {
+    const strands = [
+      strand('feature', { 'kanban/card': 'true' }),
+      identity('reviewer-identity', 'gentle-ready-fox'),
+      strand('land-root', {
+        'workflow/form': 'molecule',
+        'workflow/role': 'root',
+        'workflow/run-id': 'land-auto-feature',
+        'workflow/context': { card: 'feature', feature: 'feature' },
+      }),
+      strand('review-gate', {
+        'workflow/form': 'molecule',
+        'workflow/role': 'step',
+        'review/role': 'reviewer',
+      }),
+      strand('review-run', { ...runAttrs, 'harness/alias': 'reviewer' }),
+    ];
+    const edges = [
+      edge('land-root', 'review-gate', 'parent-of'),
+      edge('reviewer-identity', 'review-run', 'performed'),
+      edge('review-run', 'review-gate', 'serves'),
+    ];
+    const result = parseAgents({ strands, edges });
+
+    expect(result.runs[0]).toMatchObject({
+      id: 'review-run',
+      target: 'review-gate',
+      rootTargets: [],
+      workflow: {
+        rootId: 'land-root',
+        runId: 'land-auto-feature',
+        cardId: 'feature',
+        role: 'reviewer',
+      },
+    });
+    expect(
+      parseAgents({ strands: strands.filter(({ id }) => id !== 'feature'), edges }).runs[0]
+        ?.workflow,
+    ).toBeNull();
+  });
+
   it('keeps native resume and fresh retry provenance distinct', () => {
     const result = parseAgents({
       strands: [

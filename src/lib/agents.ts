@@ -87,7 +87,7 @@ export function agentDirectorySummary(agents: AgentIdentity[]): AgentDirectorySu
 }
 
 export function runTargets(run: AgentRun, id: string): boolean {
-  return run.target === id || run.rootTargets.includes(id);
+  return run.target === id || run.rootTargets.includes(id) || run.workflow?.cardId === id;
 }
 
 export function issueAgents(

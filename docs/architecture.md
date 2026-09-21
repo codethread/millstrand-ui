@@ -319,7 +319,11 @@ page to consume. Domain options must not import Router; navigation belongs in ho
   claim order for `card-provenance.tsx`; it never infers ownership from a note or run.
 - Pure projections live in `src/lib/agents.ts`: `activeAgentIdentities` and
   `agentDirectorySummary` support overview/count consumers; `relevantAgentActivity`
-  preserves owner versus explicitly targeted working/queued semantics;
+  preserves owner versus explicitly targeted working/queued semantics. A run serving a
+  persisted workflow gate carries its direct gate target plus the workflow root, run,
+  feature-card context and recorded reviewer/auto-run role. This relationship makes the
+  run discoverable from that feature without fabricating ownership or replacing its
+  actual target; terminal runs remain past participation in the card Agents tab.
   `selectedAgentActivity` resolves an exact run even when a URL has no/stale identity;
   `agentRunIdentities` and `targetAgentRunIds` support reviews without exposing the
   timestamp-bearing directory.

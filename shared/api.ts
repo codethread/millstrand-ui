@@ -90,6 +90,13 @@ export type LogContinuation =
   | { kind: 'native-resume'; predecessorRunId: string }
   | { kind: 'fresh-retry'; predecessorRunId: string };
 
+export interface AgentWorkflowTarget {
+  rootId: string;
+  runId: string;
+  cardId: string;
+  role: string | null;
+}
+
 export interface AgentRun {
   id: string;
   requestId: string | null;
@@ -104,6 +111,8 @@ export interface AgentRun {
   cwd: string | null;
   target: string | null;
   rootTargets: string[];
+  /** Workflow ancestry for a gate target; the direct target remains authoritative. */
+  workflow: AgentWorkflowTarget | null;
   participants: IdentityAttribution[];
   continuation: LogContinuation | null;
   createdAt: string;

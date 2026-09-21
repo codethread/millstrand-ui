@@ -36,6 +36,7 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     cwd: '/workspace',
     target: null,
     rootTargets: [],
+    workflow: null,
     participants: [],
     continuation: null,
     createdAt: '2026-09-18',
@@ -143,6 +144,31 @@ describe('card agent roster', () => {
       tasks: [task('child', null)],
     });
     expect(cardLogAgentStatus(roster[0]!)).toBe('Queued');
+  });
+
+  it('retains settled workflow reviewers as past participation with their role', () => {
+    const reviewerRun = run({
+      alias: 'reviewer',
+      target: 'review-gate',
+      status: 'stopped',
+      substatus: 'completed',
+      workflow: {
+        rootId: 'land-root',
+        runId: 'land-auto-feature',
+        cardId: 'feature',
+        role: 'reviewer',
+      },
+    });
+    const roster = cardLogAgents(
+      [identity('gentle-ready-fox', [reviewerRun])],
+      null,
+      'feature',
+      [],
+    );
+
+    expect(roster[0]).toMatchObject({ relation: 'target', group: 'history', run: reviewerRun });
+    expect(cardLogAgentContext(roster[0]!)).toBe('Workflow reviewer');
+    expect(cardLogAgentStatus(roster[0]!)).toBe('Completed');
   });
 
   it('retains root-targeted and completed feature runs without inventing ownership', () => {

@@ -121,7 +121,9 @@ export function cardLogRoster(
 export function cardLogAgentContext(agent: CardLogAgent): string {
   const relationship =
     agent.relation === 'target'
-      ? 'Linked run'
+      ? agent.run?.workflow?.role
+        ? `Workflow ${agent.run.workflow.role}`
+        : 'Linked run'
       : agent.relation === 'owner'
         ? 'Feature owner'
         : 'Task owner';

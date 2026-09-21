@@ -83,9 +83,13 @@ it('runs one bounded selective graph read without interpolating the workspace', 
   expect(sql).toContain('LIMIT 10001');
   expect(sql).toContain('LIMIT 50001');
   expect(sql).toContain("marker.key = 'harness/run'");
+  expect(sql).toContain("marker.key = 'workflow/form'");
+  expect(sql).toContain("workflow_parent.key = 'workflow/form'");
   expect(sql).toContain("attributes.key LIKE 'kanban.label/%'");
   expect(sql).not.toContain(workspace);
   expect(parameters).toContain('kanban/ownership-claim');
+  expect(parameters).toContain('workflow/context');
+  expect(parameters).toContain('review/role');
   expect(parameters).toContain('performed');
   expect(parameters).toContain('serves-root');
   expect(parameters).toContain('depends-on');
