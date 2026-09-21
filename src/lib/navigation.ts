@@ -11,6 +11,7 @@ import { useAgentPromptStore } from '../agent-prompt-store';
 import type { CardType, Lane, Priority, SavedView, ViewFilter } from '../../shared/api';
 import { emptyFilter, type WorkspaceView } from './board';
 import {
+  allGraphCardsSearch,
   manualFilterSearch,
   parseDashboardSearch,
   savedViewSearch,
@@ -191,6 +192,7 @@ export function useDashboardActions() {
         agentRun: null,
         graphDependencies: kind === 'expand' ? { kind, ids: [id] } : { kind, id },
       }),
+    showAllGraphCards: () => updateCurrent(allGraphCardsSearch),
     setGraphDependencies: (graphDependencies: DependencySelection) => update({ graphDependencies }),
     toggleGraphDependencies: (id: string) =>
       updateCurrent((current) => ({
@@ -209,7 +211,7 @@ export function useDashboardActions() {
         agentRun: null,
       }),
     setGraphRoot: (graphRoot: string | null) =>
-      update({ graphRoot, graphDependencies: { kind: 'expand', ids: [] } }),
+      update({ graphRoot, graphDependencies: { kind: 'expand', ids: [] }, issue: null }),
     setDetailTab: (detailTab: DetailTab) => update({ detailTab }),
     setAgentQuery: (agentQuery: string) => update({ agentQuery }, true),
     resetAgentFilters: () => update({ agentQuery: '', activeAgentsOnly: false }),

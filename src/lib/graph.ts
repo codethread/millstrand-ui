@@ -1,6 +1,6 @@
 import { graphlib, layout as runLayout } from '@dagrejs/dagre';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
-import type { Card, CardGraph, GraphNode, JsonValue } from '../../shared/api';
+import type { Card, CardGraph, DependencyCounts, GraphNode, JsonValue } from '../../shared/api';
 
 export type DependencySelection =
   { kind: 'expand'; ids: string[] } | { kind: 'focus'; id: string | null };
@@ -9,9 +9,10 @@ export type IssueGraphNode = Node<
   {
     item: GraphNode;
     status: string;
-    dependencies: { incoming: number; outgoing: number } | null;
+    dependencies: DependencyCounts | null;
     context: 'hierarchy' | 'dependency' | 'focus';
     expanded: boolean;
+    hierarchyFocus: boolean;
   },
   'issue'
 >;
@@ -129,6 +130,7 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
           dependencies: null,
           context: 'hierarchy',
           expanded: false,
+          hierarchyFocus: false,
         },
       };
     }),
@@ -215,7 +217,29 @@ export function dependencyLayout(
               ? 'hierarchy'
               : 'dependency',
         expanded: roots.has(node.id),
+        hierarchyFocus: !focused && node.id === base.rootId,
       },
     })),
   };
+}
+
+/** Card focus loads the owning epic, while the URL retains the selected card. */
+export function graphHierarchyRoot(id: string | null, cards: Card[]): string | null {
+  const card = cards.find((item) => item.id === id);
+  return card?.epicId ?? id;
+}
+
+/** Tasks focus through their nearest card; unrelated work has no invented hierarchy. */
+export function graphFocusCard(id: string, graph: CardGraph, cards: Card[]): string | null {
+  const cardIds = new Set(cards.map((card) => card.id));
+  const pending = [id];
+  const seen = new Set<string>();
+  for (const current of pending) {
+    if (cardIds.has(current)) return current;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    for (const edge of graph.edges)
+      if (edge.kind === 'parent-of' && edge.to === current) pending.push(edge.from);
+  }
+  return null;
 }

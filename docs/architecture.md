@@ -379,3 +379,22 @@ poll via `src/hooks/use-graph.ts`, in addition to the existing focused subtree p
 edges, retaining closed neighbours, and decorates nodes with workspace-wide counts
 and hierarchy/added/focus roles. Graph menu actions are URL navigation, not data
 mutations or local copies. See `docs/graph.md` for both demos and browser evidence.
+
+### Card dependency counts and hierarchy focus
+
+`Card.dependencies` is the required incoming/outgoing projection from
+`ProvenanceIndex.dependencies`. The existing bounded provenance SQL also reads
+`depends-on` edges incident to its candidates; one-pass deduplication indexes counts
+without requiring neighbour hydration. `parseCard` hydrates both board and detail
+contracts. Existing board/detail/overview poll owners and failure retention apply;
+there are no count-specific requests or mirrored stores. `CardDependencyCounts`
+in `src/components/dependency-counts.tsx` is a pure-prop shared leaf across card
+surfaces with a Radix popover explaining arrow direction.
+
+For the Graph surface, `graphRoot` remains the selected card; `graphHierarchyRoot`
+in `src/lib/graph.ts` resolves its epic to the existing `['graph', workspace, id]`
+key in `useGraphSource`. Graph-local task inspection prompts against that actual
+query root, not the selected sibling feature. `graphFocusCard` follows parent edges
+only for task focus. **Show all cards** is a Router action that clears scope and
+filters but preserves completed visibility. Graph dependency data keeps its existing
+surface-lifetime poll owner and counts; no cache key or endpoint is renamed.

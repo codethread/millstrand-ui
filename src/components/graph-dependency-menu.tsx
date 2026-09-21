@@ -6,12 +6,14 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
 } from './ui/context-menu';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 
 export interface DependencyAction {
@@ -23,14 +25,20 @@ export interface DependencyAction {
 export function GraphDependencyMenu({
   children,
   action,
+  focus,
 }: {
   children: ReactNode;
   action: DependencyAction;
+  focus: DependencyAction;
 }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent onClick={(event) => event.stopPropagation()}>
+        <ContextMenuItem disabled={focus.disabled} onSelect={focus.run}>
+          {focus.label}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
         <ContextMenuItem disabled={action.disabled} onSelect={action.run}>
           {action.label}
         </ContextMenuItem>
@@ -39,7 +47,15 @@ export function GraphDependencyMenu({
   );
 }
 
-export function GraphDependencyButton({ id, action }: { id: string; action: DependencyAction }) {
+export function GraphDependencyButton({
+  id,
+  action,
+  focus,
+}: {
+  id: string;
+  action: DependencyAction;
+  focus: DependencyAction;
+}) {
   return (
     <div className="nodrag nopan">
       <DropdownMenu>
@@ -47,13 +63,17 @@ export function GraphDependencyButton({ id, action }: { id: string; action: Depe
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Dependency actions for ${id}`}
+            aria-label={`Graph actions for ${id}`}
             onClick={(event) => event.stopPropagation()}
           >
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
+          <DropdownMenuItem disabled={focus.disabled} onSelect={focus.run}>
+            {focus.label}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem disabled={action.disabled} onSelect={action.run}>
             {action.label}
           </DropdownMenuItem>

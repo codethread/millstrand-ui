@@ -159,6 +159,7 @@ const card: Card = {
   lane: 'in_production',
   priority: 'p2',
   epicId: null,
+  dependencies: { incoming: 0, outgoing: 0 },
   owner: null,
   reporter: null,
   ownership: { current: null, history: [] },

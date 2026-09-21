@@ -6,7 +6,7 @@ board-error feedback stay in the shell. An empty filtered board still mounts the
 graph toolbar, so a focused graph is reachable.
 
 - `src/hooks/use-graph.ts`: `useGraphSource` composes board `graphFromCards` or
-  the focused `useGraph` query (`graphQueryOptions` in `src/lib/api/cards.ts`).
+  the owning epic’s focused `useGraph` query (or the standalone card’s query) (`graphQueryOptions` in `src/lib/api/cards.ts`).
   The mounted graph is the focused query's 10-second poll owner. There is no new
   key, cache, timer or mirrored snapshot. `GraphSource` distinguishes loading,
   unavailable, and successful data with nullable refresh error. A failed refresh
@@ -131,3 +131,61 @@ changed. No uncaught browser errors.
 ![In-place expansion](evidence/graph-dependencies/expanded-dark.png)
 ![Focused direct dependencies](evidence/graph-dependencies/focused-dark.png)
 ![Narrow light theme](evidence/graph-dependencies/focused-narrow-light.png)
+
+## Hierarchy focus and counts on all card surfaces (s0c9b)
+
+Use **Focus epic hierarchy** from a graph node’s right-click or **…** menu,
+from Board/Outline card menus, or choose **Focus card** in the graph toolbar.
+The URL retains the chosen card (`graphRoot`); `graphHierarchyRoot` resolves its
+owning epic for the existing subtree query. The graph shows that epic’s family,
+including sibling features and tasks, with the chosen card outlined and labelled
+**Hierarchy focus**. A standalone card loads its own task subtree. Task nodes
+focus through their nearest card; unrelated non-card work cannot invent an epic.
+The focused card and its ancestors remain visible even when closed; other closed
+work still follows **Include completed**.
+
+**Show all cards** clears the hierarchy focus, dependency exploration, search,
+label/status/type/priority filters and saved-view selection. It preserves
+**Include completed**. The existing **Fit View** control fits the visible graph.
+Focus and dependency exploration are distinct: **Add / hide in place** adds direct
+neighbours to the hierarchy; **Dependencies only** replaces it with the one-hop
+neighbourhood. Both remain explicit opt-in. Back/reload restore the selected scope.
+
+`Card.dependencies` contains required `{ incoming, outgoing }` counts from the
+existing persisted board/detail read. `ProvenanceIndex` indexes unique `depends-on`
+edges in one pass, including incident edges to endpoints outside the hydrated
+card/task set and closed neighbours. Parent edges do not count. The existing SQL
+projection now allowlists `depends-on`; no extra endpoints, cache keys, per-card
+requests, or poll owners are introduced for these badges. Board/overview health
+continues to mark retained data after a failed refresh.
+
+`CardDependencyCounts` is a query-independent shared leaf used by Board, Outline
+(including epic headings), Completed, overview card/target rows, and issue details.
+**↑** is outgoing **Depends on**, **↓** incoming **Required by**. Zero is explicit;
+click/tap or keyboard-activate the badge for an accessible explanation. Graph keeps
+its full-text counts. No data mutations are attached to these controls.
+
+### Verification
+
+`pnpm quality`: 369 tests, strict TypeScript, zero-warning Oxlint, formatting and
+build pass. Added coverage for epic/standalone/task focus, selected closed card
+retention, direction/deduplication/external-endpoint counts, and accessible zero
+badges. Existing graph and persisted-read safety tests still pass.
+
+Browser checks on real Codethread data:
+
+- `pbjt3` resolves to epic `wdp2p`: all 21 family nodes with completed work enabled;
+  expansion adds its one direct external dependent (22). With completed hidden,
+  the selected closed card and closed epic remain (two), then expansion gives three.
+- Show all cards restores the broad graph and clears search; Back restores focus
+  and expansion. Reload, standalone focus, keyboard menu activation, card inspection
+  and dependency expansion were exercised. A failed epic query retained the same
+  viewport and graph with visible last-known feedback; the abort route was removed.
+- `hqqrk` displays **↑4 ↓1** in Board, Outline and details, consistent with Graph.
+  Completed and overview surfaces also render counts. Badge popovers work by pointer
+  and Enter; 390px Outline/Graph layouts have no horizontal document overflow.
+  Desktop/light and narrow/dark evidence below. No uncaught browser errors.
+
+![Hierarchy plus direct dependencies](evidence/graph-focus/hierarchy-and-dependencies.png)
+![Board dependency counts](evidence/graph-focus/board-counts.png)
+![Narrow Outline counts and explanation](evidence/graph-focus/outline-counts-narrow.png)

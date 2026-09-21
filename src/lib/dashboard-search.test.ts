@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import {
+  allGraphCardsSearch,
   manualFilterSearch,
   parseDashboardSearch,
   pinnableWorkspaceId,
@@ -272,4 +273,19 @@ it('round trips both dependency demos and resets exploration on filter changes',
   expect(
     parseDashboardSearch({ graphDependencies: { kind: 'focus', ids: [] } }).graphDependencies,
   ).toEqual({ kind: 'expand', ids: [] });
+});
+
+it('shows all graph cards by clearing scope and filters but retaining completed visibility', () => {
+  const search = parseDashboardSearch({
+    graphRoot: 'feature',
+    graphDependencies: { kind: 'expand', ids: ['outside'] },
+    activeViewId: 'saved',
+    filter: { query: 'narrow', lanes: ['claimed'], terms: { web: 'include' }, includeClosed: true },
+  });
+  expect(allGraphCardsSearch(search)).toEqual({
+    graphRoot: null,
+    graphDependencies: { kind: 'expand', ids: [] },
+    activeViewId: null,
+    filter: { ...parseDashboardSearch({}).filter, includeClosed: true },
+  });
 });

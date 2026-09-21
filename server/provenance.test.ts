@@ -1,3 +1,4 @@
+import { parseCard } from './parse.ts';
 import { describe, expect, it } from 'vitest';
 import { ProvenanceIndex } from './provenance.ts';
 
@@ -156,4 +157,21 @@ describe('durable attribution projection', () => {
     });
     expect(() => conflicting.reporter('card')).toThrow('conflicts with raw identity');
   });
+});
+
+it('counts direct incoming/outgoing dependencies on cards regardless of neighbour state or hydration', () => {
+  const row = strand('card', { 'kanban/card': 'true' });
+  const projection = new ProvenanceIndex({
+    strands: [row, strand('closed', { 'kanban/card': 'true' }, 'closed')],
+    edges: [
+      edge('card', 'closed', 'depends-on'),
+      edge('card', 'external-work', 'depends-on'),
+      edge('card', 'external-work', 'depends-on'),
+      edge('dependent', 'card', 'depends-on'),
+      edge('card', 'child', 'parent-of'),
+    ],
+  });
+  expect(parseCard(row, projection).dependencies).toEqual({ incoming: 1, outgoing: 2 });
+  expect(projection.dependencies('closed')).toEqual({ incoming: 1, outgoing: 0 });
+  expect(projection.dependencies('child')).toEqual({ incoming: 0, outgoing: 0 });
 });

@@ -88,6 +88,7 @@ it('runs one bounded selective graph read without interpolating the workspace', 
   expect(parameters).toContain('kanban/ownership-claim');
   expect(parameters).toContain('performed');
   expect(parameters).toContain('serves-root');
+  expect(parameters).toContain('depends-on');
   expect(parameters).not.toContain('harness/env');
   expect(parameters).not.toContain('harness/prompt');
 });

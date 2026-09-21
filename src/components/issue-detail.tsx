@@ -1,3 +1,4 @@
+import { CardDependencyCounts } from './dependency-counts';
 import { useState } from 'react';
 import { ArrowUpRight, Check, Clock3, Copy, GitBranch, Layers, Network } from 'lucide-react';
 import { Markdown } from './markdown';
@@ -191,6 +192,7 @@ export function IssueDetail({ id }: { id: string }) {
                   target={{ kind: 'card', cardId: id, id, title: detail.card.title }}
                 />
                 <StatusBadge status={detail.card.lane} />
+                <CardDependencyCounts counts={detail.card.dependencies} />
                 <span className="detail-meta-separator" />
                 <IssueAgents owner={detail.card.owner} target={detail.card.id} />
                 <span className="detail-meta-separator" />

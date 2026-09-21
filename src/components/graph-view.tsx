@@ -2,7 +2,13 @@ import { useMemo } from 'react';
 import { Network } from 'lucide-react';
 import type { Card } from '../../shared/api';
 import { useDependencies, useGraphSource } from '../hooks/use-graph';
-import { dependencyLayout, type GraphSource, type GraphLayout } from '../lib/graph';
+import {
+  dependencyLayout,
+  graphFocusCard,
+  graphHierarchyRoot,
+  type GraphSource,
+  type GraphLayout,
+} from '../lib/graph';
 import {
   useDashboardActions,
   useGraphDependencies,
@@ -19,8 +25,13 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
   const selection = useGraphDependencies();
   const dependencies = useDependencies();
   const dependencyGraph = dependencies.data ?? null;
-  const { setGraphRoot, openCard, setGraphDependencies, toggleGraphDependencies } =
-    useDashboardActions();
+  const {
+    setGraphRoot,
+    openCard,
+    setGraphDependencies,
+    toggleGraphDependencies,
+    showAllGraphCards,
+  } = useDashboardActions();
   const source = useGraphSource(root, cards, allCards);
   const graph = source.kind === 'ready' ? source.graph : null;
   const layout = useMemo(
@@ -29,6 +40,20 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
         ? null
         : dependencyLayout(graph, dependencyGraph, selection, filter.includeClosed),
     [graph, dependencyGraph, selection, filter.includeClosed],
+  );
+  const focusTargets = useMemo(
+    () =>
+      graph === null || layout?.kind !== 'ready'
+        ? {}
+        : Object.fromEntries(
+            layout.nodes
+              .map((node) => node.data.item)
+              .flatMap((node) => {
+                const target = graphFocusCard(node.id, graph, allCards);
+                return target === null ? [] : [[node.id, target]];
+              }),
+          ),
+    [graph, layout, allCards],
   );
   return (
     <div className="graph-workspace">
@@ -43,13 +68,13 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
           )}
         </div>
         <label>
-          Focus
+          Focus card
           <select
             aria-label="Graph focus"
             value={root ?? ''}
             onChange={(event) => setGraphRoot(event.target.value || null)}
           >
-            <option value="">All filtered issues</option>
+            <option value="">All filtered cards</option>
             {allCards.map((card) => (
               <option key={card.id} value={card.id}>
                 {card.id} · {card.title}
@@ -57,20 +82,28 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
             ))}
           </select>
         </label>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={showAllGraphCards}
+          title="Clear hierarchy focus, dependencies and filters; completed visibility stays unchanged"
+        >
+          Show all cards
+        </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-        <span>Dependency demo</span>
+        <span>Dependencies</span>
         <Button
           size="sm"
           variant={selection.kind === 'expand' ? 'secondary' : 'ghost'}
           onClick={() =>
             setGraphDependencies({
               kind: 'expand',
-              ids: selection.kind === 'focus' && selection.id ? [selection.id] : [],
+              ids: selection.kind === 'expand' ? selection.ids : selection.id ? [selection.id] : [],
             })
           }
         >
-          1 · Add / hide in place
+          Add / hide in place
         </Button>
         <Button
           size="sm"
@@ -82,7 +115,7 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
             })
           }
         >
-          2 · Focus one card
+          Dependencies only
         </Button>
         <Button
           size="sm"
@@ -142,11 +175,13 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
         <GraphCanvas
           key={JSON.stringify([root, filter, selection])}
           layout={layout}
-          root={root}
+          root={graphHierarchyRoot(root, allCards)}
           openCard={openCard}
           dependencyMode={selection.kind}
           promptIds={graph?.nodes.map((node) => node.id) ?? []}
           toggleDependencies={toggleGraphDependencies}
+          focusTargets={focusTargets}
+          focusHierarchy={setGraphRoot}
         />
       ) : layout !== null ? (
         <GraphEmpty layout={layout} />

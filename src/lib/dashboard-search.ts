@@ -167,6 +167,16 @@ export function pinnableWorkspaceId(
   );
 }
 
+/** Leave hierarchy/dependency focus without retaining hidden board narrowing. */
+export function allGraphCardsSearch(search: DashboardSearch): Partial<DashboardSearch> {
+  return {
+    graphRoot: null,
+    graphDependencies: { kind: 'expand', ids: [] },
+    filter: { ...emptyFilter(), includeClosed: search.filter.includeClosed },
+    activeViewId: null,
+  };
+}
+
 /** Manual filter edits no longer represent the selected saved view snapshot. */
 export function manualFilterSearch(
   search: DashboardSearch,

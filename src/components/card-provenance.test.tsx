@@ -11,6 +11,7 @@ const card: Card = {
   lane: 'claimed',
   priority: 'p2',
   epicId: null,
+  dependencies: { incoming: 0, outgoing: 0 },
   owner: 'alpha',
   reporter: { identity: 'reporter', status: 'resolved', identityStrandIds: ['reporter-id'] },
   ownership: {

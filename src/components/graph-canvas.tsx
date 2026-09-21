@@ -23,13 +23,16 @@ import {
 } from './graph-dependency-menu';
 import '@xyflow/react/dist/style.css';
 
-type InteractiveGraphNode = Node<IssueGraphNode['data'] & { action: DependencyAction }, 'issue'>;
+type InteractiveGraphNode = Node<
+  IssueGraphNode['data'] & { action: DependencyAction; focus: DependencyAction },
+  'issue'
+>;
 
 function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
   return (
-    <GraphDependencyMenu action={data.action}>
+    <GraphDependencyMenu action={data.action} focus={data.focus}>
       <div
-        className={`graph-node graph-kind-${data.item.kind} ${data.context === 'dependency' ? 'border-dashed! border-2! border-amber-500/60!' : 'border-2! border-violet-400/60!'} ${data.context === 'focus' ? 'ring-2 ring-violet-500 ring-offset-2 ring-offset-background' : ''}`}
+        className={`graph-node graph-kind-${data.item.kind} ${data.context === 'dependency' ? 'border-dashed! border-2! border-amber-500/60!' : 'border-2! border-violet-400/60!'} ${data.context === 'focus' || data.hierarchyFocus ? 'outline-2 outline-violet-500 outline-offset-2' : ''}`}
       >
         <Handle type="target" position={Position.Left} />
         <Handle type="source" position={Position.Left} id="dependency-source" />
@@ -48,7 +51,9 @@ function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
               ? 'Added dependency'
               : data.context === 'focus'
                 ? 'Dependency focus'
-                : 'Hierarchy'}
+                : data.hierarchyFocus
+                  ? 'Hierarchy focus'
+                  : 'Hierarchy'}
           </span>
         </div>
         <div className="mt-2 flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
@@ -67,7 +72,7 @@ function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
               </>
             )}
           </span>
-          <GraphDependencyButton id={data.item.id} action={data.action} />
+          <GraphDependencyButton id={data.item.id} action={data.action} focus={data.focus} />
         </div>
         <Handle type="source" position={Position.Right} />
         <Handle type="target" position={Position.Right} id="dependency-target" />
@@ -85,6 +90,8 @@ export function GraphCanvas({
   dependencyMode,
   promptIds,
   toggleDependencies,
+  focusTargets,
+  focusHierarchy,
 }: {
   layout: ReadyGraphLayout;
   root: string | null;
@@ -92,6 +99,8 @@ export function GraphCanvas({
   dependencyMode: 'expand' | 'focus';
   promptIds: string[];
   toggleDependencies: (id: string) => void;
+  focusTargets: Record<string, string>;
+  focusHierarchy: (id: string) => void;
 }) {
   const nodes = useMemo(
     () =>
@@ -99,6 +108,14 @@ export function GraphCanvas({
         ...node,
         data: {
           ...node.data,
+          focus: {
+            label: 'Focus epic hierarchy',
+            disabled: focusTargets[node.id] === undefined,
+            run: () => {
+              const target = focusTargets[node.id];
+              if (target !== undefined) focusHierarchy(target);
+            },
+          },
           action: {
             label: node.data.expanded
               ? 'Hide dependencies'
@@ -113,7 +130,7 @@ export function GraphCanvas({
           },
         },
       })),
-    [layout.nodes, dependencyMode, toggleDependencies],
+    [layout.nodes, dependencyMode, toggleDependencies, focusTargets, focusHierarchy],
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = layout.nodes.find((node) => node.id === selectedId)?.data.item ?? null;
@@ -149,7 +166,11 @@ export function GraphCanvas({
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable
-        onNodeClick={(_event, node) => selectNode(node.data.item)}
+        onNodeClick={(event, node) => {
+          if (event.target instanceof Element && event.target.closest('button, [role=menu]'))
+            return;
+          selectNode(node.data.item);
+        }}
         onPaneClick={() => setSelectedId(null)}
         proOptions={{ hideAttribution: true }}
       >

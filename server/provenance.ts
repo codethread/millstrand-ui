@@ -4,6 +4,7 @@ import type {
   AgentRun,
   AgentWork,
   CardOwnership,
+  DependencyCounts,
   IdentityAttribution,
   LogContinuation,
   OwnershipClaim,
@@ -34,6 +35,7 @@ const edgeKinds = [
   'resumes',
   'continues',
   'parent-of',
+  'depends-on',
 ] as const;
 const edgeSchema = z.object({
   from_strand_id: z.string(),
@@ -129,11 +131,25 @@ export class ProvenanceIndex {
   private readonly identitiesByFriendly = new Map<string, IdentityRecord[]>();
   private readonly runs: RunRecord[];
   private readonly cardOwnership = new Map<string, CardOwnership>();
+  private readonly dependencyCounts = new Map<string, DependencyCounts>();
 
   constructor(value: unknown) {
     const snapshot = parseSchema(snapshotSchema, value, 'persisted provenance');
     this.strands = new Map(snapshot.strands.map((strand) => [strand.id, strand]));
     this.edges = snapshot.edges;
+    const dependencyPairs = new Set<string>();
+    for (const edge of this.edges) {
+      if (edge.edge_type !== 'depends-on') continue;
+      const pair = JSON.stringify([edge.from_strand_id, edge.to_strand_id]);
+      if (dependencyPairs.has(pair)) continue;
+      dependencyPairs.add(pair);
+      const from = this.dependencyCounts.get(edge.from_strand_id) ?? { incoming: 0, outgoing: 0 };
+      this.dependencyCounts.set(edge.from_strand_id, from);
+      from.outgoing += 1;
+      const to = this.dependencyCounts.get(edge.to_strand_id) ?? { incoming: 0, outgoing: 0 };
+      this.dependencyCounts.set(edge.to_strand_id, to);
+      to.incoming += 1;
+    }
     this.identities = snapshot.strands
       .filter((strand) => strand.attributes['identity/session'] === 'true')
       .map((strand) => ({
@@ -246,6 +262,10 @@ export class ProvenanceIndex {
     const ownership = { current: ordered.at(-1) ?? null, history: ordered };
     this.cardOwnership.set(target, ownership);
     return ownership;
+  }
+
+  dependencies(id: string): DependencyCounts {
+    return this.dependencyCounts.get(id) ?? { incoming: 0, outgoing: 0 };
   }
 
   cardRows(): unknown[] {

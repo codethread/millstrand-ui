@@ -284,11 +284,15 @@ and keeps production observation work available in workspace views.
 Choose a graph focus to load one card's task subtree and dependencies. Solid arrows
 point from parent to child; dashed arrows point from a dependent to its prerequisite.
 Right-click a graph card or use **…** to explicitly view its direct dependencies.
-Compare **Add / hide in place** (accumulate neighbourhoods) with **Focus one card**
+Use **Focus epic hierarchy** to view a card’s epic, sibling features and tasks;
+**Show all cards** clears focus and filters while preserving completed visibility.
+Compare **Add / hide in place** (accumulate neighbourhoods) with **Dependencies only**
 (replace the neighbourhood). Graph cards show workspace-wide **Depends on** and
 **Required by** counts. Solid borders mark the original hierarchy; dashed amber
 borders mark added cards, including closed dependencies. Board/Outline menus can
-open either demo directly. See [graph demos and screenshots](docs/graph.md).
+open either dependency view or hierarchy focus directly. Board, Outline, Completed,
+overview and details also show compact **↑** prerequisite / **↓** dependent counts;
+activate the badge for the explanation. See [graph guide and screenshots](docs/graph.md).
 Scroll to zoom, drag to pan, and click a node to inspect it. Views above 150 nodes
 ask you to narrow the filters or choose a smaller focus. Changing a filter or
 saved view returns the graph to the filtered board.

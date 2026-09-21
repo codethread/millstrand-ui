@@ -1,3 +1,4 @@
+import { CardDependencyCounts } from './dependency-counts';
 import {
   ArrowUpRight,
   CalendarDays,
@@ -121,24 +122,29 @@ function CompletedFilterSummary() {
 function EntryLink({ entry }: { entry: CompletedEntry }) {
   const actions = useDashboardActions();
   return (
-    <button
-      className="group flex w-full min-w-0 items-start gap-3 text-left"
-      onClick={() => actions.openCard(entry.card.id)}
-    >
-      <span className="mt-0.5 rounded-full bg-primary/10 p-1 text-primary">
-        <Check className="size-3" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block leading-relaxed font-medium break-words group-hover:text-primary">
-          {entry.card.title}
+    <div>
+      <button
+        className="group flex w-full min-w-0 items-start gap-3 text-left"
+        onClick={() => actions.openCard(entry.card.id)}
+      >
+        <span className="mt-0.5 rounded-full bg-primary/10 p-1 text-primary">
+          <Check className="size-3" />
         </span>
-        <span className="mt-1 block text-xs text-muted-foreground">
-          {entry.card.id} · {entry.card.type}
-          {entry.parent && ` · ${entry.parent.title}`}
+        <span className="min-w-0 flex-1">
+          <span className="block leading-relaxed font-medium break-words group-hover:text-primary">
+            {entry.card.title}
+          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            {entry.card.id} · {entry.card.type}
+            {entry.parent && ` · ${entry.parent.title}`}
+          </span>
         </span>
-      </span>
-      <ArrowUpRight className="mt-1 size-4 shrink-0 text-muted-foreground" />
-    </button>
+        <ArrowUpRight className="mt-1 size-4 shrink-0 text-muted-foreground" />
+      </button>
+      <div className="mt-2 pl-9">
+        <CardDependencyCounts counts={entry.card.dependencies} />
+      </div>
+    </div>
   );
 }
 

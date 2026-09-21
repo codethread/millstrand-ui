@@ -1,3 +1,4 @@
+import { CardDependencyCounts } from './dependency-counts';
 import type { ReactNode } from 'react';
 import { ArrowUpRight, Bell, Bot, Clock3, Inbox } from 'lucide-react';
 import type { CockpitSection } from '../cockpit-store';
@@ -60,61 +61,77 @@ function CardRow({ item }: { item: CockpitCard }) {
   const { inspectOverviewCard } = useDashboardActions();
   const reason = item.reason;
   return (
-    <button
-      onClick={() => inspectOverviewCard(item.workspace.id, item.card.id)}
-      disabled={item.workspace.status !== 'running'}
-      className="block w-full border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-accent/40 disabled:opacity-60"
-    >
-      <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]">
-        <span className="font-medium text-primary">{item.workspace.name}</span>
-        <span className="font-mono text-muted-foreground">{item.card.id}</span>
-        <span className="ml-auto text-[10px] uppercase text-muted-foreground">
-          {item.card.priority}
-        </span>
-        <ArrowUpRight className="size-3 text-muted-foreground" />
+    <article className="border-b border-border last:border-b-0">
+      <button
+        onClick={() => inspectOverviewCard(item.workspace.id, item.card.id)}
+        disabled={item.workspace.status !== 'running'}
+        className="block w-full px-4 pt-4 pb-2 text-left transition-colors hover:bg-accent/40 disabled:opacity-60"
+      >
+        <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="font-medium text-primary">{item.workspace.name}</span>
+          <span className="font-mono text-muted-foreground">{item.card.id}</span>
+          <span className="ml-auto text-[10px] uppercase text-muted-foreground">
+            {item.card.priority}
+          </span>
+          <ArrowUpRight className="size-3 text-muted-foreground" />
+        </div>
+        <h3 className="mb-1 break-words text-sm font-semibold leading-relaxed">
+          {item.card.title}
+        </h3>
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span
+            className={cn(
+              'rounded px-2 py-0.5',
+              reason
+                ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+                : 'bg-accent text-primary',
+            )}
+          >
+            {reason ?? 'In review'}
+          </span>
+          {item.card.owner && <span className="text-muted-foreground">{item.card.owner}</span>}
+          {item.stale && <span className="text-destructive">Last-known card</span>}
+        </div>
+      </button>
+      <div className="px-3 pb-2">
+        <CardDependencyCounts counts={item.card.dependencies} />
       </div>
-      <h3 className="mb-1 break-words text-sm font-semibold leading-relaxed">{item.card.title}</h3>
-      <div className="flex flex-wrap items-center gap-2 text-[11px]">
-        <span
-          className={cn(
-            'rounded px-2 py-0.5',
-            reason
-              ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
-              : 'bg-accent text-primary',
-          )}
-        >
-          {reason ?? 'In review'}
-        </span>
-        {item.card.owner && <span className="text-muted-foreground">{item.card.owner}</span>}
-        {item.stale && <span className="text-destructive">Last-known card</span>}
-      </div>
-    </button>
+    </article>
   );
 }
 
 function QuietRow({ agent }: { agent: CockpitAgent }) {
   const { inspectOverviewAgent } = useDashboardActions();
   return (
-    <button
-      disabled={agent.workspace.status !== 'running'}
-      onClick={() => inspectOverviewAgent(agent.workspace.id, agent.identity.id)}
-      className="block w-full min-w-0 border-b border-border px-4 py-4 text-left transition-colors last:border-b-0 hover:bg-accent/40 disabled:opacity-60"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <Clock3 className="size-4 shrink-0 text-amber-700 dark:text-amber-300" />
-        <strong className="min-w-0 flex-1 break-words text-sm">{agent.identity.id}</strong>
-        <Pulse pulse={agent.pulse} />
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">{agent.workspace.name} · process running</p>
+    <div className="border-b border-border last:border-b-0">
+      <button
+        disabled={agent.workspace.status !== 'running'}
+        onClick={() => inspectOverviewAgent(agent.workspace.id, agent.identity.id)}
+        className="block w-full min-w-0 px-4 py-4 text-left transition-colors hover:bg-accent/40 disabled:opacity-60"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Clock3 className="size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+          <strong className="min-w-0 flex-1 break-words text-sm">{agent.identity.id}</strong>
+          <Pulse pulse={agent.pulse} />
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {agent.workspace.name} · process running
+        </p>
+        {agent.target && (
+          <p className="mt-2 line-clamp-2 text-xs leading-relaxed">{agent.target.title}</p>
+        )}
+        <AgentLogHint
+          workspace={agent.workspace.id}
+          identityStrandId={agent.identity.strandId}
+          stale={agent.stale}
+        />
+      </button>
       {agent.target && (
-        <p className="mt-2 line-clamp-2 text-xs leading-relaxed">{agent.target.title}</p>
+        <div className="px-3 pb-2">
+          <CardDependencyCounts counts={agent.target.dependencies} />
+        </div>
       )}
-      <AgentLogHint
-        workspace={agent.workspace.id}
-        identityStrandId={agent.identity.strandId}
-        stale={agent.stale}
-      />
-    </button>
+    </div>
   );
 }
 
@@ -260,6 +277,11 @@ export function ActivityRail({ agents }: { agents: CockpitAgent[] }) {
               >
                 <span className="line-clamp-2">{agent.target.title}</span>
               </button>
+            )}
+            {agent.target && (
+              <div className="px-2 pb-1">
+                <CardDependencyCounts counts={agent.target.dependencies} />
+              </div>
             )}
             <AgentLogButton
               workspace={agent.workspace.id}

@@ -2,7 +2,13 @@ import { sorted } from '../../shared/array';
 import { describe, expect, it } from 'vitest';
 import type { Card, CardGraph, GraphNode } from '../../shared/api';
 import { emptyFilter, issueSurfaceContent } from './board';
-import { dependencyLayout, graphFromCards, layoutGraph } from './graph';
+import {
+  dependencyLayout,
+  graphFromCards,
+  graphHierarchyRoot,
+  graphFocusCard,
+  layoutGraph,
+} from './graph';
 
 function node(id: string, state = 'active'): GraphNode {
   return {
@@ -23,6 +29,7 @@ function card(id: string, epicId: string | null = null): Card {
     title: id,
     type: epicId === null ? 'epic' : 'feature',
     epicId,
+    dependencies: { incoming: 0, outgoing: 0 },
     state: 'active',
     lane: 'pending',
     priority: 'p2',
@@ -222,4 +229,39 @@ describe('explicit direct dependency exploration', () => {
     const reset = dependencyLayout(base, dependencies, { kind: 'focus', id: null }, false);
     expect(reset.kind === 'ready' && reset.nodes.map((n) => n.id)).toEqual(['root', 'task']);
   });
+});
+
+it('focuses a feature through its epic and a task through its owning card, not dependencies', () => {
+  const cards = [
+    card('epic'),
+    card('feature', 'epic'),
+    card('sibling', 'epic'),
+    { ...card('standalone'), type: 'feature' as const },
+  ];
+  const graph: CardGraph = {
+    rootId: 'epic',
+    nodes: [node('epic'), node('feature'), node('sibling'), node('task'), node('work')],
+    edges: [
+      { kind: 'parent-of', from: 'epic', to: 'feature' },
+      { kind: 'parent-of', from: 'epic', to: 'sibling' },
+      { kind: 'parent-of', from: 'feature', to: 'task' },
+      { kind: 'depends-on', from: 'feature', to: 'work' },
+    ],
+  };
+  expect(graphHierarchyRoot('feature', cards)).toBe('epic');
+  expect(graphHierarchyRoot('standalone', cards)).toBe('standalone');
+  expect(graphHierarchyRoot(null, cards)).toBeNull();
+  expect(graphFocusCard('task', graph, cards)).toBe('feature');
+  expect(graphFocusCard('work', graph, cards)).toBeNull();
+  expect(graphFocusCard('standalone', graph, cards)).toBe('standalone');
+  const focused = {
+    ...graph,
+    rootId: 'feature',
+    nodes: graph.nodes.map((n) => (n.id === 'feature' ? { ...n, state: 'closed' } : n)),
+  };
+  const result = dependencyLayout(focused, null, { kind: 'expand', ids: [] }, false);
+  if (result.kind !== 'ready') throw new Error('Expected layout');
+  expect(result.nodes.map((n) => n.id)).toContain('sibling');
+  expect(result.nodes.find((n) => n.id === 'feature')?.data.hierarchyFocus).toBe(true);
+  expect(result.nodes.find((n) => n.id === 'epic')?.data.hierarchyFocus).toBe(false);
 });

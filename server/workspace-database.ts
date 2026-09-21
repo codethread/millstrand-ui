@@ -105,6 +105,7 @@ const provenanceEdgeKinds = [
   'resumes',
   'continues',
   'parent-of',
+  'depends-on',
 ] as const;
 
 function placeholders(values: readonly string[]): string {

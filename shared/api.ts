@@ -49,6 +49,11 @@ export interface CardOwnership {
   history: OwnershipClaim[];
 }
 
+export interface DependencyCounts {
+  incoming: number;
+  outgoing: number;
+}
+
 export interface Card {
   id: string;
   title: string;
@@ -57,6 +62,7 @@ export interface Card {
   lane: Lane;
   priority: Priority;
   epicId: string | null;
+  dependencies: DependencyCounts;
   /** Convenience projection of ownership.current.owner.identity. */
   owner: string | null;
   reporter: IdentityAttribution | null;
