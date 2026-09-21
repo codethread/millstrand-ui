@@ -47,12 +47,7 @@ function CardMenuItems({ card, context }: { card: Card; context: boolean }) {
     <>
       <Label>Graph</Label>
       <Item onSelect={() => exploreGraph(card.id)}>Focus epic hierarchy</Item>
-      <Item onSelect={() => viewCardDependencies(card.id, 'expand')}>
-        View dependencies · add / hide
-      </Item>
-      <Item onSelect={() => viewCardDependencies(card.id, 'focus')}>
-        View dependencies · focused
-      </Item>
+      <Item onSelect={() => viewCardDependencies(card.id)}>View dependencies</Item>
       <Separator />
       <Label>Move to lane</Label>
       {lanes.map(({ id, title }) =>

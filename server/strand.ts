@@ -91,6 +91,7 @@ export class StrandData {
   private readonly agentDirectories = new ReadCache<AgentDirectory>();
   private readonly details = new ReadCache<CardDetail>();
   private readonly graphs = new ReadCache<CardGraph>();
+  private readonly dependencyGraphs = new ReadCache<CardGraph>();
   private readonly replies = new ReadCache<AgentReply>();
 
   private readonly reviewDirectories = new ReadCache<ReviewDirectory>();
@@ -421,6 +422,10 @@ export class StrandData {
     });
   }
 
+  dependencies(): Promise<CardGraph> {
+    return this.dependencyGraphs.get('dependencies', () => this.database.readDependencies());
+  }
+
   graph(id: string): Promise<CardGraph> {
     return this.graphs.get(id, async () => {
       await this.card(id);
@@ -457,6 +462,7 @@ export class StrandData {
       this.boards.clear();
       this.details.clear();
       this.graphs.clear();
+      this.dependencyGraphs.clear();
       this.agentDirectories.clear();
     }
   }

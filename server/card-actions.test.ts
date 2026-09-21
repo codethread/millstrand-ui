@@ -63,6 +63,7 @@ function mockBoard() {
     throw new Error(`Unexpected command ${JSON.stringify(op)}`);
   });
   const database = {
+    readDependencies: vi.fn(async () => ({ rootId: '', nodes: [], edges: [] })),
     readProvenance: vi.fn(async () => ({
       strands: cards.map((item) => ({
         ...item,
@@ -105,10 +106,13 @@ it('does not mutate a non-card or a card removed since the last poll', async () 
     }),
   ).toBe(true);
 });
-it('moves the card without touching children or assignment attributes', async () => {
+it('moves only the card and invalidates cached dependency metadata', async () => {
   const { database } = mockBoard();
   const data = new StrandData('/repo/.millstrand', database);
+  await data.dependencies();
   await data.changeCard('card1', { kind: 'move', lane: 'in_review' });
+  await data.dependencies();
+  expect(database.readDependencies).toHaveBeenCalledTimes(2);
   expect(exec.mock.calls.at(-1)?.[1]).toEqual([
     '--workspace',
     '/repo/.millstrand',
@@ -120,6 +124,7 @@ it('invalidates the board even when the command fails after a possible side effe
   const { database } = mockBoard();
   const data = new StrandData('/repo/.millstrand', database);
   await data.board();
+  await data.dependencies();
   // Validation reads the compact board, then hydrates it before the mutation times out.
   exec.mockResolvedValueOnce({ stdout: JSON.stringify({ cards: [card] }) });
   database.readProvenance.mockResolvedValueOnce({
@@ -128,6 +133,8 @@ it('invalidates the board even when the command fails after a possible side effe
   });
   exec.mockRejectedValueOnce(new Error('Timeout'));
   await expect(data.changeCard('card1', { kind: 'delete' })).rejects.toThrow('Timeout');
+  await data.dependencies();
+  expect(database.readDependencies).toHaveBeenCalledTimes(2);
   exec.mockResolvedValueOnce({ stdout: '{"cards":[]}' });
   expect((await data.board()).cards).toEqual([]);
 });

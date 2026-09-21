@@ -32,7 +32,7 @@ function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
   return (
     <GraphDependencyMenu action={data.action} focus={data.focus}>
       <div
-        className={`graph-node graph-kind-${data.item.kind} ${data.context === 'dependency' ? 'border-dashed! border-2! border-amber-500/60!' : 'border-2! border-violet-400/60!'} ${data.context === 'focus' || data.hierarchyFocus ? 'outline-2 outline-violet-500 outline-offset-2' : ''}`}
+        className={`graph-node graph-kind-${data.item.kind} ${data.context === 'dependency' ? 'border-dashed! border-2! border-amber-500/60!' : 'border-2! border-violet-400/60!'} ${data.context === 'hierarchy-focus' ? 'outline-2 outline-violet-500 outline-offset-2' : ''}`}
       >
         <Handle type="target" position={Position.Left} />
         <Handle type="source" position={Position.Left} id="dependency-source" />
@@ -49,28 +49,20 @@ function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
           <span>
             {data.context === 'dependency'
               ? 'Added dependency'
-              : data.context === 'focus'
-                ? 'Dependency focus'
-                : data.hierarchyFocus
-                  ? 'Hierarchy focus'
-                  : 'Hierarchy'}
+              : data.context === 'hierarchy-focus'
+                ? 'Hierarchy focus'
+                : 'Hierarchy'}
           </span>
         </div>
         <div className="mt-2 flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
           <span>
-            {data.dependencies === null ? (
-              'Dependencies unavailable'
-            ) : (
-              <>
-                <span title="Outgoing dependencies: prerequisites">
-                  Depends on <b>{data.dependencies.outgoing}</b>
-                </span>
-                {' · '}
-                <span title="Incoming dependencies: dependents">
-                  Required by <b>{data.dependencies.incoming}</b>
-                </span>
-              </>
-            )}
+            <span title="Outgoing dependencies: prerequisites">
+              Depends on <b>{data.item.dependencies.outgoing}</b>
+            </span>
+            {' · '}
+            <span title="Incoming dependencies: dependents">
+              Required by <b>{data.item.dependencies.incoming}</b>
+            </span>
           </span>
           <GraphDependencyButton id={data.item.id} action={data.action} focus={data.focus} />
         </div>
@@ -87,7 +79,6 @@ export function GraphCanvas({
   layout,
   root,
   openCard,
-  dependencyMode,
   promptIds,
   toggleDependencies,
   focusTargets,
@@ -96,10 +87,9 @@ export function GraphCanvas({
   layout: ReadyGraphLayout;
   root: string | null;
   openCard: (id: string) => void;
-  dependencyMode: 'expand' | 'focus';
   promptIds: string[];
   toggleDependencies: (id: string) => void;
-  focusTargets: Record<string, string>;
+  focusTargets: ReadonlyMap<string, string>;
   focusHierarchy: (id: string) => void;
 }) {
   const nodes = useMemo(
@@ -110,27 +100,22 @@ export function GraphCanvas({
           ...node.data,
           focus: {
             label: 'Focus epic hierarchy',
-            disabled: focusTargets[node.id] === undefined,
+            disabled: focusTargets.get(node.id) === undefined,
             run: () => {
-              const target = focusTargets[node.id];
+              const target = focusTargets.get(node.id);
               if (target !== undefined) focusHierarchy(target);
             },
           },
           action: {
-            label: node.data.expanded
-              ? 'Hide dependencies'
-              : dependencyMode === 'expand'
-                ? 'View dependencies · add here'
-                : 'View dependencies · focus here',
+            label: node.data.expanded ? 'Hide dependencies' : 'View dependencies',
             disabled:
               !node.data.expanded &&
-              (node.data.dependencies === null ||
-                node.data.dependencies.incoming + node.data.dependencies.outgoing === 0),
+              node.data.item.dependencies.incoming + node.data.item.dependencies.outgoing === 0,
             run: () => toggleDependencies(node.id),
           },
         },
       })),
-    [layout.nodes, dependencyMode, toggleDependencies, focusTargets, focusHierarchy],
+    [layout.nodes, toggleDependencies, focusTargets, focusHierarchy],
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = layout.nodes.find((node) => node.id === selectedId)?.data.item ?? null;

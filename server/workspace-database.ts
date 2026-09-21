@@ -1,3 +1,4 @@
+import { countDependencies } from '../shared/dependencies.ts';
 import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 import { dirname, isAbsolute } from 'node:path';
@@ -185,7 +186,8 @@ const provenanceSql = `
     FROM strand_edges
     WHERE strand_edges.edge_type IN (${placeholders(provenanceEdgeKinds)})
       AND (
-        strand_edges.from_strand_id IN (SELECT strand_id FROM candidate_ids)
+        strand_edges.edge_type = 'depends-on'
+        OR strand_edges.from_strand_id IN (SELECT strand_id FROM candidate_ids)
         OR strand_edges.to_strand_id IN (SELECT strand_id FROM candidate_ids)
       )
       AND (
@@ -315,6 +317,7 @@ function decodeProvenance(value: unknown) {
 
 export interface PersistedWorkspaceReads {
   readProvenance(): Promise<unknown>;
+  readDependencies(): Promise<CardGraph>;
 }
 
 /** One bounded SQL statement sees a stable committed snapshot and never silently truncates history. */
@@ -327,6 +330,9 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
 
   async readDependencies(): Promise<CardGraph> {
     const snapshot = await this.readSnapshot(dependencySql, []);
+    const counts = countDependencies(
+      snapshot.edges.map((edge) => ({ from: edge.from_strand_id, to: edge.to_strand_id })),
+    );
     return parseGraph(
       {
         'root-id': '',
@@ -334,7 +340,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
         'parent-of-edges': [],
         'depends-on-edges': snapshot.edges,
       },
-      { owner: () => null },
+      { owner: () => null, dependencies: (id) => counts.get(id) ?? { incoming: 0, outgoing: 0 } },
     );
   }
 

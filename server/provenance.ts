@@ -1,3 +1,4 @@
+import { countDependencies } from '../shared/dependencies.ts';
 import { z } from 'zod';
 import type {
   AgentIdentity,
@@ -131,25 +132,17 @@ export class ProvenanceIndex {
   private readonly identitiesByFriendly = new Map<string, IdentityRecord[]>();
   private readonly runs: RunRecord[];
   private readonly cardOwnership = new Map<string, CardOwnership>();
-  private readonly dependencyCounts = new Map<string, DependencyCounts>();
+  private readonly dependencyCounts: Map<string, DependencyCounts>;
 
   constructor(value: unknown) {
     const snapshot = parseSchema(snapshotSchema, value, 'persisted provenance');
     this.strands = new Map(snapshot.strands.map((strand) => [strand.id, strand]));
     this.edges = snapshot.edges;
-    const dependencyPairs = new Set<string>();
-    for (const edge of this.edges) {
-      if (edge.edge_type !== 'depends-on') continue;
-      const pair = JSON.stringify([edge.from_strand_id, edge.to_strand_id]);
-      if (dependencyPairs.has(pair)) continue;
-      dependencyPairs.add(pair);
-      const from = this.dependencyCounts.get(edge.from_strand_id) ?? { incoming: 0, outgoing: 0 };
-      this.dependencyCounts.set(edge.from_strand_id, from);
-      from.outgoing += 1;
-      const to = this.dependencyCounts.get(edge.to_strand_id) ?? { incoming: 0, outgoing: 0 };
-      this.dependencyCounts.set(edge.to_strand_id, to);
-      to.incoming += 1;
-    }
+    this.dependencyCounts = countDependencies(
+      snapshot.edges
+        .filter((edge) => edge.edge_type === 'depends-on')
+        .map((edge) => ({ from: edge.from_strand_id, to: edge.to_strand_id })),
+    );
     this.identities = snapshot.strands
       .filter((strand) => strand.attributes['identity/session'] === 'true')
       .map((strand) => ({

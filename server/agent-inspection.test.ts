@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { StrandData } from './strand.ts';
 
 const readProvenance = vi.fn();
-const database = { readProvenance };
+const database = { readProvenance, readDependencies: vi.fn() };
 
 beforeEach(() => readProvenance.mockReset());
 

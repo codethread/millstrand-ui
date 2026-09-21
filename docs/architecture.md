@@ -128,7 +128,7 @@ parameters are URI-encoded. The only global key is discovery. No key was renamed
 | `['views', w]`               | `/views`                             | 15s             | Always in workspace dashboard                                                                   |
 | `['card', w, id]`            | `/cards/:id`                         | 5s              | While detail/inspector mounted                                                                  |
 | `['graph', w, id]`           | `/cards/:id/graph`                   | 10s             | `id !== null`                                                                                   |
-| `['dependencies', w]`        | `/dependencies`                      | 10s             | Mounted GraphView only; workspace-wide direct dependency counts and endpoints                   |
+| `['dependencies', w]`        | `/dependencies`                      | 10s             | GraphView only while explicitly expanded; workspace-wide dependency endpoints                   |
 | `['notes', w, taskId]`       | `/cards/:cardId/tasks/:taskId/notes` | 5s when enabled | Expanded task only; existing key intentionally does not include cardId                          |
 | `['reviews', w]`             | `/reviews`                           | 5s              | Workspace consumers (including sidebar)                                                         |
 | `['review', w, id]`          | `/reviews/:id`                       | 5s              | Selected detail mounted                                                                         |
@@ -373,20 +373,25 @@ controllers remain in `use-cards.ts`, with cache settlement in `api/cards.ts`.
 
 ### Explicit dependency exploration
 
-`GraphView` deliberately owns the surface-lifetime `['dependencies', workspace]`
+`GraphView` deliberately owns the expansion-lifetime `['dependencies', workspace]`
 poll via `src/hooks/use-graph.ts`, in addition to the existing focused subtree poll.
 `dependencyLayout` in `src/lib/graph.ts` selects only requested one-hop incident
-edges, retaining closed neighbours, and decorates nodes with workspace-wide counts
-and hierarchy/added/focus roles. Graph menu actions are URL navigation, not data
-mutations or local copies. See `docs/graph.md` for both demos and browser evidence.
+edges, retaining closed neighbours, and decorates nodes with hierarchy/added/focus
+roles. Counts arrive in existing board and subtree responses; no dependency request
+or timer runs until an expansion is selected. The server coalesces concurrent
+dependency reads in its short-lived read cache, cleared on card mutation settlement.
+Graph menu actions are URL navigation, not data mutations or local copies. See
+`docs/graph.md` for the expansion contract and browser evidence.
 
 ### Card dependency counts and hierarchy focus
 
-`Card.dependencies` is the required incoming/outgoing projection from
-`ProvenanceIndex.dependencies`. The existing bounded provenance SQL also reads
-`depends-on` edges incident to its candidates; one-pass deduplication indexes counts
-without requiring neighbour hydration. `parseCard` hydrates both board and detail
-contracts. Existing board/detail/overview poll owners and failure retention apply;
+`Card.dependencies` and `GraphNode.dependencies` are the required incoming/outgoing
+projections from `ProvenanceIndex.dependencies`. The existing bounded provenance
+SQL also reads `depends-on` edges workspace-wide (within the existing edge bound);
+one-pass deduplication indexes counts without requiring neighbour hydration.
+`parseCard` and `parseGraph` hydrate board, detail and subtree contracts using the
+shared unique-link projection in `shared/dependencies.ts`. Existing board/detail/
+overview poll owners and failure retention apply;
 there are no count-specific requests or mirrored stores. `CardDependencyCounts`
 in `src/components/dependency-counts.tsx` is a pure-prop shared leaf across card
 surfaces with a Radix popover explaining arrow direction.
@@ -394,7 +399,8 @@ surfaces with a Radix popover explaining arrow direction.
 For the Graph surface, `graphRoot` remains the selected card; `graphHierarchyRoot`
 in `src/lib/graph.ts` resolves its epic to the existing `['graph', workspace, id]`
 key in `useGraphSource`. Graph-local task inspection prompts against that actual
-query root, not the selected sibling feature. `graphFocusCard` follows parent edges
-only for task focus. **Show all cards** is a Router action that clears scope and
-filters but preserves completed visibility. Graph dependency data keeps its existing
-surface-lifetime poll owner and counts; no cache key or endpoint is renamed.
+query root, not the selected sibling feature. `graphFocusTargets` indexes parent edges
+once for task focus, excluding dependency links. **Show all cards** is a Router
+action that clears scope and filters but preserves completed visibility. Graph
+dependency data polls only while explicit expansions are present; no cache key or
+endpoint is renamed.

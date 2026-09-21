@@ -8,11 +8,12 @@ vi.mock('node:child_process', async () => {
 });
 
 const readProvenance = vi.fn();
-const database = { readProvenance };
+const database = { readProvenance, readDependencies: vi.fn() };
 
 beforeEach(() => {
   exec.mockReset();
   readProvenance.mockReset();
+  database.readDependencies.mockReset();
 });
 
 const card = {
@@ -66,4 +67,25 @@ it('reports hydration failures rather than claiming cards have no configuration'
   await expect(new StrandData('/repo/.millstrand', database).board()).rejects.toMatchObject({
     status: 502,
   });
+});
+
+it('coalesces concurrent dependency reads and reuses the short-lived successful snapshot', async () => {
+  const graph = { rootId: '', nodes: [], edges: [] };
+  database.readDependencies.mockResolvedValue(graph);
+  const data = new StrandData('/repo/.millstrand', database);
+  const [first, second] = await Promise.all([data.dependencies(), data.dependencies()]);
+  expect(first).toBe(graph);
+  expect(second).toBe(graph);
+  expect(await data.dependencies()).toBe(graph);
+  expect(database.readDependencies).toHaveBeenCalledTimes(1);
+});
+
+it('does not cache dependency failures as empty success', async () => {
+  database.readDependencies.mockRejectedValueOnce(new Error('Unsupported storage'));
+  const data = new StrandData('/repo/.millstrand', database);
+  await expect(data.dependencies()).rejects.toThrow('Unsupported storage');
+  const graph = { rootId: '', nodes: [], edges: [] };
+  database.readDependencies.mockResolvedValue(graph);
+  expect(await data.dependencies()).toBe(graph);
+  expect(database.readDependencies).toHaveBeenCalledTimes(2);
 });

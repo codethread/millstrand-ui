@@ -395,7 +395,7 @@ function graphEdges(items: EdgeRow[], kind: GraphEdge['kind']): GraphEdge[] {
 
 export function parseGraph(
   value: unknown,
-  provenance: Pick<AttributionProjection, 'owner'>,
+  provenance: Pick<AttributionProjection, 'owner' | 'dependencies'>,
 ): CardGraph {
   const row = parseSchema(compiledGraphSchema, value, 'graph');
   const nodes = row.strands.map((item): GraphNode => {
@@ -413,7 +413,12 @@ export function parseGraph(
         : taskMarker === 'true'
           ? 'task'
           : 'work';
-    return { ...work, kind, owner: provenance.owner(work.id) };
+    return {
+      ...work,
+      kind,
+      owner: provenance.owner(work.id),
+      dependencies: provenance.dependencies(work.id),
+    };
   });
   return {
     rootId: row['root-id'],

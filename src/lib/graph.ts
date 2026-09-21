@@ -1,18 +1,13 @@
 import { graphlib, layout as runLayout } from '@dagrejs/dagre';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
-import type { Card, CardGraph, DependencyCounts, GraphNode, JsonValue } from '../../shared/api';
-
-export type DependencySelection =
-  { kind: 'expand'; ids: string[] } | { kind: 'focus'; id: string | null };
+import type { Card, CardGraph, GraphNode, JsonValue } from '../../shared/api';
 
 export type IssueGraphNode = Node<
   {
     item: GraphNode;
     status: string;
-    dependencies: DependencyCounts | null;
-    context: 'hierarchy' | 'dependency' | 'focus';
+    context: 'hierarchy' | 'hierarchy-focus' | 'dependency';
     expanded: boolean;
-    hierarchyFocus: boolean;
   },
   'issue'
 >;
@@ -29,6 +24,7 @@ export function graphFromCards(cards: Card[], allCards: Card[]): CardGraph {
       kind: card.type,
       state: card.state,
       owner: card.owner,
+      dependencies: card.dependencies,
       createdAt: card.createdAt,
       updatedAt: card.updatedAt,
       attributes: {
@@ -75,8 +71,9 @@ export type GraphLayout =
   ReadyGraphLayout | { kind: 'empty' } | { kind: 'too-large'; count: number };
 
 function visibleGraph(graph: CardGraph, includeClosed: boolean): CardGraph {
+  if (includeClosed) return graph;
   const children = graph.nodes.filter(
-    (node) => includeClosed || node.state !== 'closed' || node.id === graph.rootId,
+    (node) => node.state !== 'closed' || node.id === graph.rootId,
   );
   const ids = new Set(children.map((item) => item.id));
   // Keep ancestor context for any live descendants, even when an ancestor is closed.
@@ -99,6 +96,12 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
   if (items.length > 150) return { kind: 'too-large', count: items.length };
   const itemIds = new Set(items.map((item) => item.id));
   const validEdges = graph.edges.filter((edge) => itemIds.has(edge.from) && itemIds.has(edge.to));
+  const liveIds = new Set(items.filter((item) => item.state !== 'closed').map((item) => item.id));
+  const blockedIds = new Set(
+    validEdges
+      .filter((edge) => edge.kind === 'depends-on' && liveIds.has(edge.to))
+      .map((edge) => edge.from),
+  );
   const layout = new graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   layout.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 95, marginx: 35, marginy: 35 });
   for (const item of items) layout.setNode(item.id, { width: 260, height: 158 });
@@ -112,14 +115,7 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
     kind: 'ready',
     nodes: items.map((item) => {
       const position = layout.node(item.id);
-      const blocked =
-        item.state !== 'closed' &&
-        validEdges.some(
-          (edge) =>
-            edge.kind === 'depends-on' &&
-            edge.from === item.id &&
-            items.some((other) => other.id === edge.to && other.state !== 'closed'),
-        );
+      const blocked = liveIds.has(item.id) && blockedIds.has(item.id);
       return {
         id: item.id,
         type: 'issue',
@@ -127,10 +123,8 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
         data: {
           item,
           status: blocked ? 'blocked' : graphStatus(item),
-          dependencies: null,
           context: 'hierarchy',
           expanded: false,
-          hierarchyFocus: false,
         },
       };
     }),
@@ -163,18 +157,15 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
 export function dependencyLayout(
   base: CardGraph,
   dependencies: CardGraph | null,
-  selection: DependencySelection,
+  expandedIds: string[],
   includeClosed: boolean,
 ): GraphLayout {
   const hierarchy = visibleGraph(base, includeClosed);
-  const focused = selection.kind === 'focus' && selection.id !== null;
-  const roots = new Set(
-    selection.kind === 'expand' ? selection.ids : selection.id ? [selection.id] : [],
-  );
+  const roots = new Set(expandedIds);
   const nodes = new Map(
     [...(dependencies?.nodes ?? []), ...base.nodes].map((node) => [node.id, node]),
   );
-  const ids = new Set(focused ? roots : hierarchy.nodes.map((node) => node.id));
+  const ids = new Set(hierarchy.nodes.map((node) => node.id));
   const edges = (dependencies?.edges ?? []).filter(
     (edge) => roots.has(edge.from) || roots.has(edge.to),
   );
@@ -187,37 +178,25 @@ export function dependencyLayout(
     {
       rootId: base.rootId,
       nodes: [...nodes.values()].filter((node) => ids.has(node.id)),
-      edges: [...(focused ? [] : base.edges.filter((edge) => edge.kind === 'parent-of')), ...edges],
+      edges: [...base.edges.filter((edge) => edge.kind === 'parent-of'), ...edges],
     },
     true,
   );
   if (result.kind !== 'ready') return result;
   const baseIds = new Set(base.nodes.map((node) => node.id));
-  const counts = new Map<string, { incoming: number; outgoing: number }>();
-  for (const edge of dependencies?.edges ?? []) {
-    const from = counts.get(edge.from) ?? { incoming: 0, outgoing: 0 };
-    counts.set(edge.from, from);
-    from.outgoing += 1;
-    const to = counts.get(edge.to) ?? { incoming: 0, outgoing: 0 };
-    counts.set(edge.to, to);
-    to.incoming += 1;
-  }
   return {
     ...result,
     nodes: result.nodes.map((node) => ({
       ...node,
       data: {
         ...node.data,
-        dependencies:
-          dependencies === null ? null : (counts.get(node.id) ?? { incoming: 0, outgoing: 0 }),
         context:
-          focused && roots.has(node.id)
-            ? 'focus'
+          node.id === base.rootId
+            ? 'hierarchy-focus'
             : baseIds.has(node.id)
               ? 'hierarchy'
               : 'dependency',
         expanded: roots.has(node.id),
-        hierarchyFocus: !focused && node.id === base.rootId,
       },
     })),
   };
@@ -229,17 +208,23 @@ export function graphHierarchyRoot(id: string | null, cards: Card[]): string | n
   return card?.epicId ?? id;
 }
 
-/** Tasks focus through their nearest card; unrelated work has no invented hierarchy. */
-export function graphFocusCard(id: string, graph: CardGraph, cards: Card[]): string | null {
-  const cardIds = new Set(cards.map((card) => card.id));
-  const pending = [id];
-  const seen = new Set<string>();
-  for (const current of pending) {
-    if (cardIds.has(current)) return current;
-    if (seen.has(current)) continue;
-    seen.add(current);
-    for (const edge of graph.edges)
-      if (edge.kind === 'parent-of' && edge.to === current) pending.push(edge.from);
+/** Index card ancestry once per hierarchy, not once per rendered node/action. */
+export function graphFocusTargets(graph: CardGraph, cards: Card[]): Map<string, string> {
+  const targets = new Map(cards.map((card) => [card.id, card.id]));
+  const children = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    if (edge.kind !== 'parent-of') continue;
+    const ids = children.get(edge.from) ?? [];
+    ids.push(edge.to);
+    children.set(edge.from, ids);
   }
-  return null;
+  const queue = cards.map((card) => ({ id: card.id, cardId: card.id }));
+  for (const { id, cardId } of queue) {
+    for (const child of children.get(id) ?? []) {
+      if (targets.has(child)) continue;
+      targets.set(child, cardId);
+      queue.push({ id: child, cardId });
+    }
+  }
+  return targets;
 }

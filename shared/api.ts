@@ -241,6 +241,7 @@ export interface CardDetail {
 }
 
 export interface GraphNode extends WorkItem {
+  dependencies: DependencyCounts;
   kind: 'epic' | 'feature' | 'task' | 'work';
   owner: string | null;
 }

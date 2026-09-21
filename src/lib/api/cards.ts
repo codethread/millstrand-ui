@@ -34,12 +34,13 @@ export function graphQueryOptions(workspace: string | null, id: string | null) {
   });
 }
 
-/** GraphView owns this poll; counts include links outside the rendered graph. */
-export function dependencyQueryOptions(workspace: string | null) {
+/** GraphView owns expansion polling, only while at least one card is expanded. */
+export function dependencyQueryOptions(workspace: string | null, enabled: boolean) {
   return queryOptions({
     queryKey: ['dependencies', workspace],
     queryFn: () => request<CardGraph>('/dependencies', workspace),
-    refetchInterval: 10000,
+    enabled,
+    refetchInterval: enabled ? 10000 : false,
   });
 }
 
