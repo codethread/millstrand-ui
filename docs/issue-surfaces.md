@@ -23,7 +23,11 @@
 ## Detail and edits
 
 `IssueDetail({ id })` owns the selected detail query and URL tabs. `issue-tasks.tsx`
-contains Notes, TaskRow and TaskActivity; expanded tasks alone enable note polling.
+contains Notes, TaskRow and TaskActivity; expanded tasks alone enable task-note polling.
+Full card notes are a separate `useCardNotes` query, enabled only on the Notes tab
+(`/cards/:id/notes`). The detail response no longer embeds them. Hidden tabs stop
+fetching and polling; the count appears after the first successful read. Initial
+failures remain errors, and refresh failures keep the last notes with a warning.
 TaskActivity retains successful notes on failure and labels them last-known, as
 IssueDetail does for detail refresh failures. Properties and label forms are in
 `issue-properties.tsx` and `issue-labels.tsx`. Label typing remains in the local form.

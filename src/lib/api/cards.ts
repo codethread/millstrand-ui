@@ -25,6 +25,16 @@ export function cardQueryOptions(workspace: string | null, id: string) {
   });
 }
 
+/** IssueDetail owns this poll only while its Notes tab is visible. */
+export function cardNotesQueryOptions(workspace: string | null, id: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: ['card-notes', workspace, id],
+    queryFn: () => request<Note[]>(`/cards/${encodeURIComponent(id)}/notes`, workspace),
+    enabled,
+    refetchInterval: enabled ? 5000 : false,
+  });
+}
+
 export function graphQueryOptions(workspace: string | null, id: string | null) {
   return queryOptions({
     queryKey: ['graph', workspace, id],
@@ -72,7 +82,10 @@ export function labelsMutationOptions(client: QueryClient, workspace: string | n
       }),
     onSuccess: async (detail) => {
       client.setQueryData(['card', workspace, id], detail);
-      await client.invalidateQueries({ queryKey: ['board', workspace] });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['board', workspace] }),
+        client.invalidateQueries({ queryKey: ['card-notes', workspace, id] }),
+      ]);
     },
   });
 }
@@ -92,7 +105,7 @@ export function cardActionMutationOptions(client: QueryClient, workspace: string
       ),
     onSettled: async () => {
       await Promise.all(
-        ['board', 'card', 'graph', 'dependencies', 'agents'].map((key) =>
+        ['board', 'card', 'card-notes', 'notes', 'graph', 'dependencies', 'agents'].map((key) =>
           client.invalidateQueries({ queryKey: [key, workspace] }),
         ),
       );

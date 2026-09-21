@@ -24,7 +24,7 @@ it.each([true, false])(
       '/api/cards/card1?workspace=selected-weaver',
       expect.objectContaining({ method: 'DELETE' }),
     );
-    for (const key of ['board', 'card', 'graph', 'dependencies', 'agents'])
+    for (const key of ['board', 'card', 'card-notes', 'notes', 'graph', 'dependencies', 'agents'])
       expect(invalidate).toHaveBeenCalledWith({ queryKey: [key, 'selected-weaver'] });
     client.clear();
   },

@@ -12,6 +12,7 @@ import {
   boardQueryOptions,
   cardActionMutationOptions,
   cardQueryOptions,
+  cardNotesQueryOptions,
   graphQueryOptions,
   labelsMutationOptions,
   taskNotesQueryOptions,
@@ -146,6 +147,10 @@ export function useSavedViewBoard(filter: ViewFilter) {
 
 export function useCard(id: string) {
   return useQuery(cardQueryOptions(useWorkspace(), id));
+}
+
+export function useCardNotes(id: string, enabled: boolean) {
+  return useQuery(cardNotesQueryOptions(useWorkspace(), id, enabled));
 }
 
 export function useGraph(id: string | null) {

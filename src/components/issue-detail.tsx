@@ -4,7 +4,7 @@ import { ArrowUpRight, Check, Clock3, Copy, GitBranch, Layers, Network } from 'l
 import { Markdown } from './markdown';
 import type { CardDetail } from '../../shared/api';
 import { PromptAgentButton } from './agent-prompt';
-import { useCard } from '../hooks/use-cards';
+import { useCard, useCardNotes } from '../hooks/use-cards';
 import { formatDate } from '../lib/board';
 import { useDashboardActions, useDetailTab } from '../lib/navigation';
 import type { DetailTab } from '../lib/dashboard-search';
@@ -148,6 +148,7 @@ function CopyLink() {
 export function IssueDetail({ id }: { id: string }) {
   const query = useCard(id);
   const tab = useDetailTab();
+  const notes = useCardNotes(id, tab === 'notes');
   const { closeCard, openCard, exploreGraph, setDetailTab: setTab } = useDashboardActions();
   const detail = query.data;
   const tabs: { id: DetailTab; label: string }[] = [
@@ -223,7 +224,9 @@ export function IssueDetail({ id }: { id: string }) {
                       className={cn(tab === item.id && 'selected')}
                     >
                       {item.label}
-                      {item.id === 'notes' && <span>{detail.notes.length}</span>}
+                      {item.id === 'notes' && notes.data !== undefined && (
+                        <span>{notes.data.length}</span>
+                      )}
                     </TabsTrigger>
                   ))}
                 </TabsList>
@@ -245,7 +248,15 @@ export function IssueDetail({ id }: { id: string }) {
                 <DetailOverview detail={detail} />
               </TabsContent>
               <TabsContent value="notes" className="detail-body">
-                <Notes notes={detail.notes} />
+                {notes.error && <ErrorNotice error={notes.error} />}
+                {notes.data !== undefined ? (
+                  <>
+                    {notes.error && <p className="detail-empty">Showing last-known notes.</p>}
+                    <Notes notes={notes.data} />
+                  </>
+                ) : notes.isPending ? (
+                  <Loading text="Loading notes…" />
+                ) : null}
               </TabsContent>
               <TabsContent value="agents" className="detail-body flex-col data-[state=active]:flex">
                 <CardAgentLog owner={detail.card.owner} target={detail.card.id} />

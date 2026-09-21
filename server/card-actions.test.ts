@@ -135,6 +135,9 @@ it('invalidates the board even when the command fails after a possible side effe
   await expect(data.changeCard('card1', { kind: 'delete' })).rejects.toThrow('Timeout');
   await data.dependencies();
   expect(database.readDependencies).toHaveBeenCalledTimes(2);
+  expect(database.readProvenance).toHaveBeenCalledTimes(2);
+  await data.provenance();
+  expect(database.readProvenance).toHaveBeenCalledTimes(3);
   exec.mockResolvedValueOnce({ stdout: '{"cards":[]}' });
   expect((await data.board()).cards).toEqual([]);
 });

@@ -10,7 +10,6 @@ import { parseCurateReview, parsePublishReview } from './review-comments.ts';
 import { parseWeaverOperation, WorkspaceDirectory } from './workspaces.ts';
 import { parseAgentPrompt } from './agent-prompts.ts';
 import { parseCardLane } from './card-actions.ts';
-import { WorkspaceDatabase } from './workspace-database.ts';
 import { readLogActivity } from './log-activity.ts';
 import { SessionLogReader } from './session-log-reader.ts';
 import { parseSessionLogSource, SessionLogStreams } from './session-logs.ts';
@@ -248,9 +247,8 @@ const server = createServer((request, response) => {
       return;
     }
     if (path === '/api/log-activity' && method === 'GET') {
-      const workspace = await workspaces.select(url.searchParams.get('workspace'));
-      const snapshot = await new WorkspaceDatabase(workspace.path).readProvenance();
-      json(response, 200, await readLogActivity(snapshot, sessionLogs));
+      const { strand } = await workspaces.select(url.searchParams.get('workspace'));
+      json(response, 200, await readLogActivity(await strand.provenance(), sessionLogs));
       return;
     }
     if (path === '/api/session-logs/snapshot' && method === 'GET') {
@@ -284,7 +282,7 @@ const server = createServer((request, response) => {
       return;
     }
     const match =
-      /^\/api\/cards\/([a-zA-Z0-9_-]+)(?:\/(graph|labels|lane|tasks|agent-runs)(?:\/([a-zA-Z0-9_-]+)\/notes)?)?$/.exec(
+      /^\/api\/cards\/([a-zA-Z0-9_-]+)(?:\/(graph|notes|labels|lane|tasks|agent-runs)(?:\/([a-zA-Z0-9_-]+)\/notes)?)?$/.exec(
         path,
       );
     const id = match?.[1];
@@ -293,6 +291,8 @@ const server = createServer((request, response) => {
       const action = match?.[2];
       const taskId = match?.[3];
       if (method === 'GET' && action === undefined) json(response, 200, await strand.detail(id));
+      else if (method === 'GET' && action === 'notes' && taskId === undefined)
+        json(response, 200, await strand.cardNotes(id));
       else if (method === 'GET' && action === 'graph' && taskId === undefined)
         json(response, 200, await strand.graph(id));
       else if (method === 'GET' && action === 'tasks' && taskId !== undefined)

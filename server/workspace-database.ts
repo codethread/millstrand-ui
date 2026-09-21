@@ -91,9 +91,6 @@ const provenanceAttributeKeys = [
   'auto-run/error',
   'auto-run/worktree',
   'auto-run/branch',
-  'note/text',
-  'note/at',
-  'note/kind',
 ] as const;
 const provenanceEdgeKinds = [
   'reported',

@@ -234,7 +234,6 @@ export interface CardDetail {
   body: string;
   attributes: Record<string, JsonValue>;
   tasks: Task[];
-  notes: Note[];
   activeWork: WorkItem[];
   ready: WorkItem[];
   related: Relation[];

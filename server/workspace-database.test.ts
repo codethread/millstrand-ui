@@ -90,6 +90,10 @@ it('runs one bounded selective graph read without interpolating the workspace', 
   expect(parameters).toContain('serves-root');
   expect(parameters).toContain('depends-on');
   expect(sql).toContain("strand_edges.edge_type = 'depends-on'");
+  expect(parameters).not.toContain('note/text');
+  expect(parameters).not.toContain('note/at');
+  expect(parameters).not.toContain('note/kind');
+  expect(parameters).toContain('identity/by-identity');
   expect(parameters).not.toContain('harness/env');
   expect(parameters).not.toContain('harness/prompt');
 });

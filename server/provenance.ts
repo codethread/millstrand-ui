@@ -102,6 +102,7 @@ const claimAttributesSchema = z
   })
   .loose();
 
+type AgentProjection = { identities: AgentIdentity[]; runs: AgentRun[] };
 type Strand = z.infer<typeof strandSchema>;
 type EdgeKind = (typeof edgeKinds)[number];
 type Edge = z.infer<typeof edgeSchema>;
@@ -127,7 +128,9 @@ function unique(values: string[]): string[] {
 /** Parsed once from the selective persisted graph read. All role projections use durable records/edges. */
 export class ProvenanceIndex {
   private readonly strands: Map<string, Strand>;
-  private readonly edges: Edge[];
+  private readonly edgesBySource = new Map<string, Edge[]>();
+  private readonly edgesByTarget = new Map<string, Edge[]>();
+  private agentProjection: AgentProjection | null = null;
   private readonly identities: IdentityRecord[];
   private readonly identitiesByFriendly = new Map<string, IdentityRecord[]>();
   private readonly runs: RunRecord[];
@@ -137,7 +140,14 @@ export class ProvenanceIndex {
   constructor(value: unknown) {
     const snapshot = parseSchema(snapshotSchema, value, 'persisted provenance');
     this.strands = new Map(snapshot.strands.map((strand) => [strand.id, strand]));
-    this.edges = snapshot.edges;
+    for (const edge of snapshot.edges) {
+      const outgoing = this.edgesBySource.get(edge.from_strand_id) ?? [];
+      outgoing.push(edge);
+      this.edgesBySource.set(edge.from_strand_id, outgoing);
+      const incoming = this.edgesByTarget.get(edge.to_strand_id) ?? [];
+      incoming.push(edge);
+      this.edgesByTarget.set(edge.to_strand_id, incoming);
+    }
     this.dependencyCounts = countDependencies(
       snapshot.edges
         .filter((edge) => edge.edge_type === 'depends-on')
@@ -174,16 +184,16 @@ export class ProvenanceIndex {
 
   private outgoing(id: string, kind: EdgeKind): string[] {
     return unique(
-      this.edges
-        .filter((edge) => edge.from_strand_id === id && edge.edge_type === kind)
+      (this.edgesBySource.get(id) ?? [])
+        .filter((edge) => edge.edge_type === kind)
         .map((edge) => edge.to_strand_id),
     );
   }
 
   private incoming(id: string, kind: EdgeKind): string[] {
     return unique(
-      this.edges
-        .filter((edge) => edge.to_strand_id === id && edge.edge_type === kind)
+      (this.edgesByTarget.get(id) ?? [])
+        .filter((edge) => edge.edge_type === kind)
         .map((edge) => edge.from_strand_id),
     );
   }
@@ -355,7 +365,8 @@ export class ProvenanceIndex {
     };
   }
 
-  agents(): { identities: AgentIdentity[]; runs: AgentRun[] } {
+  agents(): AgentProjection {
+    if (this.agentProjection !== null) return this.agentProjection;
     const runs = sorted(
       this.runs.map((run) => this.agentRun(run)),
       (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
@@ -397,7 +408,8 @@ export class ProvenanceIndex {
         work: currentWork.get(strandId) ?? [],
       };
     });
-    return { identities, runs };
+    this.agentProjection = { identities, runs };
+    return this.agentProjection;
   }
 
   logBindings(): LogBinding[] {

@@ -1,3 +1,4 @@
+import { ProvenanceIndex } from './provenance';
 import { expect, it } from 'vitest';
 import type { LogProvider, LogSnapshot } from '../shared/session-log';
 import { parseSessionLogSource } from './session-logs';
@@ -121,7 +122,7 @@ it('keeps duplicate friendly identities bound to their immutable identity strand
     }
   })();
 
-  const activity = await readLogActivity(snapshot, reader);
+  const activity = await readLogActivity(new ProvenanceIndex(snapshot), reader);
 
   expect(reader.sessions).toEqual(['pi/session-second-running']);
   expect(activity.bindings).toMatchObject([

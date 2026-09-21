@@ -300,6 +300,8 @@ ask you to narrow the filters or choose a smaller focus. Changing a filter or
 saved view returns the graph to the filtered board.
 
 Click any card for its description, task status, full notes, labels, and attributes.
+Full notes load and refresh only while the **Notes** tab is open; closing it stops
+those requests while retaining the last notes and count.
 Workspace, layout, issue/agent selection, issue detail tab, graph focus, board
 filters, agent search/active-only, and selected saved view all live in the URL.
 Reload, shared links, and browser Back restore that navigation state. Saved-view
