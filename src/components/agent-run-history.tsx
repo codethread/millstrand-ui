@@ -13,7 +13,7 @@ export function AgentRunHistory({
   selectedRunId: string | null;
   stale: boolean;
 }) {
-  const { focusAgentRun } = useDashboardActions();
+  const { focusAgentRun, openCard } = useDashboardActions();
   return (
     <section className="detail-section">
       <h3 className="detail-section-title">Run history · {identity.runs.length}</h3>
@@ -49,6 +49,21 @@ export function AgentRunHistory({
             <dd className="font-mono text-xs">{run.cwd ?? 'Not recorded'}</dd>
             <dt>Target</dt>
             <dd>{run.target ?? 'No explicit target'}</dd>
+            {run.workflow !== null && (
+              <>
+                <dt>Workflow</dt>
+                <dd>
+                  <button
+                    className="text-left text-primary hover:underline"
+                    onClick={() => openCard(run.workflow!.cardId)}
+                  >
+                    View feature {run.workflow.cardId}
+                  </button>
+                  {' · '}
+                  {run.workflow.role ?? 'workflow agent'} · {run.workflow.runId}
+                </dd>
+              </>
+            )}
             <dt>Contributors</dt>
             <dd>
               {run.participants.length > 0

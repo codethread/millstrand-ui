@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type {
   AgentIdentity,
   AgentRun,
+  AgentWorkflowTarget,
   AgentWork,
   CardOwnership,
   DependencyCounts,
@@ -88,6 +89,19 @@ const runAttributesSchema = z
     'harness/cwd': z.string().optional(),
     'harness/started-at': z.string().optional(),
     'harness/finished-at': z.string().optional(),
+  })
+  .loose();
+const workflowAttributesSchema = z
+  .object({
+    'workflow/form': z.literal('molecule'),
+    'workflow/role': z.string().min(1),
+    'workflow/run-id': z.string().min(1).optional(),
+    'workflow/context': z
+      .object({ card: z.string().min(1).optional(), feature: z.string().min(1).optional() })
+      .loose()
+      .optional(),
+    'review/role': z.string().min(1).optional(),
+    'auto-run/role': z.string().min(1).optional(),
   })
   .loose();
 const claimAttributesSchema = z
@@ -315,6 +329,58 @@ export class ProvenanceIndex {
     return this.ownership(target).current?.owner.identity ?? null;
   }
 
+  private workflowTarget(target: string | undefined): AgentWorkflowTarget | null {
+    if (target === undefined) return null;
+    const targetStrand = this.strands.get(target);
+    if (targetStrand?.attributes['workflow/form'] !== 'molecule') return null;
+    const targetAttributes = parseSchema(
+      workflowAttributesSchema,
+      targetStrand.attributes,
+      `workflow target ${target}`,
+    );
+    const visited = new Set<string>();
+    const pending = [target];
+    const roots: Array<{ id: string; attributes: z.infer<typeof workflowAttributesSchema> }> = [];
+    for (const id of pending) {
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const strand = this.strands.get(id);
+      if (strand?.attributes['workflow/form'] !== 'molecule') continue;
+      const attributes = parseSchema(
+        workflowAttributesSchema,
+        strand.attributes,
+        `workflow strand ${id}`,
+      );
+      if (attributes['workflow/role'] === 'root') roots.push({ id, attributes });
+      pending.push(...this.incoming(id, 'parent-of'));
+    }
+    if (roots.length > 1)
+      throw new Error(
+        `workflow target ${target} has multiple workflow roots: ${roots.map(({ id }) => id).join(', ')}`,
+      );
+    const root = roots[0];
+    if (!root) throw new Error(`workflow target ${target} has no workflow root`);
+    const runId = root.attributes['workflow/run-id'];
+    const context = root.attributes['workflow/context'];
+    const cardIds = unique(
+      [context?.card, context?.feature].filter(
+        (id): id is string =>
+          id !== undefined && this.strands.get(id)?.attributes['kanban/card'] === 'true',
+      ),
+    );
+    if (!runId) throw new Error(`workflow root ${root.id} has no workflow/run-id`);
+    if (cardIds.length === 0) return null;
+    if (cardIds.length > 1)
+      throw new Error(`workflow root ${root.id} references multiple feature cards`);
+    const cardId = cardIds[0]!;
+    return {
+      rootId: root.id,
+      runId,
+      cardId,
+      role: targetAttributes['review/role'] ?? targetAttributes['auto-run/role'] ?? null,
+    };
+  }
+
   private continuation(runId: string): LogContinuation | null {
     const resumes = this.outgoing(runId, 'resumes');
     const continues = this.outgoing(runId, 'continues');
@@ -357,6 +423,7 @@ export class ProvenanceIndex {
       cwd: attrs['harness/cwd'] ?? null,
       target: targets[0] ?? null,
       rootTargets: this.outgoing(run.strand.id, 'serves-root'),
+      workflow: this.workflowTarget(targets[0]),
       participants: this.runParticipants(run),
       continuation: this.continuation(run.strand.id),
       createdAt: run.strand.created_at,

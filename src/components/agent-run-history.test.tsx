@@ -22,6 +22,7 @@ const run: AgentRun = {
   cwd: null,
   target: 'task',
   rootTargets: ['card'],
+  workflow: null,
   participants: [
     { identity: 'first-worker', status: 'resolved', identityStrandIds: ['first'] },
     { identity: 'raw-worker', status: 'ambiguous', identityStrandIds: [] },
@@ -53,6 +54,26 @@ it('keeps terminal runs and every published participant inspectable', () => {
   expect(html).toContain('first-worker, Ambiguous identity: raw-worker');
   expect(html).toContain('Fresh retry of');
   expect(html).toContain('earlier-run');
+});
+
+it('shows the actual workflow gate and a feature navigation link', () => {
+  const workflowRun: AgentRun = {
+    ...run,
+    alias: 'reviewer',
+    target: 'review-gate',
+    workflow: {
+      rootId: 'land-root',
+      runId: 'land-auto-card',
+      cardId: 'card',
+      role: 'reviewer',
+    },
+  };
+  const html = renderToStaticMarkup(
+    <AgentRunHistory identity={identity([workflowRun])} selectedRunId={null} stale={false} />,
+  );
+  expect(html).toContain('review-gate');
+  expect(html).toContain('View feature card');
+  expect(html).toContain('reviewer · land-auto-card');
 });
 
 it('makes an absent run history explicit', () => {

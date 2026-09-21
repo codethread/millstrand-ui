@@ -30,6 +30,7 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     cwd: '/workspace',
     target: null,
     rootTargets: [],
+    workflow: null,
     participants: [],
     continuation: null,
     createdAt: '2026-09-13 10:00:00',
@@ -112,6 +113,36 @@ describe('agent activity and issue attribution', () => {
     expect(issueAgents([direct, descendant, stopped], null, 'card1')).toEqual([direct, descendant]);
     expect(issueAgentActivity(direct, 'card1')).toBe('Working');
     expect(issueAgentActivity(descendant, 'card1')).toBe('Working');
+  });
+
+  it('surfaces active workflow reviewers on their feature and removes them when settled', () => {
+    const workflow = {
+      rootId: 'land-root',
+      runId: 'land-auto-card1',
+      cardId: 'card1',
+      role: 'reviewer',
+    };
+    const active = identity(
+      [run({ id: 'review', alias: 'reviewer', target: 'review-gate', workflow })],
+      'gentle-ready-fox',
+    );
+    const settled = identity(
+      [
+        run({
+          id: 'review',
+          alias: 'reviewer',
+          target: 'review-gate',
+          workflow,
+          status: 'stopped',
+        }),
+      ],
+      'gentle-ready-fox',
+    );
+
+    expect(relevantAgentActivity([active], null, 'card1')).toMatchObject([
+      { identity: { id: 'gentle-ready-fox' }, run: { id: 'review' }, label: 'Working' },
+    ]);
+    expect(relevantAgentActivity([settled], null, 'card1')).toEqual([]);
   });
 
   it('uses the matching run alias and never describes a queued target as running', () => {

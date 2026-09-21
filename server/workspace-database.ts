@@ -68,6 +68,12 @@ const provenanceAttributeKeys = [
   'harness/cwd',
   'harness/started-at',
   'harness/finished-at',
+  'workflow/form',
+  'workflow/role',
+  'workflow/run-id',
+  'workflow/context',
+  'review/role',
+  'auto-run/role',
   'kanban/card',
   'kanban/task',
   'kanban/type',
@@ -122,6 +128,7 @@ const provenanceSql = `
           'kanban/task',
           'kanban/ownership-claim'
         ) AND marker.value = '"true"')
+        OR marker.key = 'workflow/form'
         OR marker.key = 'note/text'
         OR (
           marker.key = 'harness/run'
@@ -203,6 +210,20 @@ const provenanceSql = `
               AND child_task.archived = 0
               AND child_task.key = 'kanban/task'
               AND child_task.value = '"true"'
+          )
+        )
+        OR (
+          EXISTS (
+            SELECT 1 FROM attributes AS workflow_parent
+            WHERE workflow_parent.strand_id = strand_edges.from_strand_id
+              AND workflow_parent.archived = 0
+              AND workflow_parent.key = 'workflow/form'
+          )
+          AND EXISTS (
+            SELECT 1 FROM attributes AS workflow_child
+            WHERE workflow_child.strand_id = strand_edges.to_strand_id
+              AND workflow_child.archived = 0
+              AND workflow_child.key = 'workflow/form'
           )
         )
       )
