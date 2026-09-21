@@ -9,6 +9,7 @@
             [ct.spools.codethread.auto-run-worktree :as auto-run-worktree]
             [ct.spools.harnesses :as harnesses]
             [ct.spools.harnesses.assignment :as assignment]
+            [ct.spools.harnesses.reviewers :as reviewers]
             [millhouse.spools.land.autonomous :as autonomous]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
@@ -36,9 +37,17 @@
                                            "me/auto_run_workflows.clj" "me/auto_run.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)
-          status (auto-run/status rt)]
+          status (auto-run/status rt)
+          image-reviewer (->> (reviewers/reviewers rt)
+                              (filter #(= "repository-images" (:name %)))
+                              first)]
       (is (= 'millstrand.spools.batteries
              (:owner (help-transform/default-help-transform rt))))
+      (is (= ["grunt"] (:seats image-reviewer)))
+      (is (= ["**/*.{png,PNG,jpg,JPG,jpeg,JPEG,svg,SVG,gif,GIF,webp,WEBP,avif,AVIF,bmp,BMP,ico,ICO,tif,TIF,tiff,TIFF}"]
+             (:glob image-reviewer)))
+      (is (str/includes? (:prompt image-reviewer) "102,400 bytes"))
+      (is (str/includes? (:prompt image-reviewer) "GitHub user content"))
       (is (:enabled status))
       (is (= 2 (get-in status [:config :max-running])))
       (is (= "auto-human-review" (get-in status [:config :workflow])))
