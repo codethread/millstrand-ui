@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { useAgentPromptStore } from '../agent-prompt-store';
-import { useAgentReply } from '../hooks/use-agents';
+import { useAgentReply, useRunLaunchRefusal } from '../hooks/use-agents';
 import { useBoard } from '../hooks/use-cards';
+import { launchRefusalNote } from '../lib/agents';
 import { runIsFinished } from '../lib/agent-notifications';
 import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
@@ -12,6 +13,7 @@ import { Button } from './ui/button';
 export function AgentRunReply({ id }: { id: string }) {
   const query = useAgentReply(id, true);
   const board = useBoard();
+  const refusal = useRunLaunchRefusal(id).data ?? null;
   const workspace = useWorkspaceId();
   const { exploreGraph, openCard, openReview } = useDashboardActions();
   const markRead = useAgentPromptStore((state) => state.markRead);
@@ -21,6 +23,12 @@ export function AgentRunReply({ id }: { id: string }) {
   }, [workspace, id, reply, query.error, markRead]);
   const targetId = reply?.prompt?.cardId ?? reply?.target ?? null;
   const card = board.data?.cards.find((candidate) => candidate.id === targetId);
+  const launchNote = launchRefusalNote(refusal);
+  // A blocked queued run must not read as ordinary executable queueing here either.
+  const queuedNote =
+    launchNote === null
+      ? 'Queued · waiting for the agent to start.'
+      : `${launchNote} The run cannot start until that changes.`;
   return (
     <section className="mb-5 space-y-3" aria-label="Prompt and agent reply">
       {reply?.prompt && reply.prompt.kind !== 'card' ? (
@@ -102,7 +110,7 @@ export function AgentRunReply({ id }: { id: string }) {
           ) : (
             <output className="block text-xs text-muted-foreground">
               {reply.status === 'ready'
-                ? 'Queued · waiting for the agent to start.'
+                ? queuedNote
                 : reply.status === 'running'
                   ? 'Working on your prompt. The reply will appear here.'
                   : reply.status === 'unknown'

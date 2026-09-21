@@ -15,6 +15,7 @@ import { promisify } from 'node:util';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { ProvenanceIndex } from './provenance.ts';
+import { launchRefusalMessage } from './launch-readiness.ts';
 import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
 import {
   agentLaunchArgs,
@@ -28,6 +29,7 @@ import type {
   AgentOption,
   AgentPrompt,
   AgentReply,
+  AgentRun,
   Board,
   Card,
   CardDetail,
@@ -272,11 +274,28 @@ export class StrandData {
   agents(): Promise<AgentDirectory> {
     return this.agentDirectories.get('agents', async () => {
       const agents = (await this.provenance()).agents();
+      // Queued runs are the only durable place a refused target still shows up, so
+      // resolve just those targets and leave every other run unresolved.
+      const targets = [
+        ...new Set(
+          agents.runs.flatMap((run) =>
+            run.status === 'ready' && run.target !== null ? [run.target] : [],
+          ),
+        ),
+      ];
+      const refusals = await this.database.readLaunchRefusals(targets);
+      const queuedRun = (run: AgentRun): AgentRun => {
+        const target = run.status === 'ready' ? run.target : null;
+        return target === null ? run : { ...run, launchRefusal: refusals.get(target) ?? null };
+      };
       return {
         workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
         fetchedAt: new Date().toISOString(),
-        identities: agents.identities,
-        runs: agents.runs,
+        identities: agents.identities.map((identity) => ({
+          ...identity,
+          runs: identity.runs.map(queuedRun),
+        })),
+        runs: agents.runs.map(queuedRun),
       };
     });
   }
@@ -331,6 +350,11 @@ export class StrandData {
         400,
         'That agent is not available headlessly in this weaver. Choose an available alias.',
       );
+    // Refuse before publishing: Harnesses never launches a run whose target is not
+    // graph-ready, so a durable refused run would only queue forever.
+    const refusal = (await this.database.readLaunchRefusals([input.targetId])).get(input.targetId);
+    if (refusal !== undefined)
+      throw new HttpError(409, launchRefusalMessage(input.targetId, refusal));
     const cwd = await this.agentDirectory(card);
     let context = review === null ? null : reviewPromptContext(review, this.workspace);
     if (input.targetKind === 'review-comment') {

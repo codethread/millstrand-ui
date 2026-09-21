@@ -27,6 +27,7 @@ const run: AgentRun = {
     { identity: 'raw-worker', status: 'ambiguous', identityStrandIds: [] },
   ],
   continuation: { kind: 'fresh-retry', predecessorRunId: 'earlier-run' },
+  launchRefusal: null,
   createdAt: '2026-09-01T12:00:00Z',
   startedAt: null,
   finishedAt: '2026-09-01T13:00:00Z',

@@ -38,6 +38,7 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     rootTargets: [],
     participants: [],
     continuation: null,
+    launchRefusal: null,
     createdAt: '2026-09-18',
     startedAt: null,
     finishedAt: null,

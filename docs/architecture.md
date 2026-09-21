@@ -53,7 +53,7 @@ for those exceptions.
 | `src/components/workspace-discovery.tsx`                                                                                                 | Single app-lifetime discovery poll owner, mounted in `src/main.tsx`                                                                                                                           |
 | `src/components/workspace-switcher.tsx`                                                                                                  | Working pilot: selected option and filtered options use `select`; separate discovery health reader; URL-owned switching                                                                       |
 | `src/lib/workspaces.ts`                                                                                                                  | Pure `selectedWorkspace` and `matchingWorkspaces` projections                                                                                                                                 |
-| `server/workspace-database.ts`, `server/provenance.ts`                                                                                   | Bounded read-only persisted graph selection; durable reporter/claim/note/run role projections and explicit attribution status                                                                 |
+| `server/workspace-database.ts`, `server/provenance.ts`, `server/launch-readiness.ts`                                                     | Bounded read-only persisted graph selection; durable reporter/claim/note/run role projections and explicit attribution status                                                                 |
 | `src/components/markdown.tsx`                                                                                                            | Shared page-independent Markdown leaf; no issue-detail dependency                                                                                                                             |
 | `src/components/agent-activity.tsx`, `agent-prompt.tsx`, `agent-status.tsx`                                                              | Shared issue/task badge, prompt button/dialog and run-status leaves; consumers never import the Agents page                                                                                   |
 | `src/components/agent-directory.tsx`, `agent-detail.tsx`, `agent-run-history.tsx`, `agent-run-reply.tsx`                                 | Agent directory and selected identity/run presentation boundaries; `agents-view.tsx` is only the page entry                                                                                   |
@@ -319,19 +319,28 @@ page to consume. Domain options must not import Router; navigation belongs in ho
   claim order for `card-provenance.tsx`; it never infers ownership from a note or run.
 - Pure projections live in `src/lib/agents.ts`: `activeAgentIdentities` and
   `agentDirectorySummary` support overview/count consumers; `relevantAgentActivity`
-  preserves owner versus explicitly targeted working/queued semantics;
+  preserves owner versus explicitly targeted working/queued/blocked semantics;
   `selectedAgentActivity` resolves an exact run even when a URL has no/stale identity;
   `agentRunIdentities` and `targetAgentRunIds` support reviews without exposing the
-  timestamp-bearing directory.
+  timestamp-bearing directory. `launchRefusalNote` is the shared sentence for a
+  refused target, and `runLabel` reports `Blocked` for a queued run whose resolved
+  `AgentRun.launchRefusal` is present. Only `/agents` resolves it, for queued runs with
+  a direct target; every other run keeps `null`.
 - Selected-workspace consumers use the disabled readers in `src/hooks/use-agents.ts`:
   `useAgentIdentities`, `useAgentSummary`, `useRelevantAgentActivity`,
   `useSelectedAgentActivity`, `useAgentRunIdentities`, and `useTargetAgentRunIds`.
   The prompt dialog's `useConflictingPromptRuns` is also a disabled reader: it
   selects queued/running direct targets, excluding the current request ID so an
   unchanged retry can recover its receipt. Root-target relationships alone do not
-  reserve execution. Strand remains authoritative at dispatch and reports active
-  target conflicts as HTTP 409 with a concise diagnosis; failed prompts retain the
-  composer draft and never automatically stop, resume, or retry a run.
+  reserve execution. Strand remains authoritative at dispatch: reachable targets that
+  cannot launch (missing, closed, still in refinement, or held by active
+  `depends-on` blockers) and active target conflicts both fail as HTTP 409 with a
+  concise diagnosis, failed prompts retain the composer draft, and no refused target
+  gets a durable run. `useRunLaunchRefusal` reads that refusal for one run from the
+  polled directory, so a graph-blocked queue is never described as "waiting for the
+  agent to start". `server/launch-readiness.ts` owns the decision and the refusal
+  text; `readLaunchRefusals` in `server/workspace-database.ts` resolves target state,
+  lane and active blockers for exactly the requested ids in one bounded statement.
   Missing or failed activity reads visibly block sending; Retry activity explicitly
   refetches the shared query without introducing a poll owner.
   Fetch health/fetched-at is a separate `useAgentStatus` subscription. Only

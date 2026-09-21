@@ -3,6 +3,7 @@ import { StrandData } from './strand';
 import { commentsFixture } from './review-comments.fixture';
 import { parseCurateReview, parseReviewComments } from './review-comments';
 import { parseAgentPrompt, parsePromptContext } from './agent-prompts';
+import { noLaunchRefusals } from './launch-refusals.fixture';
 import { review } from './reviews.fixture';
 
 const exec = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<{ stdout: string }>>());
@@ -14,6 +15,12 @@ vi.mock('node:child_process', async () => {
 beforeEach(() => {
   exec.mockReset();
 });
+
+const database = {
+  readProvenance: vi.fn(),
+  readDependencies: vi.fn(),
+  readLaunchRefusals: noLaunchRefusals(),
+};
 const change = {
   revision: 'frozen-head',
   expectedVersion: 1,
@@ -75,7 +82,7 @@ function mock(snapshot = commentsFixture) {
 
 it('uses canonical comments and invokes curate with JSON as one argv and honest actor', async () => {
   mock();
-  const data = new StrandData('/repo/.millstrand');
+  const data = new StrandData('/repo/.millstrand', database);
   expect(await data.curateReview('review1', parseCurateReview(change))).toEqual(
     parseReviewComments(commentsFixture),
   );
@@ -104,7 +111,7 @@ it.each(['version', 'revision', 'locked', 'outdated', 'membership', 'candidate']
     if (reason === 'candidate')
       parsed.changes[0]!.candidate = { expectedVersion: 2, text: 'Edited' };
     await expect(
-      new StrandData('/repo/.millstrand').curateReview('review1', parsed),
+      new StrandData('/repo/.millstrand', database).curateReview('review1', parsed),
     ).rejects.toThrow();
     expect(exec.mock.calls).toHaveLength(1);
   },
@@ -119,7 +126,7 @@ it('persists stable comment identity and base candidate in agent context without
     prompt: 'Explain the guard more clearly',
     requestId: 'ui-0123456789abcdef',
   });
-  const reply = await new StrandData('/repo/.millstrand').promptAgent('review1', input);
+  const reply = await new StrandData('/repo/.millstrand', database).promptAgent('review1', input);
   expect(reply.prompt).toMatchObject({
     kind: 'review-comment',
     comment: { id: 'comment1', revision: 'frozen-head', candidateVersion: 1 },
@@ -142,7 +149,7 @@ it('rejects a stale comment prompt before agent launch', async () => {
     requestId: 'ui-0123456789abcdef',
   });
   await expect(
-    new StrandData('/repo/.millstrand').promptAgent('review1', input),
+    new StrandData('/repo/.millstrand', database).promptAgent('review1', input),
   ).rejects.toMatchObject({ status: 409 });
   expect(exec.mock.calls.some((call) => JSON.stringify(call[1]).includes('"run"'))).toBe(false);
 });

@@ -359,6 +359,8 @@ export class ProvenanceIndex {
       rootTargets: this.outgoing(run.strand.id, 'serves-root'),
       participants: this.runParticipants(run),
       continuation: this.continuation(run.strand.id),
+      // The directory resolves this for queued runs; persisted provenance cannot.
+      launchRefusal: null,
       createdAt: run.strand.created_at,
       startedAt: attrs['harness/started-at'] ?? null,
       finishedAt: attrs['harness/finished-at'] ?? null,

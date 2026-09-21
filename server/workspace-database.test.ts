@@ -174,3 +174,61 @@ it('reads dependency endpoints with display-only metadata and directed links', a
   expect(sql).toContain("edge_type = 'depends-on'");
   expect(sql).not.toContain('harness/prompt');
 });
+
+it('resolves launch refusals for exactly the requested strands in one bounded statement', async () => {
+  const database = fakeDatabase([
+    {
+      target_id: 'blocked',
+      target_state: 'active',
+      target_lane: 'pending',
+      blocker_id: 'dep1',
+      blocker_lane: 'refinement',
+    },
+    {
+      target_id: 'ready',
+      target_state: 'active',
+      target_lane: null,
+      blocker_id: null,
+      blocker_lane: null,
+    },
+    {
+      target_id: 'gone',
+      target_state: null,
+      target_lane: null,
+      blocker_id: null,
+      blocker_lane: null,
+    },
+  ]);
+  const reader = new WorkspaceDatabase(
+    workspace,
+    async () => '/state/workspace.sqlite',
+    () => database,
+  );
+
+  const refusals = await reader.readLaunchRefusals(['blocked', 'ready', 'gone']);
+  expect([...refusals]).toEqual([
+    ['blocked', { kind: 'blocked', blockers: [{ id: 'dep1', lane: 'refinement' }] }],
+    ['gone', { kind: 'missing' }],
+  ]);
+  const [sql, parameters] = database.all.mock.calls[0]!;
+  // Three requested ids become three bound placeholders in one VALUES list.
+  expect(parameters).toEqual(['blocked', 'ready', 'gone']);
+  expect(sql.match(/\(\?\)/g)).toHaveLength(3);
+  expect(sql).toContain("edge_type = 'depends-on'");
+  expect(sql).toContain("blockers.state = 'active'");
+  expect(sql).not.toContain('harness/prompt');
+  expect(sql).not.toContain(workspace);
+  expect(database.close).toHaveBeenCalledOnce();
+});
+
+it('never interpolates an unbounded readiness request', async () => {
+  const reader = new WorkspaceDatabase(
+    workspace,
+    async () => '/state/workspace.sqlite',
+    () => fakeDatabase([]),
+  );
+  await expect(reader.readLaunchRefusals([])).resolves.toEqual(new Map());
+  await expect(
+    reader.readLaunchRefusals(Array.from({ length: 501 }, (_value, index) => `s${index}`)),
+  ).rejects.toMatchObject({ status: 502 });
+});

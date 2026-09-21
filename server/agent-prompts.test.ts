@@ -7,6 +7,7 @@ import {
   parsePromptContext,
   reviewPromptContext,
 } from './agent-prompts.ts';
+
 import { StrandData } from './strand.ts';
 import { review } from './reviews.fixture.ts';
 import { parseReviewDetail } from './reviews.ts';
@@ -24,9 +25,10 @@ const reviewDetail = parseReviewDetail({
   },
 });
 
-const { exec, readProvenance } = vi.hoisted(() => ({
+const { exec, readProvenance, readLaunchRefusals } = vi.hoisted(() => ({
   exec: vi.fn(),
   readProvenance: vi.fn(),
+  readLaunchRefusals: vi.fn(),
 }));
 vi.mock('node:child_process', async () => {
   const { promisify } = await import('node:util');
@@ -35,6 +37,7 @@ vi.mock('node:child_process', async () => {
 vi.mock('./workspace-database.ts', () => ({
   WorkspaceDatabase: class {
     readProvenance = readProvenance;
+    readLaunchRefusals = readLaunchRefusals;
   },
 }));
 
@@ -85,6 +88,8 @@ const reply = {
 beforeEach(() => {
   exec.mockReset();
   readProvenance.mockReset();
+  readLaunchRefusals.mockReset();
+  readLaunchRefusals.mockResolvedValue(new Map());
 });
 
 describe('prompt boundaries', () => {
@@ -350,6 +355,101 @@ describe('scoped launch process', () => {
       'show',
       reviewDetail.id,
     ]);
+  });
+  it('refuses a refinement card before publishing any run', async () => {
+    mockWorkspace();
+    readLaunchRefusals.mockResolvedValue(new Map([['card1', { kind: 'refinement' }]]));
+    const data = new StrandData('/repo/.millstrand');
+    await expect(data.promptAgent('card1', prompt)).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('still in refinement'),
+    });
+    expect(exec.mock.calls.some((call) => Array.isArray(call[1]) && call[1].includes('run'))).toBe(
+      false,
+    );
+  });
+  it('refuses a pending card blocked by an active dependency and names the blockers', async () => {
+    mockWorkspace();
+    readLaunchRefusals.mockResolvedValue(
+      new Map([
+        [
+          'card1',
+          {
+            kind: 'blocked',
+            blockers: [
+              { id: 'dep1', lane: 'refinement' },
+              { id: 'dep2', lane: 'pending' },
+            ],
+          },
+        ],
+      ]),
+    );
+    const data = new StrandData('/repo/.millstrand');
+    await expect(data.promptAgent('card1', prompt)).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringMatching(/dep1 \(refinement\), dep2 \(pending\)/),
+    });
+    expect(exec.mock.calls.some((call) => Array.isArray(call[1]) && call[1].includes('run'))).toBe(
+      false,
+    );
+  });
+  it('labels only queued runs with their resolved launch refusal', async () => {
+    mockWorkspace();
+    readLaunchRefusals.mockResolvedValue(
+      new Map([['card1', { kind: 'blocked', blockers: [{ id: 'dep1', lane: null }] }]]),
+    );
+    readProvenance.mockResolvedValue({
+      strands: [
+        {
+          id: 'identity1',
+          title: 'Identity',
+          state: 'active',
+          created_at: '2026-09-14',
+          updated_at: '2026-09-14',
+          attributes: {
+            'identity/session': 'true',
+            'identity/id': 'worker',
+            'identity/harness': 'pi',
+          },
+        },
+        {
+          id: 'card1',
+          title: 'Feature',
+          state: 'active',
+          created_at: '2026-09-14',
+          updated_at: '2026-09-14',
+          attributes: { 'kanban/card': 'true' },
+        },
+        {
+          id: 'run1',
+          title: 'Queued work',
+          state: 'active',
+          created_at: '2026-09-14',
+          updated_at: '2026-09-14',
+          attributes: {
+            'harness/run': 'true',
+            'harness/published': 'true',
+            'identity/id': 'worker',
+            'harness/alias': 'tui',
+            'harness/harness': 'pi',
+            'harness/status': 'ready',
+            'harness/mode': 'headless',
+          },
+        },
+      ],
+      edges: [
+        { from_strand_id: 'run1', to_strand_id: 'card1', edge_type: 'serves' },
+        { from_strand_id: 'identity1', to_strand_id: 'run1', edge_type: 'performed' },
+      ],
+    });
+    const directory = await new StrandData('/repo/.millstrand').agents();
+    expect(readLaunchRefusals).toHaveBeenCalledWith(['card1']);
+    expect(directory.runs[0]).toMatchObject({
+      id: 'run1',
+      status: 'ready',
+      target: 'card1',
+      launchRefusal: { kind: 'blocked', blockers: [{ id: 'dep1', lane: null }] },
+    });
   });
   it('rejects unknown cards and aliases before any agent run', async () => {
     mockWorkspace();

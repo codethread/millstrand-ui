@@ -205,6 +205,20 @@ reply when available. Each submission starts a new run; there are no stop,
 assignment, or session-resume controls. A failed run can still have a useful reply,
 which is shown alongside its failure.
 
+Dispatch refuses a target that cannot launch under the Harnesses graph contract. A
+card that is still in **refinement** must be promoted to `pending`, a closed or
+replaced strand cannot take a targeted run, and a target with active `depends-on`
+blockers names those blockers (id and lane) in the form error without losing the
+draft. No run is created for a refused target, and the same check runs for every
+client, so a durable run that cannot launch is never published. The check is one
+bounded read-only SQL projection; it never inspects prompts, results or unrelated
+attributes.
+
+Agents distinguishes that graph-blocked queueing from executable queueing: a queued
+run whose target cannot launch shows **Blocked** (with the reason on hover and in its
+run detail or reply) instead of **Queued**. Runs created before this check by another
+client therefore remain visible and explained rather than looking stalled.
+
 If the target already has an active run, the dialog links to it and pauses new
 submissions until it settles. **Prompt agent** cannot send a message into that
 running session. A conflict discovered during dispatch leaves the prompt in the

@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { parseCardLane, moveCardArgs } from './card-actions';
+import { noLaunchRefusals } from './launch-refusals.fixture.ts';
 import { requestValue } from './parse';
 import { StrandData } from './strand';
 
@@ -64,6 +65,7 @@ function mockBoard() {
   });
   const database = {
     readDependencies: vi.fn(async () => ({ rootId: '', nodes: [], edges: [] })),
+    readLaunchRefusals: noLaunchRefusals(),
     readProvenance: vi.fn(async () => ({
       strands: cards.map((item) => ({
         ...item,

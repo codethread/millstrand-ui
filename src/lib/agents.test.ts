@@ -8,6 +8,7 @@ import {
   issueAgentActivity,
   issueAgents,
   issueRun,
+  launchRefusalNote,
   relevantAgentActivity,
   runLabel,
   selectAgents,
@@ -32,6 +33,7 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     rootTargets: [],
     participants: [],
     continuation: null,
+    launchRefusal: null,
     createdAt: '2026-09-13 10:00:00',
     startedAt: null,
     finishedAt: null,
@@ -88,6 +90,47 @@ describe('agent activity and issue attribution', () => {
     expect(runLabel(run({ substatus: 'requested' }))).toBe('Stopping');
   });
 
+  it('distinguishes a graph-blocked queue from ordinary executable queueing', () => {
+    expect(runLabel(run({ status: 'ready', launchRefusal: null }))).toBe('Queued');
+    expect(runLabel(run({ status: 'ready', launchRefusal: { kind: 'refinement' } }))).toBe(
+      'Blocked',
+    );
+    expect(
+      runLabel(
+        run({
+          status: 'ready',
+          launchRefusal: { kind: 'blocked', blockers: [{ id: 'dep1', lane: 'refinement' }] },
+        }),
+      ),
+    ).toBe('Blocked');
+    // A running run cannot be graph-blocked, so its resolved refusal stays ignored.
+    expect(runLabel(run({ status: 'running', launchRefusal: { kind: 'refinement' } }))).toBe(
+      'Running',
+    );
+  });
+
+  it.each([
+    [null, null],
+    [{ kind: 'missing' } as const, 'This target is not in the selected weaver.'],
+    [{ kind: 'closed' as const, state: 'closed' as const }, 'This target is closed.'],
+    [
+      { kind: 'refinement' } as const,
+      'This card is still in refinement. Promote it to pending before dispatching an agent.',
+    ],
+    [
+      {
+        kind: 'blocked' as const,
+        blockers: [
+          { id: 'dep1', lane: 'refinement' as const },
+          { id: 'dep2', lane: null },
+        ],
+      },
+      'Blocked by active dependencies: dep1 (refinement), dep2.',
+    ],
+  ])('explains a launch refusal %j', (refusal, note) => {
+    expect(launchRefusalNote(refusal)).toBe(note);
+  });
+
   it('does not claim an owner is working on a card without explicit targeting evidence', () => {
     const owner = identity([run()]);
     expect(issueAgents([owner], owner.id, 'card1')).toEqual([owner]);
@@ -121,6 +164,24 @@ describe('agent activity and issue attribution', () => {
     expect(issueAgentActivity(agent, 'card1')).toBe('Queued');
     expect(relevantAgentActivity([agent], agent.id, 'card1')).toEqual([
       { identity: agent, run: targeted, label: 'Queued', relation: 'queued' },
+    ]);
+  });
+
+  it('separates a blocked targeted queue from the owner running their own session', () => {
+    const targeted = run({
+      id: 'targeted',
+      alias: 'reviewer',
+      status: 'ready',
+      target: 'card1',
+      launchRefusal: {
+        kind: 'blocked',
+        blockers: [{ id: 'dep1', lane: 'refinement' }],
+      },
+    });
+    const agent = identity([targeted]);
+    expect(issueAgentActivity(agent, 'card1')).toBe('Blocked');
+    expect(relevantAgentActivity([agent], agent.id, 'card1')).toEqual([
+      { identity: agent, run: targeted, label: 'Blocked', relation: 'blocked' },
     ]);
   });
 

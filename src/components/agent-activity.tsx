@@ -21,7 +21,7 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
           className="agent-link"
           onClick={() => openAgent(identity.id)}
           aria-label={`View agent ${identity.id}`}
-          title={`${identity.id} · ${run?.alias ?? identity.harness}. ${health.error ? 'Activity refresh failed; last known status. ' : ''}${relation === 'owner-session' ? 'Owner’s session is running; work on this issue is not confirmed.' : label}`}
+          title={`${identity.id} · ${run?.alias ?? identity.harness}. ${health.error ? 'Activity refresh failed; last known status. ' : ''}${relation === 'owner-session' ? 'Owner’s session is running; work on this issue is not confirmed.' : relation === 'blocked' ? `${label}; the target cannot launch yet.` : label}`}
         >
           <span
             className={cn(

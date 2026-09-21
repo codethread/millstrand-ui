@@ -130,6 +130,16 @@ export function useAgentOptions(workspace: string | null, enabled = true) {
   return useQuery(agentOptionsQueryOptions(workspace, enabled));
 }
 
+/** One queued run's launch refusal from the polled directory; null when it can launch. */
+export function useRunLaunchRefusal(runId: string) {
+  const select = useCallback(
+    (directory: AgentDirectory) =>
+      directory.runs.find((candidate) => candidate.id === runId)?.launchRefusal ?? null,
+    [runId],
+  );
+  return useQuery({ ...agentReaderOptions(useWorkspace()), select });
+}
+
 /** Reply polling deliberately remains enabled for terminal runs so late results stay observable. */
 export function useAgentReply(id: string, enabled: boolean) {
   return useQuery(agentReplyQueryOptions(useWorkspace(), id, enabled));

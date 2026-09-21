@@ -86,6 +86,23 @@ export interface Board {
 
 export type AgentRunStatus = 'ready' | 'running' | 'stopped' | 'failed' | 'unknown';
 
+/** One active `depends-on` blocker that keeps a targeted harness run from launching. */
+export interface LaunchBlocker {
+  id: string;
+  lane: Lane | null;
+}
+
+/**
+ * Why a targeted run cannot launch under the Harnesses graph contract: the target is
+ * missing or closed, still in Kanban refinement, or held by active `depends-on`
+ * blockers. Absent means the target can launch.
+ */
+export type LaunchRefusal =
+  | { kind: 'missing' }
+  | { kind: 'closed'; state: 'closed' | 'replaced' }
+  | { kind: 'refinement' }
+  | { kind: 'blocked'; blockers: LaunchBlocker[] };
+
 export type LogContinuation =
   | { kind: 'native-resume'; predecessorRunId: string }
   | { kind: 'fresh-retry'; predecessorRunId: string };
@@ -106,6 +123,11 @@ export interface AgentRun {
   rootTargets: string[];
   participants: IdentityAttribution[];
   continuation: LogContinuation | null;
+  /**
+   * Resolved only for a queued run with a direct target, where it separates a
+   * graph-blocked queue from ordinary executable queueing. Null for every other run.
+   */
+  launchRefusal: LaunchRefusal | null;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;

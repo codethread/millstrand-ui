@@ -1,8 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import { noLaunchRefusals } from './launch-refusals.fixture.ts';
 import { StrandData } from './strand.ts';
 
 const readProvenance = vi.fn();
-const database = { readProvenance, readDependencies: vi.fn() };
+const database = {
+  readProvenance,
+  readDependencies: vi.fn(),
+  readLaunchRefusals: noLaunchRefusals(),
+};
 
 beforeEach(() => readProvenance.mockReset());
 

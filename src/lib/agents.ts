@@ -1,8 +1,16 @@
-import type { AgentIdentity, AgentRun, AgentRunStatus } from '../../shared/api';
+import type { AgentIdentity, AgentRun, AgentRunStatus, LaunchRefusal } from '../../shared/api';
 import { sorted } from '../../shared/array';
 
 export type AgentRunLabel =
-  'Untracked' | 'Unknown' | 'Queued' | 'Stopping' | 'Running' | 'Failed' | 'Completed' | 'Stopped';
+  | 'Untracked'
+  | 'Unknown'
+  | 'Queued'
+  | 'Blocked'
+  | 'Stopping'
+  | 'Running'
+  | 'Failed'
+  | 'Completed'
+  | 'Stopped';
 
 export interface AgentDirectorySummary {
   total: number;
@@ -13,7 +21,7 @@ export interface RelevantAgentActivity {
   identity: AgentIdentity;
   run: AgentRun | null;
   label: AgentRunLabel | 'Working' | 'Session running';
-  relation: 'working' | 'queued' | 'owner-session' | 'owner';
+  relation: 'working' | 'queued' | 'blocked' | 'owner-session' | 'owner';
 }
 
 export interface SelectedAgentActivity {
@@ -40,10 +48,22 @@ export function agentIsActive(agent: AgentIdentity): boolean {
   return agentStatus(agent) === 'running' || agentStatus(agent) === 'ready';
 }
 
+/** Explain why a queued run cannot launch, or null when it can. */
+export function launchRefusalNote(refusal: LaunchRefusal | null): string | null {
+  if (refusal === null) return null;
+  if (refusal.kind === 'missing') return 'This target is not in the selected weaver.';
+  if (refusal.kind === 'closed') return `This target is ${refusal.state}.`;
+  if (refusal.kind === 'refinement')
+    return 'This card is still in refinement. Promote it to pending before dispatching an agent.';
+  return `Blocked by active dependencies: ${refusal.blockers
+    .map((blocker) => (blocker.lane === null ? blocker.id : `${blocker.id} (${blocker.lane})`))
+    .join(', ')}.`;
+}
+
 export function runLabel(run: AgentRun | null): AgentRunLabel {
   if (!run) return 'Untracked';
   if (run.status === 'unknown') return 'Unknown';
-  if (run.status === 'ready') return 'Queued';
+  if (run.status === 'ready') return run.launchRefusal === null ? 'Queued' : 'Blocked';
   if (run.status === 'running') return run.substatus === 'requested' ? 'Stopping' : 'Running';
   if (run.status === 'failed') return 'Failed';
   return run.substatus === 'completed' ? 'Completed' : 'Stopped';
@@ -121,7 +141,7 @@ export function issueAgentActivity(
   const running = agent.runs.find((run) => run.status === 'running' && runTargets(run, id));
   if (running) return running.substatus === 'requested' ? 'Stopping' : 'Working';
   const queued = agent.runs.find((run) => run.status === 'ready' && runTargets(run, id));
-  if (queued) return 'Queued';
+  if (queued) return queued.launchRefusal === null ? 'Queued' : 'Blocked';
   const run = currentRun(agent);
   return run?.status === 'running' ? 'Session running' : runLabel(run);
 }
@@ -143,9 +163,11 @@ export function relevantAgentActivity(
           ? 'working'
           : label === 'Queued'
             ? 'queued'
-            : label === 'Session running'
-              ? 'owner-session'
-              : 'owner',
+            : label === 'Blocked'
+              ? 'blocked'
+              : label === 'Session running'
+                ? 'owner-session'
+                : 'owner',
     };
   });
 }

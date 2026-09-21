@@ -4,12 +4,14 @@ import { DatabaseSync } from 'node:sqlite';
 import { dirname, isAbsolute } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
+import { parseLaunchRefusals } from './launch-readiness.ts';
 import { HttpError, parseGraph } from './parse.ts';
-import type { CardGraph } from '../shared/api.ts';
+import type { CardGraph, LaunchRefusal } from '../shared/api.ts';
 
 const exec = promisify(execFile);
 const strandLimit = 10_000;
 const edgeLimit = 50_000;
+const refusalLimit = 500;
 const supportedSchemaVersion = 1;
 
 const weaverStatusesSchema = z.compile(
@@ -216,6 +218,29 @@ const provenanceSql = `
   SELECT record FROM projected_edges
 `;
 
+// Launch refusals: target state/lane and its active dependency blockers only; never prompts or results.
+function refusalSql(count: number): string {
+  return `
+  WITH requested(id) AS (VALUES ${Array.from({ length: count }, () => '(?)').join(', ')})
+  SELECT targets.id AS target_id,
+         targets.state AS target_state,
+         (SELECT json_extract(lane.value, '$') FROM attributes AS lane
+           WHERE lane.strand_id = targets.id AND lane.archived = 0
+             AND lane.key = 'kanban/lane') AS target_lane,
+         blockers.id AS blocker_id,
+         (SELECT json_extract(lane.value, '$') FROM attributes AS lane
+           WHERE lane.strand_id = blockers.id AND lane.archived = 0
+             AND lane.key = 'kanban/lane') AS blocker_lane
+  FROM requested
+  LEFT JOIN strands AS targets ON targets.id = requested.id
+  LEFT JOIN strand_edges AS dependency
+    ON dependency.from_strand_id = targets.id AND dependency.edge_type = 'depends-on'
+  LEFT JOIN strands AS blockers
+    ON blockers.id = dependency.to_strand_id AND blockers.state = 'active'
+  ORDER BY requested.id, blockers.id
+  `;
+}
+
 // Only dependency endpoints and display metadata; never arbitrary attributes or run payloads.
 const dependencySql = `
   WITH dependencies AS (
@@ -315,6 +340,7 @@ function decodeProvenance(value: unknown) {
 export interface PersistedWorkspaceReads {
   readProvenance(): Promise<unknown>;
   readDependencies(): Promise<CardGraph>;
+  readLaunchRefusals(ids: readonly string[]): Promise<Map<string, LaunchRefusal>>;
 }
 
 /** One bounded SQL statement sees a stable committed snapshot and never silently truncates history. */
@@ -326,7 +352,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
   ) {}
 
   async readDependencies(): Promise<CardGraph> {
-    const snapshot = await this.readSnapshot(dependencySql, []);
+    const snapshot = await this.read(dependencySql, [], decodeProvenance);
     const counts = countDependencies(
       snapshot.edges.map((edge) => ({ from: edge.from_strand_id, to: edge.to_strand_id })),
     );
@@ -342,16 +368,39 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
   }
 
   readProvenance(): Promise<unknown> {
-    return this.readSnapshot(provenanceSql, [...provenanceAttributeKeys, ...provenanceEdgeKinds]);
+    return this.read(
+      provenanceSql,
+      [...provenanceAttributeKeys, ...provenanceEdgeKinds],
+      decodeProvenance,
+    );
   }
 
-  private async readSnapshot(sql: string, parameters: readonly string[]) {
+  /**
+   * Resolve launch refusals for exactly these strand ids in one bounded statement.
+   * The result contains only targets that cannot launch; an absent strand is `missing`.
+   */
+  async readLaunchRefusals(ids: readonly string[]): Promise<Map<string, LaunchRefusal>> {
+    const requested = [...new Set(ids)];
+    if (requested.length === 0) return new Map();
+    if (requested.length > refusalLimit)
+      throw new HttpError(
+        502,
+        `Launch refusals were requested for more than ${refusalLimit} strands.`,
+      );
+    return this.read(refusalSql(requested.length), requested, parseLaunchRefusals);
+  }
+
+  private async read<T>(
+    sql: string,
+    parameters: readonly string[],
+    decode: (value: unknown) => T,
+  ): Promise<T> {
     let database: ReadonlyDatabase | null = null;
     try {
       database = this.open(await this.discover(this.workspace));
       database.configure();
       schemaVersionSchema.parse(database.schemaVersion());
-      return decodeProvenance(database.all(sql, parameters));
+      return decode(database.all(sql, parameters));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown persisted read failure';
       throw new HttpError(502, `Provenance inspection failed: ${message.slice(0, 1500)}`);

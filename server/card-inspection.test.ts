@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+import { noLaunchRefusals } from './launch-refusals.fixture.ts';
 import { StrandData } from './strand';
 
 const { exec } = vi.hoisted(() => ({ exec: vi.fn() }));
@@ -8,7 +9,11 @@ vi.mock('node:child_process', async () => {
 });
 
 const readProvenance = vi.fn();
-const database = { readProvenance, readDependencies: vi.fn() };
+const database = {
+  readProvenance,
+  readDependencies: vi.fn(),
+  readLaunchRefusals: noLaunchRefusals(),
+};
 
 beforeEach(() => {
   exec.mockReset();

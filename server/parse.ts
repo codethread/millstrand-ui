@@ -54,6 +54,11 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Normalize a persisted lane to the shared contract; unknown spellings stay explicit. */
+export function normalizedLane(value: string | null): Lane {
+  return lanes.find((candidate) => candidate === value) ?? 'unknown';
+}
+
 function isJsonValue(value: unknown): value is JsonValue {
   if (
     value === null ||
@@ -300,8 +305,7 @@ export function parseCard(value: unknown, provenance: AttributionProjection): Ca
   const attrs = row.attributes === undefined ? {} : jsonObject(row.attributes, 'card.attributes');
   const read = (key: keyof CardRow, attr = key): unknown => row[key] ?? attrs[attr];
   const sourceLane = maybeString(read('lane', 'kanban/lane'), 'card.lane');
-  const lane: Lane =
-    row.state === 'closed' ? 'closed' : (lanes.find((item) => item === sourceLane) ?? 'unknown');
+  const lane: Lane = row.state === 'closed' ? 'closed' : normalizedLane(sourceLane);
   const labels =
     row.labels === undefined
       ? Object.entries(attrs)

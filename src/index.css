@@ -2045,6 +2045,9 @@ h1 {
 .agent-status-ready {
   color: light-dark(#98783e, #d1b583);
 }
+.agent-status-blocked {
+  color: light-dark(#9c6f4a, #cc9f78);
+}
 .agent-status-failed {
   color: var(--color-destructive);
 }
