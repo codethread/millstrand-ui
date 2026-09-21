@@ -2,7 +2,19 @@ import { graphlib, layout as runLayout } from '@dagrejs/dagre';
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
 import type { Card, CardGraph, GraphNode, JsonValue } from '../../shared/api';
 
-export type IssueGraphNode = Node<{ item: GraphNode; status: string }, 'issue'>;
+export type DependencySelection =
+  { kind: 'expand'; ids: string[] } | { kind: 'focus'; id: string | null };
+
+export type IssueGraphNode = Node<
+  {
+    item: GraphNode;
+    status: string;
+    dependencies: { incoming: number; outgoing: number } | null;
+    context: 'hierarchy' | 'dependency' | 'focus';
+    expanded: boolean;
+  },
+  'issue'
+>;
 
 export function graphFromCards(cards: Card[], allCards: Card[]): CardGraph {
   const ids = new Set(cards.map((card) => card.id));
@@ -61,7 +73,7 @@ export interface ReadyGraphLayout {
 export type GraphLayout =
   ReadyGraphLayout | { kind: 'empty' } | { kind: 'too-large'; count: number };
 
-export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayout {
+function visibleGraph(graph: CardGraph, includeClosed: boolean): CardGraph {
   const children = graph.nodes.filter(
     (node) => includeClosed || node.state !== 'closed' || node.id === graph.rootId,
   );
@@ -77,13 +89,18 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
       }
   }
   const items = graph.nodes.filter((item) => ids.has(item.id));
+  return { ...graph, nodes: items };
+}
+
+export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayout {
+  const items = visibleGraph(graph, includeClosed).nodes;
   if (items.length === 0) return { kind: 'empty' };
   if (items.length > 150) return { kind: 'too-large', count: items.length };
   const itemIds = new Set(items.map((item) => item.id));
   const validEdges = graph.edges.filter((edge) => itemIds.has(edge.from) && itemIds.has(edge.to));
   const layout = new graphlib.Graph().setDefaultEdgeLabel(() => ({}));
   layout.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 95, marginx: 35, marginy: 35 });
-  for (const item of items) layout.setNode(item.id, { width: 260, height: 110 });
+  for (const item of items) layout.setNode(item.id, { width: 260, height: 158 });
   for (const edge of validEdges) {
     // Dependencies point at prerequisites; layout places prerequisites before their dependents.
     if (edge.kind === 'parent-of') layout.setEdge(edge.from, edge.to, { weight: 3 });
@@ -105,14 +122,22 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
       return {
         id: item.id,
         type: 'issue',
-        position: { x: position.x - 130, y: position.y - 55 },
-        data: { item, status: blocked ? 'blocked' : graphStatus(item) },
+        position: { x: position.x - 130, y: position.y - 79 },
+        data: {
+          item,
+          status: blocked ? 'blocked' : graphStatus(item),
+          dependencies: null,
+          context: 'hierarchy',
+          expanded: false,
+        },
       };
     }),
     edges: validEdges.map((edge, index) => ({
       id: `${edge.kind}-${edge.from}-${edge.to}-${index}`,
       source: edge.from,
       target: edge.to,
+      sourceHandle: edge.kind === 'depends-on' ? 'dependency-source' : null,
+      targetHandle: edge.kind === 'depends-on' ? 'dependency-target' : null,
       type: 'smoothstep',
       label: edge.kind === 'depends-on' ? 'depends on' : undefined,
       style: {
@@ -127,6 +152,69 @@ export function layoutGraph(graph: CardGraph, includeClosed: boolean): GraphLayo
         color: edge.kind === 'depends-on' ? 'var(--graph-dependency)' : 'var(--graph-hierarchy)',
         width: 16,
         height: 16,
+      },
+    })),
+  };
+}
+
+/** Explicit one-hop union. Hiding one root preserves links still requested by another. */
+export function dependencyLayout(
+  base: CardGraph,
+  dependencies: CardGraph | null,
+  selection: DependencySelection,
+  includeClosed: boolean,
+): GraphLayout {
+  const hierarchy = visibleGraph(base, includeClosed);
+  const focused = selection.kind === 'focus' && selection.id !== null;
+  const roots = new Set(
+    selection.kind === 'expand' ? selection.ids : selection.id ? [selection.id] : [],
+  );
+  const nodes = new Map(
+    [...(dependencies?.nodes ?? []), ...base.nodes].map((node) => [node.id, node]),
+  );
+  const ids = new Set(focused ? roots : hierarchy.nodes.map((node) => node.id));
+  const edges = (dependencies?.edges ?? []).filter(
+    (edge) => roots.has(edge.from) || roots.has(edge.to),
+  );
+  for (const id of roots) ids.add(id);
+  for (const edge of edges) {
+    ids.add(edge.from);
+    ids.add(edge.to);
+  }
+  const result = layoutGraph(
+    {
+      rootId: base.rootId,
+      nodes: [...nodes.values()].filter((node) => ids.has(node.id)),
+      edges: [...(focused ? [] : base.edges.filter((edge) => edge.kind === 'parent-of')), ...edges],
+    },
+    true,
+  );
+  if (result.kind !== 'ready') return result;
+  const baseIds = new Set(base.nodes.map((node) => node.id));
+  const counts = new Map<string, { incoming: number; outgoing: number }>();
+  for (const edge of dependencies?.edges ?? []) {
+    const from = counts.get(edge.from) ?? { incoming: 0, outgoing: 0 };
+    counts.set(edge.from, from);
+    from.outgoing += 1;
+    const to = counts.get(edge.to) ?? { incoming: 0, outgoing: 0 };
+    counts.set(edge.to, to);
+    to.incoming += 1;
+  }
+  return {
+    ...result,
+    nodes: result.nodes.map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        dependencies:
+          dependencies === null ? null : (counts.get(node.id) ?? { incoming: 0, outgoing: 0 }),
+        context:
+          focused && roots.has(node.id)
+            ? 'focus'
+            : baseIds.has(node.id)
+              ? 'hierarchy'
+              : 'dependency',
+        expanded: roots.has(node.id),
       },
     })),
   };

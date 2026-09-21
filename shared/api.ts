@@ -280,6 +280,7 @@ export interface ApiError {
  * GET /api/agent-options → AgentOption[] (available headless harnesses and aliases)
  * GET /api/agent-runs/:id → AgentReply
  * POST /api/cards/:id/agent-runs, AgentPrompt → AgentReply
+ * GET /api/dependencies → CardGraph (workspace dependency endpoints and directed edges)
  * GET /api/board → Board
  * GET /api/cards/:id → CardDetail
  * GET /api/cards/:id/graph → CardGraph

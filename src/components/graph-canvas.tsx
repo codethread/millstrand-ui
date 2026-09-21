@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -8,33 +8,71 @@ import {
   Position,
   ReactFlow,
   type NodeProps,
+  type Node,
 } from '@xyflow/react';
-import { ArrowUpRight, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import type { GraphNode } from '../../shared/api';
 import { graphBody, type ReadyGraphLayout, type IssueGraphNode } from '../lib/graph';
 import { Button } from './ui/button';
 import { Markdown } from './markdown';
 import { PromptAgentButton } from './agent-prompt';
+import {
+  GraphDependencyMenu,
+  GraphDependencyButton,
+  type DependencyAction,
+} from './graph-dependency-menu';
 import '@xyflow/react/dist/style.css';
 
-function GraphCard({ data }: NodeProps<IssueGraphNode>) {
+type InteractiveGraphNode = Node<IssueGraphNode['data'] & { action: DependencyAction }, 'issue'>;
+
+function GraphCard({ data }: NodeProps<InteractiveGraphNode>) {
   return (
-    <div className={`graph-node graph-kind-${data.item.kind}`}>
-      <Handle type="target" position={Position.Left} />
-      <div className="graph-node-header">
-        <span className={`graph-kind-label kind-${data.item.kind}`}>{data.item.kind}</span>
-        <span className="issue-id">{data.item.id}</span>
-        <span className={`graph-status-dot status-${data.status}`} title={data.status} />
+    <GraphDependencyMenu action={data.action}>
+      <div
+        className={`graph-node graph-kind-${data.item.kind} ${data.context === 'dependency' ? 'border-dashed! border-2! border-amber-500/60!' : 'border-2! border-violet-400/60!'} ${data.context === 'focus' ? 'ring-2 ring-violet-500 ring-offset-2 ring-offset-background' : ''}`}
+      >
+        <Handle type="target" position={Position.Left} />
+        <Handle type="source" position={Position.Left} id="dependency-source" />
+        <div className="graph-node-header">
+          <span className={`graph-kind-label kind-${data.item.kind}`}>{data.item.kind}</span>
+          <span className="issue-id">{data.item.id}</span>
+          <span className={`graph-status-dot status-${data.status}`} title={data.status} />
+        </div>
+        <strong>{data.item.title}</strong>
+        <div className="graph-node-footer">
+          <span className={`status-${data.status}`}>
+            {data.status === 'closed' ? 'Completed' : data.status.replaceAll('_', ' ')}
+          </span>
+          <span>
+            {data.context === 'dependency'
+              ? 'Added dependency'
+              : data.context === 'focus'
+                ? 'Dependency focus'
+                : 'Hierarchy'}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+          <span>
+            {data.dependencies === null ? (
+              'Dependencies unavailable'
+            ) : (
+              <>
+                <span title="Outgoing dependencies: prerequisites">
+                  Depends on <b>{data.dependencies.outgoing}</b>
+                </span>
+                {' · '}
+                <span title="Incoming dependencies: dependents">
+                  Required by <b>{data.dependencies.incoming}</b>
+                </span>
+              </>
+            )}
+          </span>
+          <GraphDependencyButton id={data.item.id} action={data.action} />
+        </div>
+        <Handle type="source" position={Position.Right} />
+        <Handle type="target" position={Position.Right} id="dependency-target" />
       </div>
-      <strong>{data.item.title}</strong>
-      <div className="graph-node-footer">
-        <span className={`status-${data.status}`}>
-          {data.status === 'closed' ? 'Completed' : data.status.replaceAll('_', ' ')}
-        </span>
-        <ArrowUpRight className="size-3" />
-      </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
+    </GraphDependencyMenu>
   );
 }
 const nodeTypes = { issue: GraphCard };
@@ -44,11 +82,39 @@ export function GraphCanvas({
   layout,
   root,
   openCard,
+  dependencyMode,
+  promptIds,
+  toggleDependencies,
 }: {
   layout: ReadyGraphLayout;
   root: string | null;
   openCard: (id: string) => void;
+  dependencyMode: 'expand' | 'focus';
+  promptIds: string[];
+  toggleDependencies: (id: string) => void;
 }) {
+  const nodes = useMemo(
+    () =>
+      layout.nodes.map((node): InteractiveGraphNode => ({
+        ...node,
+        data: {
+          ...node.data,
+          action: {
+            label: node.data.expanded
+              ? 'Hide dependencies'
+              : dependencyMode === 'expand'
+                ? 'View dependencies · add here'
+                : 'View dependencies · focus here',
+            disabled:
+              !node.data.expanded &&
+              (node.data.dependencies === null ||
+                node.data.dependencies.incoming + node.data.dependencies.outgoing === 0),
+            run: () => toggleDependencies(node.id),
+          },
+        },
+      })),
+    [layout.nodes, dependencyMode, toggleDependencies],
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = layout.nodes.find((node) => node.id === selectedId)?.data.item ?? null;
   function selectNode(item: GraphNode) {
@@ -61,6 +127,7 @@ export function GraphCanvas({
       onKeyDownCapture={(event) => {
         if ((event.key !== 'Enter' && event.key !== ' ') || !(event.target instanceof HTMLElement))
           return;
+        if (event.target.closest('button, [role=menuitem]')) return;
         const id = event.target.closest<HTMLElement>('.react-flow__node')?.dataset['id'];
         const item = layout.nodes.find((node) => node.id === id)?.data.item;
         if (item) {
@@ -71,7 +138,7 @@ export function GraphCanvas({
       }}
     >
       <ReactFlow
-        nodes={layout.nodes}
+        nodes={nodes}
         edges={layout.edges}
         nodeTypes={nodeTypes}
         colorMode="system"
@@ -90,7 +157,7 @@ export function GraphCanvas({
         <Controls showInteractive={false} />
         <MiniMap pannable zoomable nodeColor="#b4bac7" maskColor="var(--graph-canvas)" />
       </ReactFlow>
-      <div className="graph-legend">
+      <div className="graph-legend flex-wrap max-w-[calc(100%-32px)]">
         <span>
           <i />
           Parent → child
@@ -100,7 +167,9 @@ export function GraphCanvas({
           Depends on → prerequisite
         </span>
       </div>
-      <div className="graph-help">Scroll to zoom · drag to pan · click to inspect</div>
+      <div className="graph-help">
+        Scroll to zoom · drag to pan · right-click or … for dependencies
+      </div>
       {selected && (
         <aside className="graph-inspector">
           <div className="flex items-center justify-between">
@@ -117,7 +186,7 @@ export function GraphCanvas({
             </Button>
           </div>
           <h3>{selected.title}</h3>
-          {root && (
+          {root && promptIds.includes(selected.id) && (
             <PromptAgentButton
               target={{ kind: 'card', cardId: root, id: selected.id, title: selected.title }}
             />

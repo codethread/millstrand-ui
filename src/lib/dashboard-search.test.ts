@@ -137,6 +137,7 @@ describe('shareable dashboard navigation', () => {
       filter,
       activeViewId: null,
       graphRoot: null,
+      graphDependencies: { kind: 'expand', ids: [] },
       mode: 'graph',
     });
   });
@@ -153,11 +154,13 @@ describe('shareable dashboard navigation', () => {
       filter,
       activeViewId: 'platform',
       graphRoot: null,
+      graphDependencies: { kind: 'expand', ids: [] },
       mode: 'board',
     });
     expect(workspaceViewSearch({ ...search, mode: 'agents' }, 'review')).toMatchObject({
       activeViewId: null,
       graphRoot: null,
+      graphDependencies: { kind: 'expand', ids: [] },
       mode: 'board',
       filter: { lanes: ['in_review'] },
     });
@@ -252,4 +255,21 @@ it('keeps completed filters on the history surface and rejects removed layouts',
     updated,
   );
   expect(parseDashboardSearch({ historyLayout: 'ledger' }).historyLayout).toBe('timeline');
+});
+
+it('round trips both dependency demos and resets exploration on filter changes', () => {
+  for (const selection of [
+    { kind: 'expand', ids: ['a', 'b'] },
+    { kind: 'focus', id: 'outside' },
+  ]) {
+    const state = parseDashboardSearch({ mode: 'graph', graphDependencies: selection });
+    expect(parseDashboardSearch(defaultParseSearch(defaultStringifySearch(state)))).toEqual(state);
+    expect(manualFilterSearch(state, state.filter).graphDependencies).toEqual({
+      kind: 'expand',
+      ids: [],
+    });
+  }
+  expect(
+    parseDashboardSearch({ graphDependencies: { kind: 'focus', ids: [] } }).graphDependencies,
+  ).toEqual({ kind: 'expand', ids: [] });
 });

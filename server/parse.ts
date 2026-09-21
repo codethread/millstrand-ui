@@ -390,7 +390,10 @@ function graphEdges(items: EdgeRow[], kind: GraphEdge['kind']): GraphEdge[] {
   return items.map((edge) => ({ kind, from: edge.from_strand_id, to: edge.to_strand_id }));
 }
 
-export function parseGraph(value: unknown, provenance: AttributionProjection): CardGraph {
+export function parseGraph(
+  value: unknown,
+  provenance: Pick<AttributionProjection, 'owner'>,
+): CardGraph {
   const row = parseSchema(compiledGraphSchema, value, 'graph');
   const nodes = row.strands.map((item): GraphNode => {
     const work = parseWork(item);

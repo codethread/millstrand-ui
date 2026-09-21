@@ -34,6 +34,15 @@ export function graphQueryOptions(workspace: string | null, id: string | null) {
   });
 }
 
+/** GraphView owns this poll; counts include links outside the rendered graph. */
+export function dependencyQueryOptions(workspace: string | null) {
+  return queryOptions({
+    queryKey: ['dependencies', workspace],
+    queryFn: () => request<CardGraph>('/dependencies', workspace),
+    refetchInterval: 10000,
+  });
+}
+
 export function taskNotesQueryOptions(
   workspace: string | null,
   cardId: string,
@@ -82,7 +91,7 @@ export function cardActionMutationOptions(client: QueryClient, workspace: string
       ),
     onSettled: async () => {
       await Promise.all(
-        ['board', 'card', 'graph', 'agents'].map((key) =>
+        ['board', 'card', 'graph', 'dependencies', 'agents'].map((key) =>
           client.invalidateQueries({ queryKey: [key, workspace] }),
         ),
       );

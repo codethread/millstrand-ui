@@ -3,7 +3,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { dirname, isAbsolute } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
-import { HttpError } from './parse.ts';
+import { HttpError, parseGraph } from './parse.ts';
+import type { CardGraph } from '../shared/api.ts';
 
 const exec = promisify(execFile);
 const strandLimit = 10_000;
@@ -215,6 +216,33 @@ const provenanceSql = `
   SELECT record FROM projected_edges
 `;
 
+// Only dependency endpoints and display metadata; never arbitrary attributes or run payloads.
+const dependencySql = `
+  WITH dependencies AS (
+    SELECT DISTINCT from_strand_id, to_strand_id
+    FROM strand_edges WHERE edge_type = 'depends-on'
+    ORDER BY from_strand_id, to_strand_id LIMIT ${edgeLimit + 1}
+  ), endpoints AS (
+    SELECT from_strand_id AS id FROM dependencies
+    UNION SELECT to_strand_id AS id FROM dependencies
+  ), nodes AS (
+    SELECT json_object(
+      'kind', 'strand', 'id', s.id, 'title', s.title, 'state', s.state,
+      'created_at', s.created_at, 'updated_at', s.updated_at,
+      'attributes', json(COALESCE((
+        SELECT json_group_object(a.key, json(a.value)) FROM attributes a
+        WHERE a.strand_id = s.id AND a.archived = 0
+          AND a.key IN ('kanban/type', 'kanban/card', 'kanban/task', 'kanban/lane')
+      ), '{}'))
+    ) AS record FROM strands s JOIN endpoints ON endpoints.id = s.id
+    ORDER BY s.id LIMIT ${strandLimit + 1}
+  )
+  SELECT record FROM nodes
+  UNION ALL
+  SELECT json_object('kind', 'edge', 'from_strand_id', from_strand_id,
+    'to_strand_id', to_strand_id, 'edge_type', 'depends-on') FROM dependencies
+`;
+
 interface ReadonlyDatabase {
   configure(): void;
   schemaVersion(): unknown;
@@ -257,7 +285,7 @@ function openDatabase(path: string): ReadonlyDatabase {
   };
 }
 
-function decodeProvenance(value: unknown): unknown {
+function decodeProvenance(value: unknown) {
   const records = databaseRowsSchema
     .parse(value)
     .map(({ record }) => persistedRecordSchema.parse(JSON.parse(record) as unknown));
@@ -296,15 +324,30 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     private readonly open: OpenDatabase = openDatabase,
   ) {}
 
-  async readProvenance(): Promise<unknown> {
+  async readDependencies(): Promise<CardGraph> {
+    const snapshot = await this.readSnapshot(dependencySql, []);
+    return parseGraph(
+      {
+        'root-id': '',
+        strands: snapshot.strands,
+        'parent-of-edges': [],
+        'depends-on-edges': snapshot.edges,
+      },
+      { owner: () => null },
+    );
+  }
+
+  readProvenance(): Promise<unknown> {
+    return this.readSnapshot(provenanceSql, [...provenanceAttributeKeys, ...provenanceEdgeKinds]);
+  }
+
+  private async readSnapshot(sql: string, parameters: readonly string[]) {
     let database: ReadonlyDatabase | null = null;
     try {
       database = this.open(await this.discover(this.workspace));
       database.configure();
       schemaVersionSchema.parse(database.schemaVersion());
-      return decodeProvenance(
-        database.all(provenanceSql, [...provenanceAttributeKeys, ...provenanceEdgeKinds]),
-      );
+      return decodeProvenance(database.all(sql, parameters));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown persisted read failure';
       throw new HttpError(502, `Provenance inspection failed: ${message.slice(0, 1500)}`);

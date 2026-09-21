@@ -14,7 +14,7 @@ graph toolbar, so a focused graph is reachable.
   rendered as successful empty data.
 - `src/components/graph-view.tsx`: Router focus/filter selection, toolbar, source
   notices and memoized layout. `GraphSourceNotice` and `GraphEmpty` render explicit
-  loading/error/empty/too-large states. Only the graph reference and includeClosed
+  loading/error/empty/too-large states. Only graph data, dependency data, URL exploration and includeClosed
   enter layout memoization, never query wrappers, fetchedAt or composer drafts.
 - `src/lib/graph.ts`: pure `graphFromCards`, `layoutGraph`, `graphStatus`,
   `graphBody`, and concrete source/layout types. Query structural sharing retains
@@ -27,7 +27,7 @@ graph toolbar, so a focused graph is reachable.
 
 ## Deliberate lifecycle
 
-The canvas key is serialized **URL focus and filter values**, not graph membership
+The canvas key is serialized **URL focus, dependency exploration and filter values**, not graph membership
 or object identity. Focus/filter navigation (including Back) resets local inspector
 selection and fits the new graph. Workspace/page unmount also resets it. Unchanged
 polls, refresh health, prompt drafts and ordinary data updates do not remount the
@@ -42,7 +42,7 @@ The existing navigation contract still clears focus on manual filter changes.
 Unfocused graphs include matching issues and their epic context, not unmatched
 siblings. Focused graphs retain the focused root and transitive ancestors of live
 nodes even if closed; other closed nodes require includeClosed. Parent arrows point
-parent → child. Dependency arrows point dependent → prerequisite, while Dagre
+parent → child. Dependency arrows are explicit opt-in and point dependent → prerequisite, while Dagre
 positions prerequisites before dependents. Only edges with both actual endpoints
 are laid out. An open node with a visible open prerequisite is blocked; the subtree
 cannot prove readiness against external dependencies. Empty is explicit; more than
@@ -74,3 +74,60 @@ Browser checks used real local workspace reads at 1440×1000 and 390×844:
   for smoke testing. No paid agent launch or external review publication occurred.
 - Narrow canvas/inspector controls remained usable with document width equal to the
   390px viewport. Browser reported no uncaught page errors.
+
+## Direct dependency demos (jy52w)
+
+Right-click a Graph card or use its **…** button. Board/Outline card menus also
+open either dependency demo directly. Each graph card shows **Depends on**
+(outgoing prerequisites) and **Required by** (incoming dependents), counted across
+the workspace including closed work, never just the visible graph.
+
+- **1 · Add / hide in place** unions the direct neighbours of explicitly expanded
+  cards with the current hierarchy. Expand another card to add another hop. Hide
+  it from its menu or the removable ID chips; shared nodes/edges remain when another
+  expanded card still needs them. Reset removes all expansions.
+- **2 · Focus one card** shows only that card and its direct prerequisites/dependents.
+  Choosing another card replaces the neighbourhood. Hide/Reset restores the original
+  hierarchy. Browser Back restores earlier neighbourhoods.
+- Solid violet borders and **Hierarchy** mean membership in the original graph;
+  dashed amber borders and **Added dependency** identify added cards. The focused
+  card has a ring and **Dependency focus** label. This is hierarchy membership,
+  not a claim that every added card belongs to a different epic.
+- Closed dependency neighbours remain visible even when **Include completed** is
+  off, because the user explicitly requested those relationships. Counts stay
+  independent of all filters. No recursive expansion occurs automatically.
+- `graphDependencies` is a URL discriminated union: `expand` with IDs or `focus`
+  with a nullable ID. Focus/filter changes clear exploration. Discrete exploration
+  refits the canvas; ordinary polls retain pan/zoom and selection.
+
+`GET /api/dependencies` returns a `CardGraph` containing workspace-wide dependency
+edges and only their endpoints. `WorkspaceDatabase.readDependencies` uses one
+read-only, bounded SQL snapshot discovered through `mill weaver list`, with the
+existing schema/storage validation and 10,000-node / 50,000-edge overflow failures.
+Only identity, title, lifecycle, timestamps and allowlisted kind/lane metadata are
+selected; no arbitrary attributes or agent payloads. No Strand mutations occur.
+The mounted `GraphView` owns `['dependencies', workspace]` through `useDependencies`
+at 10 seconds. No per-node requests or polling owners are added. Missing data shows
+unavailable counts, not zeros; refresh failures retain data with visible last-known
+feedback. Card mutations await invalidation of this key too.
+
+### Verification
+
+`pnpm quality` passes (365 tests). Pure tests cover one-hop expansion, closed/external
+nodes, shared-link hiding, full incident counts, focus replacement, URL round trips,
+filter resets and the existing 150-node layout limit. Persisted-read tests cover the
+bounded projection and directed mapping.
+
+Browser verification used real `codethread.spool` card **hqqrk**: four prerequisites
+(69845, 7l93k, dmpd1, e5rrk) and one dependent (s7bec). Both closed prerequisites
+remain visible. In-place shows eight nodes including two tasks; focus shows six.
+Verified right-click, … menu, keyboard menu activation, adding 7l93k, hiding hqqrk
+while preserving shared links, focusing dmpd1, Back/reload, 390px layout without
+horizontal page overflow, Fit View, and both colour themes. An aborted dependency
+refresh retained all six nodes, the same viewport element and exact transform,
+with last-known feedback. The browser route override was removed; no real data was
+changed. No uncaught browser errors.
+
+![In-place expansion](evidence/graph-dependencies/expanded-dark.png)
+![Focused direct dependencies](evidence/graph-dependencies/focused-dark.png)
+![Narrow light theme](evidence/graph-dependencies/focused-narrow-light.png)
