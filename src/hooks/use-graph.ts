@@ -1,3 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
+import { dependencyQueryOptions } from '../lib/api/cards';
+import { useWorkspace } from './use-workspace';
 import { useMemo } from 'react';
 import type { Card } from '../../shared/api';
 import { graphFromCards, type GraphSource } from '../lib/graph';
@@ -11,4 +14,9 @@ export function useGraphSource(root: string | null, cards: Card[], allCards: Car
   if (query.data !== undefined) return { kind: 'ready', graph: query.data, error: query.error };
   if (query.error) return { kind: 'unavailable', error: query.error };
   return { kind: 'loading' };
+}
+
+/** Mounted graph is the sole dependency poll owner. */
+export function useDependencies() {
+  return useQuery(dependencyQueryOptions(useWorkspace()));
 }

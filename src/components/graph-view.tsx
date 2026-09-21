@@ -1,25 +1,38 @@
 import { useMemo } from 'react';
 import { Network } from 'lucide-react';
 import type { Card } from '../../shared/api';
-import { useGraphSource } from '../hooks/use-graph';
-import { layoutGraph, type GraphSource, type GraphLayout } from '../lib/graph';
-import { useDashboardActions, useGraphRoot, useIssueFilter } from '../lib/navigation';
+import { useDependencies, useGraphSource } from '../hooks/use-graph';
+import { dependencyLayout, type GraphSource, type GraphLayout } from '../lib/graph';
+import {
+  useDashboardActions,
+  useGraphDependencies,
+  useGraphRoot,
+  useIssueFilter,
+} from '../lib/navigation';
 import { ErrorNotice, Loading } from './issue-parts';
 import { GraphCanvas } from './graph-canvas';
+import { Button } from './ui/button';
 
 export default function GraphView({ cards, allCards }: { cards: Card[]; allCards: Card[] }) {
   const root = useGraphRoot();
   const filter = useIssueFilter();
-  const { setGraphRoot, openCard } = useDashboardActions();
+  const selection = useGraphDependencies();
+  const dependencies = useDependencies();
+  const dependencyGraph = dependencies.data ?? null;
+  const { setGraphRoot, openCard, setGraphDependencies, toggleGraphDependencies } =
+    useDashboardActions();
   const source = useGraphSource(root, cards, allCards);
   const graph = source.kind === 'ready' ? source.graph : null;
   const layout = useMemo(
-    () => (graph === null ? null : layoutGraph(graph, filter.includeClosed)),
-    [graph, filter.includeClosed],
+    () =>
+      graph === null
+        ? null
+        : dependencyLayout(graph, dependencyGraph, selection, filter.includeClosed),
+    [graph, dependencyGraph, selection, filter.includeClosed],
   );
   return (
     <div className="graph-workspace">
-      <div className="graph-toolbar">
+      <div className="graph-toolbar flex-wrap">
         <div>
           <Network className="size-4" />
           <strong>Relationships</strong>
@@ -45,13 +58,95 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
           </select>
         </label>
       </div>
+      <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
+        <span>Dependency demo</span>
+        <Button
+          size="sm"
+          variant={selection.kind === 'expand' ? 'secondary' : 'ghost'}
+          onClick={() =>
+            setGraphDependencies({
+              kind: 'expand',
+              ids: selection.kind === 'focus' && selection.id ? [selection.id] : [],
+            })
+          }
+        >
+          1 · Add / hide in place
+        </Button>
+        <Button
+          size="sm"
+          variant={selection.kind === 'focus' ? 'secondary' : 'ghost'}
+          onClick={() =>
+            setGraphDependencies({
+              kind: 'focus',
+              id: selection.kind === 'expand' ? (selection.ids[0] ?? null) : selection.id,
+            })
+          }
+        >
+          2 · Focus one card
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() =>
+            setGraphDependencies(
+              selection.kind === 'expand'
+                ? { kind: 'expand', ids: [] }
+                : { kind: 'focus', id: null },
+            )
+          }
+        >
+          Reset dependencies
+        </Button>
+        <span>
+          {selection.kind === 'expand'
+            ? `${selection.ids.length} expanded`
+            : selection.id
+              ? `Focused on ${selection.id}`
+              : 'Choose a card’s dependency menu'}
+        </span>
+        <span>Solid: hierarchy · Dashed: added card · Counts include closed cards</span>
+      </div>
+      {selection.kind === 'expand' && selection.ids.length > 0 && (
+        <div className="flex flex-wrap gap-2 px-4 pb-2">
+          {selection.ids.map((id) => (
+            <Button
+              key={id}
+              size="sm"
+              variant="outline"
+              onClick={() => toggleGraphDependencies(id)}
+              aria-label={`Hide dependencies for ${id}`}
+            >
+              {id} ×
+            </Button>
+          ))}
+        </div>
+      )}
       <GraphSourceNotice source={source} />
+      {dependencies.isPending && (
+        <p className="px-4 py-2 text-xs text-muted-foreground">
+          Loading dependency counts and relationships…
+        </p>
+      )}
+      {dependencies.error && (
+        <div>
+          <ErrorNotice error={dependencies.error} />
+          <p className="px-4 text-xs text-muted-foreground">
+            {dependencyGraph
+              ? 'Showing last-known dependencies and counts.'
+              : 'Dependency counts and expansion are unavailable.'}
+          </p>
+        </div>
+      )}
+
       {layout?.kind === 'ready' ? (
         <GraphCanvas
-          key={JSON.stringify([root, filter])}
+          key={JSON.stringify([root, filter, selection])}
           layout={layout}
           root={root}
           openCard={openCard}
+          dependencyMode={selection.kind}
+          promptIds={graph?.nodes.map((node) => node.id) ?? []}
+          toggleDependencies={toggleGraphDependencies}
         />
       ) : layout !== null ? (
         <GraphEmpty layout={layout} />

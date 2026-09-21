@@ -1,3 +1,4 @@
+import { useDashboardActions } from '../lib/navigation';
 import { Check, MoreHorizontal, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Card } from '../../shared/api';
@@ -37,12 +38,21 @@ function preserveDeleteFocus(event: Event) {
 }
 
 function CardMenuItems({ card, context }: { card: Card; context: boolean }) {
+  const { viewCardDependencies } = useDashboardActions();
   const { pending, move, confirmDelete } = useCardMenu(card);
   const Item = context ? ContextMenuItem : DropdownMenuItem;
   const Label = context ? ContextMenuLabel : DropdownMenuLabel;
   const Separator = context ? ContextMenuSeparator : DropdownMenuSeparator;
   return (
     <>
+      <Label>Graph dependencies</Label>
+      <Item onSelect={() => viewCardDependencies(card.id, 'expand')}>
+        View dependencies · add / hide
+      </Item>
+      <Item onSelect={() => viewCardDependencies(card.id, 'focus')}>
+        View dependencies · focused
+      </Item>
+      <Separator />
       <Label>Move to lane</Label>
       {lanes.map(({ id, title }) =>
         id === 'unknown' ? null : (

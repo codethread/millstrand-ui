@@ -135,3 +135,31 @@ it('rejects an edge overflow rather than silently truncating history', async () 
 
   await expect(reader.readProvenance()).rejects.toThrow('50000 role edges');
 });
+
+it('reads dependency endpoints with display-only metadata and directed links', async () => {
+  const database = fakeDatabase([
+    strandRecord,
+    {
+      record: JSON.stringify({
+        kind: 'edge',
+        from_strand_id: 'strand1',
+        to_strand_id: 'outside',
+        edge_type: 'depends-on',
+      }),
+    },
+  ]);
+  const reader = new WorkspaceDatabase(
+    workspace,
+    async () => '/state/workspace.sqlite',
+    () => database,
+  );
+  const graph = await reader.readDependencies();
+  expect(graph.nodes[0]).toMatchObject({ id: 'strand1', kind: 'feature', owner: null });
+  expect(graph.edges).toEqual([{ kind: 'depends-on', from: 'strand1', to: 'outside' }]);
+  expect(database.close).toHaveBeenCalledOnce();
+  const [sql] = database.all.mock.calls[0]!;
+  expect(sql).toContain('LIMIT 10001');
+  expect(sql).toContain('LIMIT 50001');
+  expect(sql).toContain("edge_type = 'depends-on'");
+  expect(sql).not.toContain('harness/prompt');
+});

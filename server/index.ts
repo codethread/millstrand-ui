@@ -198,6 +198,11 @@ const server = createServer((request, response) => {
       json(response, 200, await strand.board());
       return;
     }
+    if (path === '/api/dependencies' && method === 'GET') {
+      const workspace = await workspaces.select(url.searchParams.get('workspace'));
+      json(response, 200, await new WorkspaceDatabase(workspace.path).readDependencies());
+      return;
+    }
     if (path === '/api/reviews' && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
       json(response, 200, await strand.reviews());

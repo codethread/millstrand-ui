@@ -1,7 +1,8 @@
+import { sorted } from '../../shared/array';
 import { describe, expect, it } from 'vitest';
 import type { Card, CardGraph, GraphNode } from '../../shared/api';
 import { emptyFilter, issueSurfaceContent } from './board';
-import { graphFromCards, layoutGraph } from './graph';
+import { dependencyLayout, graphFromCards, layoutGraph } from './graph';
 
 function node(id: string, state = 'active'): GraphNode {
   return {
@@ -137,5 +138,88 @@ describe('graph inputs and layout', () => {
     const graph = { rootId: '', nodes: [...nodes, node('extra', 'closed')], edges: [] };
     expect(layoutGraph(graph, false).kind).toBe('ready');
     expect(layoutGraph(graph, true)).toEqual({ kind: 'too-large', count: 151 });
+  });
+});
+
+describe('explicit direct dependency exploration', () => {
+  const base: CardGraph = {
+    rootId: 'root',
+    nodes: [node('root'), node('task'), node('closed-task', 'closed')],
+    edges: [
+      { kind: 'parent-of', from: 'root', to: 'task' },
+      { kind: 'parent-of', from: 'root', to: 'closed-task' },
+    ],
+  };
+  const dependencies: CardGraph = {
+    rootId: '',
+    nodes: [node('root'), node('outside', 'closed'), node('incoming'), node('two-hops')],
+    edges: [
+      { kind: 'depends-on', from: 'root', to: 'outside' },
+      { kind: 'depends-on', from: 'incoming', to: 'root' },
+      { kind: 'depends-on', from: 'outside', to: 'two-hops' },
+    ],
+  };
+  it('counts all incident edges without expanding any implicitly', () => {
+    const result = dependencyLayout(base, dependencies, { kind: 'expand', ids: [] }, false);
+    if (result.kind !== 'ready') throw new Error('Expected layout');
+    expect(result.nodes.map((n) => n.id)).toEqual(['root', 'task']);
+    expect(result.nodes[0]?.data.dependencies).toEqual({ incoming: 1, outgoing: 1 });
+    expect(result.edges).toHaveLength(1);
+    const missing = dependencyLayout(base, null, { kind: 'expand', ids: [] }, false);
+    expect(missing.kind === 'ready' && missing.nodes[0]?.data.dependencies).toBeNull();
+  });
+  it('expands only direct neighbours, including closed external cards, with explicit distinction', () => {
+    const result = dependencyLayout(base, dependencies, { kind: 'expand', ids: ['root'] }, false);
+    if (result.kind !== 'ready') throw new Error('Expected layout');
+    expect(
+      sorted(
+        result.nodes.map((n) => n.id),
+        (a, b) => a.localeCompare(b),
+      ),
+    ).toEqual(['incoming', 'outside', 'root', 'task']);
+    expect(result.nodes.find((n) => n.id === 'outside')?.data).toMatchObject({
+      context: 'dependency',
+      dependencies: { incoming: 1, outgoing: 1 },
+    });
+    expect(result.nodes.find((n) => n.id === 'root')?.data.context).toBe('hierarchy');
+    expect(result.edges.map((e) => [e.source, e.target])).toContainEqual(['incoming', 'root']);
+  });
+  it('keeps shared edges when one root is hidden and removes unrequested second hops', () => {
+    const expanded = dependencyLayout(
+      base,
+      dependencies,
+      { kind: 'expand', ids: ['root', 'outside'] },
+      false,
+    );
+    if (expanded.kind !== 'ready') throw new Error('Expected layout');
+    expect(expanded.edges).toHaveLength(4);
+    const hidden = dependencyLayout(
+      base,
+      dependencies,
+      { kind: 'expand', ids: ['outside'] },
+      false,
+    );
+    if (hidden.kind !== 'ready') throw new Error('Expected layout');
+    expect(
+      sorted(
+        hidden.nodes.map((n) => n.id),
+        (a, b) => a.localeCompare(b),
+      ),
+    ).toEqual(['outside', 'root', 'task', 'two-hops']);
+    expect(hidden.edges.map((e) => [e.source, e.target])).toContainEqual(['root', 'outside']);
+  });
+  it('replaces the focused neighbourhood without carrying hierarchy or prior neighbours', () => {
+    const result = dependencyLayout(base, dependencies, { kind: 'focus', id: 'outside' }, false);
+    if (result.kind !== 'ready') throw new Error('Expected layout');
+    expect(
+      sorted(
+        result.nodes.map((n) => n.id),
+        (a, b) => a.localeCompare(b),
+      ),
+    ).toEqual(['outside', 'root', 'two-hops']);
+    expect(result.nodes.find((n) => n.id === 'outside')?.data.context).toBe('focus');
+    expect(result.edges.map((e) => e.label)).toEqual(['depends on', 'depends on']);
+    const reset = dependencyLayout(base, dependencies, { kind: 'focus', id: null }, false);
+    expect(reset.kind === 'ready' && reset.nodes.map((n) => n.id)).toEqual(['root', 'task']);
   });
 });
