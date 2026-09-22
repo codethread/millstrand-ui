@@ -27,6 +27,10 @@ latency guarantees. Direct SQL samples used one warm-up and three measured reads
 
 ## Measurements
 
+These figures are the original 2026-09-21 audit results. They predate the later
+removal of note strands from shared provenance and are retained as historical
+samples rather than estimates of the current scoped query.
+
 | Read                                                     | Before                      | After                                                   |
 | -------------------------------------------------------- | --------------------------- | ------------------------------------------------------- |
 | Codethread serialized provenance                         | 2,200,561 bytes             | 827,296 bytes (62% smaller)                             |
@@ -47,7 +51,7 @@ row counts were unchanged. Dependency SQL and its bounds were unchanged.
 
 ## Verification
 
-`pnpm quality`: 384 tests, formatting, strict TypeScript, zero-warning Oxlint and
+`pnpm quality`: 386 tests, formatting, strict TypeScript, zero-warning Oxlint and
 production build pass (existing large-bundle advisory remains). Tests protect
 shared-read coalescing/failure recovery, fresh mutation validation/invalidation,
 metadata-only note allowlists, lazy full-note reads and attribution, hidden-query
