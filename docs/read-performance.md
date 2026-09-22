@@ -11,8 +11,9 @@ latency guarantees. Direct SQL samples used one warm-up and three measured reads
   Log activity even created a new database client each request. They now share one
   short-lived parsed snapshot per workspace; concurrent misses coalesce.
 - Codethread's snapshot had 2,479 strands, including 1,554 notes. None of the
-  background projections needed note bodies, yet every snapshot loaded them.
-  The SQL now retains note identity/attribution metadata but omits text/time/kind.
+  background projections needed notes, so shared provenance now excludes them.
+  Note readers load identity/attribution metadata only for returned note IDs;
+  text/time/kind continue to come from the notes domain command.
 - Role lookups repeatedly scanned every edge, and log summaries projected the agent
   directory twice. Source/target indexes and snapshot-local agent memoization remove
   that repeated work without changing authoritative ownership/attribution rules.
