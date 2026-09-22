@@ -387,8 +387,8 @@ Graph menu actions are URL navigation, not data mutations or local copies. See
 ### Card dependency counts and hierarchy focus
 
 `Card.dependencies` and `GraphNode.dependencies` are the required incoming/outgoing
-projections from `ProvenanceIndex.dependencies`. The existing bounded provenance
-SQL also reads `depends-on` edges workspace-wide (within the existing edge bound);
+projections from `ProvenanceIndex.dependencies`. The shared provenance SQL also
+reads `depends-on` edges workspace-wide within the existing edge bound;
 one-pass deduplication indexes counts without requiring neighbour hydration.
 `parseCard` and `parseGraph` hydrate board, detail and subtree contracts using the
 shared unique-link projection in `shared/dependencies.ts`. Existing board/detail/
@@ -417,19 +417,22 @@ ordinary polls still preserve the viewport. No server or query policy changes.
 ### Shared persisted reads and lazy full notes
 
 `StrandData.provenance()` coalesces and reuses one parsed `ProvenanceIndex` per
-workspace for three seconds across board, agents, log activity, detail, graph and
-notes readers. The existing endpoint caches remain short-lived. Card mutation
-preflight clears the shared snapshot before validation; mutation settlement clears
-it and affected responses even on uncertain failure. Labels clear it on settlement,
-and successful prompt dispatch invalidates agent provenance. No failed load is
-cached as an empty success. Generation checks prevent pre-invalidation loads from
+workspace for three seconds across board, agents, log activity, detail and graph
+readers. The existing endpoint caches remain short-lived. Card mutation preflight
+clears the shared snapshot before validation; mutation settlement clears it and
+affected responses even on uncertain failure. Labels clear it on settlement, and
+successful prompt dispatch invalidates agent provenance. No failed load is cached
+as an empty success. Generation checks prevent pre-invalidation loads from
 repopulating cleared caches.
 
-The bounded provenance SQL keeps note IDs and author attribution metadata, but
-never hydrates note text/time/kind values. `ProvenanceIndex` indexes edges by source
-and target and memoizes its agent projection rather than rescanning all edges for
-every role lookup or recomputing agents twice per log summary. Log activity uses
-the workspace's shared index, not a new database client per request.
+The shared provenance SQL has no arbitrary strand-count cutoff and excludes notes.
+Note and latest-note readers request attribution metadata only for the note IDs they
+actually received; note text/time/kind still comes from the domain command and never
+enters persisted provenance. The role-edge read remains bounded and fails rather
+than silently truncating history. `ProvenanceIndex` indexes edges by source and
+target and memoizes its agent projection rather than rescanning all edges for every
+role lookup or recomputing agents twice per log summary. Log activity uses the
+workspace's shared index, not a new database client per request.
 
 `CardDetail` no longer embeds full notes. `GET /cards/:id/notes` validates card
 membership, then loads full notes on demand; task-note reads reuse the same

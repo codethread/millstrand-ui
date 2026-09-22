@@ -11,8 +11,9 @@ latency guarantees. Direct SQL samples used one warm-up and three measured reads
   Log activity even created a new database client each request. They now share one
   short-lived parsed snapshot per workspace; concurrent misses coalesce.
 - Codethread's snapshot had 2,479 strands, including 1,554 notes. None of the
-  background projections needed note bodies, yet every snapshot loaded them.
-  The SQL now retains note identity/attribution metadata but omits text/time/kind.
+  background projections needed notes, so shared provenance now excludes them.
+  Note readers load identity/attribution metadata only for returned note IDs;
+  text/time/kind continue to come from the notes domain command.
 - Role lookups repeatedly scanned every edge, and log summaries projected the agent
   directory twice. Source/target indexes and snapshot-local agent memoization remove
   that repeated work without changing authoritative ownership/attribution rules.
@@ -25,6 +26,10 @@ latency guarantees. Direct SQL samples used one warm-up and three measured reads
   sidebar counts, badges, activity hints and prompt feedback across page modes.
 
 ## Measurements
+
+These figures are the original 2026-09-21 audit results. They predate the later
+removal of note strands from shared provenance and are retained as historical
+samples rather than estimates of the current scoped query.
 
 | Read                                                     | Before                      | After                                                   |
 | -------------------------------------------------------- | --------------------------- | ------------------------------------------------------- |
@@ -46,7 +51,7 @@ row counts were unchanged. Dependency SQL and its bounds were unchanged.
 
 ## Verification
 
-`pnpm quality`: 384 tests, formatting, strict TypeScript, zero-warning Oxlint and
+`pnpm quality`: 386 tests, formatting, strict TypeScript, zero-warning Oxlint and
 production build pass (existing large-bundle advisory remains). Tests protect
 shared-read coalescing/failure recovery, fresh mutation validation/invalidation,
 metadata-only note allowlists, lazy full-note reads and attribution, hidden-query

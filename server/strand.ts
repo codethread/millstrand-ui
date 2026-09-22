@@ -14,7 +14,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { ProvenanceIndex } from './provenance.ts';
+import { emptyProvenance, ProvenanceIndex } from './provenance.ts';
 import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
 import {
   agentLaunchArgs,
@@ -246,6 +246,12 @@ export class StrandData {
     );
   }
 
+  private async noteProvenance(noteIds: readonly string[]): Promise<ProvenanceIndex> {
+    return noteIds.length === 0
+      ? emptyProvenance()
+      : new ProvenanceIndex(await this.database.readNoteProvenance(noteIds));
+  }
+
   board(): Promise<Board> {
     return this.boards.get('board', async () => {
       const raw = object(await this.run(['kanban', 'board', '--all', 'true']), 'board');
@@ -411,11 +417,23 @@ export class StrandData {
       const body = attrs['body'];
       if (body !== undefined && typeof body !== 'string')
         throw new Error('card body must be a string');
+      const tasks = array(raw['tasks'], 'card detail.tasks').map((task) =>
+        parseTask(task, provenance),
+      );
+      const noteProvenance = await this.noteProvenance(
+        tasks.flatMap((task) => (task.latestNote === null ? [] : [task.latestNote.id])),
+      );
       return {
         card: { ...parseCard(cardRaw, provenance), epicId: known.epicId },
         body: body ?? '',
         attributes: attrs,
-        tasks: array(raw['tasks'], 'card detail.tasks').map((task) => parseTask(task, provenance)),
+        tasks: tasks.map((task) => ({
+          ...task,
+          latestNote:
+            task.latestNote === null
+              ? null
+              : { ...task.latestNote, actor: noteProvenance.noteActor(task.latestNote.id) },
+        })),
         activeWork: array(raw['active-work'], 'card detail.active-work').map(parseWork),
         ready: array(raw['ready'], 'card detail.ready').map(parseWork),
         related: array(raw['related'], 'card detail.related').map(parseRelation),
@@ -430,9 +448,12 @@ export class StrandData {
 
   private readNotes(id: string): Promise<Note[]> {
     return this.notes.get(id, async () => {
-      const notes = await this.run(['notes', id]);
-      const provenance = await this.provenance();
-      return reversed(array(notes, 'notes').map((note) => parseNote(note, provenance)));
+      const unattributed = emptyProvenance();
+      const notes = array(await this.run(['notes', id]), 'notes').map((note) =>
+        parseNote(note, unattributed),
+      );
+      const provenance = await this.noteProvenance(notes.map((note) => note.id));
+      return reversed(notes.map((note) => ({ ...note, actor: provenance.noteActor(note.id) })));
     });
   }
 

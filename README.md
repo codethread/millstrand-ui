@@ -187,9 +187,10 @@ file-backed SQLite database through `mill weaver list`, then runs a short-lived,
 read-only SQL projection over committed persisted state. It selects identity sessions,
 identity-linked published runs, and owned work before assembling only the required
 attributes. Unrelated notes, events, artifacts, provider environment variables,
-injected prompts, and credentials are never selected. The projection has explicit 10,000-strand and 50,000-role-edge safety bounds,
-retains every lifecycle state including completed claims and terminal runs, and
-fails rather than truncating or accepting an unsupported storage/schema version.
+injected prompts, and credentials are never selected. The projection has no
+arbitrary strand-count cutoff; its 50,000-role-edge safety bound fails rather than
+truncating, and unsupported storage or schema versions also fail explicitly. It
+retains every lifecycle state including completed claims and terminal runs.
 Raw friendly identities remain visible as resolved, unresolved, or ambiguous;
 the server never picks an unlinked or conflicting registry match. Card detail labels
 **Reporter**, **Current owner**, and the full oldest-first claim/handoff history
