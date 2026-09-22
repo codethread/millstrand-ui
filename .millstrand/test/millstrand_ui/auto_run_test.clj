@@ -87,6 +87,8 @@
                       finisher-step (role-step strands "finisher")]
                   (is (some? worker-step))
                   (is (some? finisher-step))
+                  (is (= "fixture-card" (attr-get worker-step :auto-run/card)))
+                  (is (= "fixture-card" (attr-get finisher-step :auto-run/card)))
                   (is (not= (:id worker-step) (:id finisher-step))))))))))))
 
 (defn- inspect-params [ctx on-change]
