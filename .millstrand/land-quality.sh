@@ -8,4 +8,4 @@ echo "==> git diff --check"
 git diff --check
 
 echo "==> pnpm quality"
-pnpm quality
+flock -w 180 /tmp/millstrand-test.lock pnpm quality

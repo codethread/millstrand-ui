@@ -1,6 +1,6 @@
 # Automatic feature delivery
 
-This repository uses the shared Codethread dispatcher to pick up opted-in,
+This repository uses the shared Millhouse dispatcher to pick up opted-in,
 graph-ready pending features. One selected worker owns each feature; no agent
 polls the board to coordinate other workers. Epics and refinement cards do not
 run. Existing feature dependencies still mean prerequisite code is landed.
@@ -100,7 +100,7 @@ removal, so the handoff must happen **before approval**, not just before cleanup
 A per-command shell `cd` does not move the original agent session's persistent
 cwd.
 
-`auto-full-land` calls Codethread's optional `auto-run-land/autonomous-land` composition. It
+`auto-full-land` calls Millhouse's optional `auto-run-land/autonomous-land` composition. It
 pours two distinct delivery targets under the feature run:
 
 1. the active `handoff-worker` step, which the assigned worker serves; and
