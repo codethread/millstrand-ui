@@ -494,17 +494,6 @@ export function strandCommandError(stderr: string, fallback: string): HttpError 
     const details = object(error['details'], 'strand error.details');
     if (
       error['code'] === 'domain/error' &&
-      error['message'] === 'Target already has an active managed run'
-    ) {
-      const runs = z.array(z.string().regex(/^[a-zA-Z0-9_-]+$/)).safeParse(details['runs']);
-      const runHint = runs.success && runs.data.length ? ` (${runs.data.join(', ')})` : '';
-      return new HttpError(
-        409,
-        `This target already has an active agent run${runHint}. Open it in Agents to inspect its progress. Wait for it to settle before starting another run; Prompt agent cannot message a running agent. Your prompt was not sent.`,
-      );
-    }
-    if (
-      error['code'] === 'domain/error' &&
       error['message'] === 'Operation not found' &&
       details['canonical-operation'] === 'kanban'
     ) {

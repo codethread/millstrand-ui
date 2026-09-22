@@ -22,7 +22,6 @@ import {
 } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { useDashboardStore } from '../store';
-import { AgentNotifications } from './agent-notifications';
 import { AgentSearchControls } from './agent-directory';
 import { DashboardFilters } from './dashboard-filters';
 import { ReviewSearchControls } from './review-inbox';
@@ -88,7 +87,6 @@ export function DashboardHeader() {
             ))}
           </div>
         )}
-        <AgentNotifications />
         {mode === 'completed' ? null : mode === 'reviews' ? (
           <ReviewSearchControls />
         ) : mode === 'agents' ? (

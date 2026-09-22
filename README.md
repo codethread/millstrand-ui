@@ -198,29 +198,12 @@ separately. A note’s **Note author** is attribution only, never an ownership u
 Board search matches the reporter and every recorded owner (including historical
 handoffs); the compact Board and Outline rows show only the current owner.
 
-Use **Prompt agent** from a card's detail panel in Board, Outline, or Graph (or a
-focused graph's strand inspector). The small compose dialog starts a headless
-`strand agent run` in that weaver and opens its existing Agents detail view.
-That view shows your prompt, the tracked status, a link back to the work, and the
-reply when available. Each submission starts a new run; there are no stop,
-assignment, or session-resume controls. A failed run can still have a useful reply,
-which is shown alongside its failure.
-
-If the target already has an active run, the dialog links to it and pauses new
-submissions until it settles. **Prompt agent** cannot send a message into that
-running session. A conflict discovered during dispatch leaves the prompt in the
-form and identifies the existing run without dumping the CLI command. An unchanged
-retry can still recover a run created by that same submission.
-The dialog waits for agent activity to load before enabling Send and shows an
-explicit retry when that activity cannot refresh.
-
-The default alias is **tui**, saved separately for each weaver in this browser.
-Change it in the compose dialog. Choices come from that weaver's
-available headless harnesses; missing Harnesses support or an unavailable alias
-is shown explicitly. Prompts are passed as command arguments, never shell code;
-the API validates the selected card/graph target and alias and owns the execution
-directory, using the card’s recorded worktree when it is registered in the same
-repository (otherwise a card without a worktree uses the weaver root). Retries of an unchanged submission reuse the CLI request ID.
+Agent runs are read-only in this dashboard. The Agents page and the issue, review
+and graph inspector links list tracked identities and runs; any run can be opened by
+its exact ID to read its status, reply, and historical prompt context. Start, stop,
+resume, or retarget a run with `strand agent run`, `strand agent show`, and
+`strand agent stop` in the weaver itself; this UI does not dispatch or message
+agents, so there are no stop, assignment, or session-resume controls here.
 
 ### Session logs
 
@@ -241,14 +224,6 @@ A log is the native session, not a task-exclusive history, and it does not provi
 whole history, token output, reasoning, or full tool stdout/stderr. See
 [session logs](docs/session-logs.md) for endpoints, retained-data behavior, and the
 LAN exposure warning.
-
-The header's agent icon tracks prompts sent from this browser in the current
-weaver. It shows active runs and unread finished runs (including failures).
-Choose a notification to open that exact run; viewing its finished reply marks
-it read. Launch receipts, read state, and per-weaver aliases use independent
-local storage keys and synchronize across tabs. Workflow, terminal, and desktop agent runs remain visible in
-Agents but are excluded from these header notifications. Prompt text and replies
-are stored with the tracked Harnesses run, not in local preferences.
 
 ## Develop
 
@@ -341,20 +316,14 @@ metadata and filter by execution stage. Selection and filters live in the URL.
 A selected review shows the complete report, expandable reviewer results and
 errors, review history, activity, and related strands. Agent runs link to their
 existing inspection view when their identity is available. Decisions remain CLI
-operations. Pending active reviews also offer **Prompt agent**, using the same
-composer and default agent as cards. The run targets the review Strand itself;
-the server adds concise repository, MR, revision, state, and artifact-location
-context without copying the report or diff. Agents shows this context separately
-from your prompt and offers **View review** to return to the review. The recorded
-review worktree is required and must pass the same registered-worktree validation
-as card launches; reviews without one cannot start an agent run.
+operations. Agents shows prior run context separately
+from recorded review evidence and offers **View review** to return to the review.
 The server reads `strand review list --all` and
 `strand review show ID`; weavers without those operations show a configuration
 message. Temporary refresh failures keep the last successful data visible.
 
 Structured reviews show canonical comment candidates with **Include** and **Dismiss**
-choices. **Prompt agent** on a comment retains its Strand identity, frozen review
-revision, and candidate version. Agent replies are proposals: inspect/edit one and
+choices. Persisted agent replies appear as proposals: inspect/edit one and
 choose **Adopt revised text** to change the canonical candidate. Merely receiving
 a reply never adopts it. Original reviewer text and earlier run proposals remain
 available. Curation is locked for outdated reviews or when the upstream snapshot

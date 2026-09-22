@@ -6,7 +6,6 @@ import {
   useReviewMutationPending,
 } from '../hooks/use-review-comments';
 import { useWorkspaceId } from '../lib/navigation';
-import { useAgentPromptStore } from '../agent-prompt-store';
 import {
   reviewDraftKey,
   useReviewCommentDraft,
@@ -38,7 +37,6 @@ function ReviewCommentController({ model }: { model: ReviewCommentModel }) {
   const rebaseDraft = useReviewCommentStore((state) => state.rebase);
   const acknowledgeAdoption = useReviewCommentStore((state) => state.adopted);
   const focusDraft = useReviewCommentStore((state) => state.focusDraft);
-  const openPrompt = useAgentPromptStore((state) => state.open);
   const element = useRef<HTMLDivElement>(null);
   const key = reviewDraftKey(workspace ?? '', curation.reviewId, curation.revision, comment.id);
   const focused = useReviewCommentFocus(key);
@@ -93,24 +91,6 @@ function ReviewCommentController({ model }: { model: ReviewCommentModel }) {
         disabled={!mutable || workspace === null}
         onInclude={() => choose('included')}
         onDismiss={() => choose('dismissed')}
-        onPromptAgent={() => {
-          if (workspace)
-            openPrompt(
-              {
-                kind: 'review-comment',
-                cardId: curation.reviewId,
-                id: curation.reviewId,
-                title: comment.title,
-                comment: {
-                  id: comment.id,
-                  revision: curation.revision,
-                  candidateVersion: comment.candidate.version,
-                },
-              },
-              null,
-              workspace,
-            );
-        }}
         proposalEditor={
           <>
             {storageError && (

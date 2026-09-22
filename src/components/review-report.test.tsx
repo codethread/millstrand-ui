@@ -28,13 +28,12 @@ function detail() {
 }
 
 describe('ReviewReport', () => {
-  it('renders original report metadata and the concrete prompt/comments slots', () => {
+  it('renders original report metadata and the concrete comments slot', () => {
     const html = renderToStaticMarkup(
       <ReviewReport
         model={reviewDetailModel(detail())}
         reviewerRunIdentities={{}}
         integrations={{
-          prompt: <button>Shared prompt entry</button>,
           comments: <section aria-label="Curated comments slot">Comments integration</section>,
         }}
         onOpenAgentRun={() => undefined}
@@ -47,7 +46,6 @@ describe('ReviewReport', () => {
     expect(html).toContain('Original <strong>Markdown</strong>');
     expect(html).toContain('Outdated at last poll');
     expect(html).toContain('It still awaits a local decision.');
-    expect(html).toContain('Shared prompt entry');
     expect(html).toContain('Curated comments slot');
     expect(html).toContain('Inspect agent run');
     expect(html).toContain('Related feature');

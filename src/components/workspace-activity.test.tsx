@@ -5,7 +5,6 @@ import type { WorkspaceOption } from '../../shared/api';
 import { workspaceActivity } from '../lib/overview';
 import { WorkspaceActivity } from './workspace-activity';
 
-vi.mock('./agent-prompt', () => ({ WeaverAgentSetting: () => null }));
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="/">{children}</a>,
 }));

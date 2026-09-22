@@ -1,8 +1,5 @@
-import { useEffect } from 'react';
-import { useAgentPromptStore } from '../agent-prompt-store';
 import { useAgentReply } from '../hooks/use-agents';
 import { useBoard } from '../hooks/use-cards';
-import { runIsFinished } from '../lib/agent-notifications';
 import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
 import { Loading } from './issue-parts';
@@ -14,11 +11,7 @@ export function AgentRunReply({ id }: { id: string }) {
   const board = useBoard();
   const workspace = useWorkspaceId();
   const { exploreGraph, openCard, openReview } = useDashboardActions();
-  const markRead = useAgentPromptStore((state) => state.markRead);
   const reply = query.data;
-  useEffect(() => {
-    if (workspace && reply && runIsFinished(reply) && !query.error) markRead(workspace, id);
-  }, [workspace, id, reply, query.error, markRead]);
   const targetId = reply?.prompt?.cardId ?? reply?.target ?? null;
   const card = board.data?.cards.find((candidate) => candidate.id === targetId);
   return (

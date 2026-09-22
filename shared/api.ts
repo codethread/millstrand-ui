@@ -137,19 +137,6 @@ export interface AgentDirectory {
   runs: AgentRun[];
 }
 
-export interface AgentOption {
-  name: string;
-  description: string | null;
-  model: string | null;
-}
-
-export type AgentPrompt = {
-  targetId: string;
-  alias: string;
-  prompt: string;
-  requestId: string;
-} & ({ targetKind?: 'review' } | { targetKind: 'review-comment'; comment: CommentPromptReference });
-
 export interface CommentPromptReference {
   id: string;
   revision: string;
@@ -283,9 +270,7 @@ export interface ApiError {
  * GET /api/workspaces → WorkspaceOption[] (known local mill weavers)
  * POST /api/workspaces/:id/lifecycle, { operation: WeaverOperation } → { ok: true }
  * GET /api/agents → AgentDirectory (identities, tracked runs, and owned work)
- * GET /api/agent-options → AgentOption[] (available headless harnesses and aliases)
  * GET /api/agent-runs/:id → AgentReply
- * POST /api/cards/:id/agent-runs, AgentPrompt → AgentReply
  * GET /api/dependencies → CardGraph (workspace dependency endpoints and directed edges)
  * GET /api/board → Board
  * GET /api/cards/:id → CardDetail

@@ -6,7 +6,6 @@ import { workspaceActivityDestination } from '../lib/dashboard-search';
 import type { WorkspaceActivityModel } from '../lib/overview';
 import { cn } from '../lib/utils';
 import { Loading, StatusBadge } from './issue-parts';
-import { WeaverAgentSetting } from './agent-prompt';
 import { AgentLogHint, AgentLogButton } from './agent-log-hint';
 
 export function WorkspaceActivity({
@@ -68,7 +67,6 @@ export function WorkspaceActivity({
                 : 'Live · 5s refresh'}
         </span>
       </header>
-      <WeaverAgentSetting workspace={workspace} />
       <div className="grid min-w-0 lg:grid-cols-2">
         <section className="min-w-0 p-4" aria-label={`${workspace.name} active cards`}>
           <h3 className="mb-3 text-xs font-semibold">

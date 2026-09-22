@@ -37,7 +37,7 @@ commands. Domain mutation options still own awaited invalidation; `useCardAction
 still owns workspace-guarded selected issue/graph cleanup after successful deletion.
 No optimistic writes or cache mirrors were introduced. Menus prevent their closing
 focus restoration from dismissing the newly opened delete dialog; Cancel receives
-initial focus. Agent badge and prompt entry points are unchanged.
+initial focus. Agent badge entry points are unchanged.
 
 ## Verification
 

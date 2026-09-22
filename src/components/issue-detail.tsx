@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { ArrowUpRight, Check, Clock3, Copy, GitBranch, Layers, Network } from 'lucide-react';
 import { Markdown } from './markdown';
 import type { CardDetail } from '../../shared/api';
-import { PromptAgentButton } from './agent-prompt';
 import { useCard, useCardNotes } from '../hooks/use-cards';
 import { formatDate } from '../lib/board';
 import { useDashboardActions, useDetailTab } from '../lib/navigation';
@@ -189,9 +188,6 @@ export function IssueDetail({ id }: { id: string }) {
                 Issue details for {detail.card.title}
               </SheetDescription>
               <div className="detail-meta">
-                <PromptAgentButton
-                  target={{ kind: 'card', cardId: id, id, title: detail.card.title }}
-                />
                 <StatusBadge status={detail.card.lane} />
                 <CardDependencyCounts counts={detail.card.dependencies} />
                 <span className="detail-meta-separator" />

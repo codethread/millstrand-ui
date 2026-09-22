@@ -6,7 +6,6 @@ import {
   reviewDirectoryContent,
   reviewInboxCount,
   reviewInboxModel,
-  reviewPromptTarget,
   selectReviews,
 } from './reviews';
 import { parseDashboardSearch, workspaceDestination, manualFilterSearch } from './dashboard-search';
@@ -62,21 +61,6 @@ describe('review inbox', () => {
     });
     expect(reviewInboxModel([], { scope: 'inbox', stage: null, query: '' }).empty).toBe('inbox');
     expect(reviewInboxModel([], { scope: 'all', stage: null, query: '' }).empty).toBe('all');
-  });
-
-  it('offers the existing prompt flow only for active pending reviews, including outdated ones', () => {
-    const row = rows[0]!;
-    expect(reviewPromptTarget(row)).toEqual({
-      kind: 'review',
-      cardId: row.id,
-      id: row.id,
-      title: row.title,
-    });
-    expect(reviewPromptTarget({ ...row, current: false })).not.toBeNull();
-    expect(reviewPromptTarget({ ...row, stage: 'running' })).not.toBeNull();
-    expect(reviewPromptTarget({ ...row, decision: 'done' })).toBeNull();
-    expect(reviewPromptTarget({ ...row, decision: 'dismissed' })).toBeNull();
-    expect(reviewPromptTarget({ ...row, state: 'closed' })).toBeNull();
   });
 
   it('combines stage with case-insensitive terms across MR and reviewer metadata', () => {
@@ -142,7 +126,6 @@ describe('review detail projections', () => {
         kind: 'empty',
         message: 'The final report will appear here when it is ready.',
       },
-      promptTarget: { kind: 'review', id: 'r123' },
     });
     expect(reviewDetailModel({ ...detail, stage: 'failed' }).report).toEqual({
       kind: 'empty',

@@ -16,7 +16,6 @@ import { graphBody, type ReadyGraphLayout, type IssueGraphNode } from '../lib/gr
 import { Button } from './ui/button';
 import { GraphDependencyCounts } from './dependency-counts';
 import { Markdown } from './markdown';
-import { PromptAgentButton } from './agent-prompt';
 import {
   GraphDependencyMenu,
   GraphDependencyButton,
@@ -75,17 +74,13 @@ const nodeTypes = { issue: GraphCard };
 /** Keyed by navigation intent by GraphView, never by refreshed node membership. */
 export function GraphCanvas({
   layout,
-  root,
   openCard,
-  promptIds,
   toggleDependencies,
   focusTargets,
   focusHierarchy,
 }: {
   layout: ReadyGraphLayout;
-  root: string | null;
   openCard: (id: string) => void;
-  promptIds: string[];
   toggleDependencies: (id: string) => void;
   focusTargets: ReadonlyMap<string, string>;
   focusHierarchy: (id: string) => void;
@@ -190,11 +185,6 @@ export function GraphCanvas({
             </Button>
           </div>
           <h3>{selected.title}</h3>
-          {root && promptIds.includes(selected.id) && (
-            <PromptAgentButton
-              target={{ kind: 'card', cardId: root, id: selected.id, title: selected.title }}
-            />
-          )}
           <span className="text-xs text-muted-foreground">{selected.state}</span>
           {graphBody(selected.attributes) && <Markdown text={graphBody(selected.attributes)} />}
           <details>

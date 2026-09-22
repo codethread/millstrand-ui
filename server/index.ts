@@ -8,7 +8,6 @@ import { promisify } from 'node:util';
 import { HttpError, parseLabelChange, parseViews, requestValue } from './parse.ts';
 import { parseCurateReview, parsePublishReview } from './review-comments.ts';
 import { parseWeaverOperation, WorkspaceDirectory } from './workspaces.ts';
-import { parseAgentPrompt } from './agent-prompts.ts';
 import { parseCardLane } from './card-actions.ts';
 import { readLogActivity } from './log-activity.ts';
 import { SessionLogReader } from './session-log-reader.ts';
@@ -260,11 +259,6 @@ const server = createServer((request, response) => {
       logStreams.open(response, parseSessionLogSource(url));
       return;
     }
-    if (path === '/api/agent-options' && method === 'GET') {
-      const { strand } = await workspaces.select(url.searchParams.get('workspace'));
-      json(response, 200, await strand.agentOptions());
-      return;
-    }
     const runId = /^\/api\/agent-runs\/([a-zA-Z0-9_-]+)$/.exec(path)?.[1];
     if (runId !== undefined && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
@@ -282,7 +276,7 @@ const server = createServer((request, response) => {
       return;
     }
     const match =
-      /^\/api\/cards\/([a-zA-Z0-9_-]+)(?:\/(graph|notes|labels|lane|tasks|agent-runs)(?:\/([a-zA-Z0-9_-]+)\/notes)?)?$/.exec(
+      /^\/api\/cards\/([a-zA-Z0-9_-]+)(?:\/(graph|notes|labels|lane|tasks)(?:\/([a-zA-Z0-9_-]+)\/notes)?)?$/.exec(
         path,
       );
     const id = match?.[1];
@@ -297,13 +291,7 @@ const server = createServer((request, response) => {
         json(response, 200, await strand.graph(id));
       else if (method === 'GET' && action === 'tasks' && taskId !== undefined)
         json(response, 200, await strand.taskNotes(id, taskId));
-      else if (method === 'POST' && action === 'agent-runs' && taskId === undefined) {
-        json(
-          response,
-          201,
-          await strand.promptAgent(id, requestValue(parseAgentPrompt, await body(request))),
-        );
-      } else if (method === 'PATCH' && action === 'labels' && taskId === undefined) {
+      else if (method === 'PATCH' && action === 'labels' && taskId === undefined) {
         json(
           response,
           200,

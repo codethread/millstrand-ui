@@ -6,7 +6,6 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useDashboardStore } from '../store';
-import { useAgentPromptStore } from '../agent-prompt-store';
 import type { CardType, Lane, Priority, SavedView, ViewFilter } from '../../shared/api';
 import { emptyFilter, type WorkspaceView } from './board';
 import {
@@ -275,12 +274,10 @@ export function useDashboardKeys() {
   const client = useQueryClient();
   const keys = useDashboardStore((state) => state.shortcuts);
   const overlay = useDashboardStore((state) => state.overlay.kind);
-  const composer = useAgentPromptStore((state) => state.composer.kind);
   const attentionEditor = useAttentionStore((state) => state.editor.kind);
   const weaverControls = useCockpitStore((state) => state.controls.kind);
   const enabled =
     overlay === 'closed' &&
-    composer === 'closed' &&
     attentionEditor === 'closed' &&
     weaverControls === 'closed' &&
     issue === null &&

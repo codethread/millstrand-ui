@@ -16,7 +16,6 @@ import {
   useSelectedReview,
 } from '../lib/navigation';
 import { reviewDetailModel, reviewInboxModel } from '../lib/reviews';
-import { PromptAgentButton } from './agent-prompt';
 import { ErrorNotice, Loading } from './issue-parts';
 import { ReviewComments } from './review-comments';
 import { ReviewInbox } from './review-inbox';
@@ -39,11 +38,6 @@ function SelectedReviewReport({ id }: { id: string }) {
       model={model}
       reviewerRunIdentities={runIdentities}
       integrations={{
-        prompt: model.promptTarget ? (
-          <div className="mt-3">
-            <PromptAgentButton target={model.promptTarget} />
-          </div>
-        ) : null,
         comments: <ReviewComments id={model.review.id} />,
       }}
       onOpenAgentRun={openAgentRun}
