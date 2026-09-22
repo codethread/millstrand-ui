@@ -13,7 +13,6 @@ import { cn } from '../lib/utils';
 import { ActivityRail, AttentionCentre } from './cockpit-work';
 import { WeaverControlsDialog, WeaverFleet, WeaverRail } from './cockpit-weavers';
 import { AgentDetail } from './agent-detail';
-import { AgentPromptDialog } from './agent-prompt';
 import { IssueDetail } from './issue-detail';
 import { ErrorNotice, Loading } from './issue-parts';
 import { OverviewLogPolls } from './overview-log-polls';
@@ -210,7 +209,6 @@ export function Overview() {
           runId={agentRun}
         />
       )}
-      <AgentPromptDialog />
       <WeaverControlsDialog />
     </div>
   );

@@ -6,7 +6,6 @@ import type {
   ReviewStage,
   ReviewSummary,
 } from '../../shared/reviews';
-import type { PromptTarget } from '../agent-prompt-store';
 
 export type ReviewDirectoryContent =
   | Extract<ReviewDirectory, { kind: 'unsupported' }>
@@ -36,7 +35,6 @@ export type ReviewCurrentness =
 export interface ReviewDetailModel {
   review: ReviewDetail;
   heading: string;
-  promptTarget: PromptTarget | null;
   report: ReviewReportState;
   currentness: ReviewCurrentness;
 }
@@ -45,12 +43,6 @@ export function reviewDirectoryContent(directory: ReviewDirectory): ReviewDirect
   return directory.kind === 'unsupported'
     ? directory
     : { kind: 'available', reviews: directory.reviews };
-}
-
-export function reviewPromptTarget(review: ReviewSummary): PromptTarget | null {
-  return reviewInInbox(review)
-    ? { kind: 'review', cardId: review.id, id: review.id, title: review.title }
-    : null;
 }
 
 export function reviewInInbox(review: ReviewSummary): boolean {
@@ -131,7 +123,6 @@ export function reviewDetailModel(review: ReviewDetail): ReviewDetailModel {
   return {
     review,
     heading: review.mr.title ?? review.title,
-    promptTarget: reviewPromptTarget(review),
     report:
       review.report === null
         ? { kind: 'empty', message: emptyReportMessage(review.stage) }

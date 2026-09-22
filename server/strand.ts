@@ -12,21 +12,12 @@ import { parseReviewComments, parseReviewPublicationReceipt } from './review-com
 import { parseReviewList, parseReviewDetail } from './reviews.ts';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { basename, dirname, isAbsolute, resolve } from 'node:path';
-import { stat } from 'node:fs/promises';
+import { basename, dirname } from 'node:path';
 import { emptyProvenance, ProvenanceIndex } from './provenance.ts';
 import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
-import {
-  agentLaunchArgs,
-  parseAgentOptions,
-  parseAgentReply,
-  parsePromptContext,
-  reviewPromptContext,
-} from './agent-prompts.ts';
+import { parseAgentReply, parsePromptContext } from './agent-replies.ts';
 import type {
   AgentDirectory,
-  AgentOption,
-  AgentPrompt,
   AgentReply,
   Board,
   Card,
@@ -287,10 +278,6 @@ export class StrandData {
     });
   }
 
-  async agentOptions(): Promise<AgentOption[]> {
-    return parseAgentOptions(await this.run(['agent', 'list']));
-  }
-
   agentReply(id: string): Promise<AgentReply> {
     return this.replies.get(id, async () => {
       const [summary, raw] = await Promise.all([
@@ -301,103 +288,6 @@ export class StrandData {
       const attrs = object(row['attributes'], 'run.attributes');
       return { ...parseAgentReply(summary), prompt: parsePromptContext(attrs['harness/context']) };
     });
-  }
-
-  async promptAgent(cardId: string, input: AgentPrompt): Promise<AgentReply> {
-    if (
-      (input.targetKind === 'review' || input.targetKind === 'review-comment') &&
-      input.targetId !== cardId
-    )
-      throw new HttpError(404, 'The review target must match the selected review.');
-    // Dispatch must validate current authoritative state, not the polling cache.
-    const review =
-      input.targetKind === 'review' || input.targetKind === 'review-comment'
-        ? await this.readReview(cardId)
-        : null;
-    if (review !== null && review.id !== cardId)
-      throw new HttpError(404, 'The selected review was not found.');
-    if (review !== null && (review.state !== 'active' || review.decision !== 'pending'))
-      throw new HttpError(
-        409,
-        'This review is no longer active and pending. Refresh the review before prompting.',
-      );
-    const card = review ?? (await this.card(cardId));
-    if (review !== null && review.worktree === null)
-      throw new HttpError(
-        409,
-        'This review has no recorded worktree. Record its review worktree before prompting.',
-      );
-    if (
-      input.targetId !== cardId &&
-      !(await this.graph(cardId)).nodes.some((node) => node.id === input.targetId)
-    )
-      throw new HttpError(404, 'That strand is not in the selected card’s graph.');
-    if (!(await this.agentOptions()).some((agent) => agent.name === input.alias))
-      throw new HttpError(
-        400,
-        'That agent is not available headlessly in this weaver. Choose an available alias.',
-      );
-    const cwd = await this.agentDirectory(card);
-    let context = review === null ? null : reviewPromptContext(review, this.workspace);
-    if (input.targetKind === 'review-comment') {
-      const snapshot = await this.reviewComments(cardId);
-      const comment = snapshot.comments.find((candidate) => candidate.id === input.comment.id);
-      if (!comment) throw new HttpError(404, 'Comment is not in this review.');
-      if (
-        !snapshot.review.current ||
-        !snapshot.review.curation.mutable ||
-        snapshot.review.revision !== input.comment.revision ||
-        comment.candidate.version !== input.comment.candidateVersion
-      )
-        throw new HttpError(
-          409,
-          'The comment changed or curation is locked. Refresh before prompting.',
-        );
-      context += `\nComment Strand: ${comment.id}; candidate version: ${comment.candidate.version}; frozen revision: ${snapshot.review.revision}. Inspect strand show ${comment.id} and strand review comments ${cardId} for its canonical text and position. Return only proposed revised comment text for the user to inspect and edit. Do not adopt, curate, publish, or change canonical comment text; adoption is a separate explicit user action.`;
-    }
-    const reply = parseAgentReply(
-      await this.run(agentLaunchArgs(this.workspace, cwd, cardId, input, context)),
-    );
-    this.agentDirectories.clear();
-    this.provenanceReads.clear();
-    return {
-      ...reply,
-      prompt: {
-        cardId,
-        text: input.prompt,
-        ...(context === null
-          ? { kind: 'card' as const }
-          : input.targetKind === 'review-comment'
-            ? { kind: 'review-comment' as const, context, comment: input.comment }
-            : { kind: 'review' as const, context }),
-      },
-    };
-  }
-
-  private async agentDirectory(card: Pick<Card, 'worktree'>): Promise<string> {
-    const root = dirname(this.workspace);
-    if (card.worktree === null) return root;
-    try {
-      if (!isAbsolute(card.worktree)) throw new Error('Worktree path must be absolute.');
-      const { stdout } = await exec('git', ['-C', root, 'worktree', 'list', '--porcelain', '-z'], {
-        encoding: 'utf8',
-        timeout: 10000,
-        maxBuffer: 1024 * 1024,
-      });
-      const known = stdout
-        .split('\0')
-        .filter((field) => field.startsWith('worktree '))
-        .map((field) => resolve(field.slice('worktree '.length)));
-      const cwd = resolve(card.worktree);
-      if (!known.includes(cwd) || !(await stat(cwd)).isDirectory())
-        throw new Error('The recorded worktree is missing or belongs to another repository.');
-      return cwd;
-    } catch {
-      throw new HttpError(
-        409,
-        'The selected work item’s recorded worktree is unavailable or is not registered in this weaver’s repository. Repair its recorded worktree before prompting.',
-      );
-    }
   }
 
   private async card(id: string): Promise<Card> {

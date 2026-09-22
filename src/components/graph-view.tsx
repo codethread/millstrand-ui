@@ -5,7 +5,6 @@ import { useDependencies, useGraphSource } from '../hooks/use-graph';
 import {
   dependencyLayout,
   graphFocusTargets,
-  graphHierarchyRoot,
   type GraphSource,
   type GraphLayout,
 } from '../lib/graph';
@@ -51,7 +50,6 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
     () => (graph === null ? new Map<string, string>() : graphFocusTargets(graph, allCards)),
     [graph, allCards],
   );
-  const promptIds = useMemo(() => graph?.nodes.map((node) => node.id) ?? [], [graph]);
   return (
     <div className="graph-workspace">
       <div className="graph-toolbar flex-wrap">
@@ -145,9 +143,7 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
           // Fit the first lazy expansion when its snapshot arrives, not just the old hierarchy.
           key={JSON.stringify([root, filter, showTasks, dependencyGraph === null ? [] : expanded])}
           layout={layout}
-          root={graphHierarchyRoot(root, allCards)}
           openCard={openCard}
-          promptIds={promptIds}
           toggleDependencies={toggleGraphDependencies}
           focusTargets={focusTargets}
           focusHierarchy={setGraphRoot}

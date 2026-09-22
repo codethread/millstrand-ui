@@ -15,15 +15,15 @@ graph toolbar, so a focused graph is reachable.
 - `src/components/graph-view.tsx`: Router focus/filter selection, toolbar, source
   notices and memoized layout. `GraphSourceNotice` and `GraphEmpty` render explicit
   loading/error/empty/too-large states. Only graph data, dependency data, URL exploration and includeClosed
-  enter layout memoization, never query wrappers, fetchedAt or composer drafts.
+  enter layout memoization, never query wrappers or fetchedAt.
 - `src/lib/graph.ts`: pure `graphFromCards`, `layoutGraph`, `graphStatus`,
   `graphBody`, and concrete source/layout types. Query structural sharing retains
   unchanged focused graph input; the issue projection retains unchanged board
   input. Dagre stays synchronous and unchanged as the layout engine.
 - `src/components/graph-canvas.tsx`: `GraphCanvas` renders React Flow and the
   local task/work inspector. Epic/feature activation delegates to Router issue
-  selection. Enter/Space activation matches clicking. Markdown and prompt entry
-  come from shared leaves, not other page implementations.
+  selection. Enter/Space activation matches clicking. Markdown entry
+  comes from a shared leaf, not another page implementation.
 
 ## Deliberate lifecycle
 
@@ -32,7 +32,7 @@ or object identity. The first lazy expansion enters that key only when its first
 snapshot arrives, so fit-to-view includes the requested neighbours rather than
 fitting the old hierarchy before the request completes. Focus/filter navigation (including Back) resets local inspector
 selection and fits the new graph. Workspace/page unmount also resets it. Unchanged
-polls, refresh health, prompt drafts and ordinary data updates do not remount the
+polls, refresh health and ordinary data updates do not remount the
 canvas or refit pan/zoom. Membership changes from a poll update the controlled
 nodes/edges without forcibly recentering; Fit View remains available. A selected
 inspector is shown only while its ID is present in the current layout. Empty and
@@ -63,8 +63,7 @@ Browser checks used real local workspace reads at 1440×1000 and 390×844:
 - Unfocused and focused graphs; zoom controls and drag pan; keyboard Enter task
   inspector and Space feature detail; pane/inspector close; detail Back and reload.
 - Focused and unfocused ordinary polls retained the exact viewport element and
-  pan/zoom transform; focused task inspection survived a poll. Prompt draft entry
-  and cancellation left viewport/selection intact, with no launch submitted.
+  pan/zoom transform; focused task inspection survived a poll.
 - Closed feature vl3cr remained as the sole root when closed tasks were excluded;
   includeClosed plus focus showed all five nodes. Filter change reset the canvas;
   Back restored the URL filter and excluded closed nodes. Zero search matches kept

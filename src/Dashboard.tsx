@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Bot, GitBranch, LayoutGrid } from 'lucide-react';
-import { useAgentPromptStore } from './agent-prompt-store';
 import { CompletedView } from './components/completed-view';
 import { AgentsView } from './components/agents-view';
 import { DashboardOverlays } from './components/overlays';
@@ -29,7 +28,6 @@ import { workspaceIsHidden } from './lib/workspaces';
 
 function resetWorkspaceState(_workspace: string | null): void {
   useDashboardStore.getState().resetWorkspace();
-  useAgentPromptStore.getState().close();
 }
 
 export function Dashboard() {

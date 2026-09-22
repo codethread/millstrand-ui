@@ -1,4 +1,4 @@
-import { Check, MessageSquare, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Markdown } from './markdown';
 import { Button } from './ui/button';
@@ -13,11 +13,10 @@ export interface ReviewCommentCardProps {
   disabled?: boolean;
   onInclude: () => void;
   onDismiss: () => void;
-  onPromptAgent: () => void;
   proposalEditor?: ReactNode;
 }
 
-/** Controlled presentation only; the caller owns identity, persistence and dispatch. */
+/** Controlled presentation only; the caller owns identity, persistence and curation. */
 export function ReviewCommentCard({
   body,
   positionLabel,
@@ -28,7 +27,6 @@ export function ReviewCommentCard({
   disabled = false,
   onInclude,
   onDismiss,
-  onPromptAgent,
   proposalEditor,
 }: ReviewCommentCardProps) {
   return (
@@ -79,16 +77,6 @@ export function ReviewCommentCard({
         >
           <X />
           Dismiss
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={busy || disabled}
-          onClick={onPromptAgent}
-        >
-          <MessageSquare />
-          Prompt agent
         </Button>
       </fieldset>
       {proposalEditor}

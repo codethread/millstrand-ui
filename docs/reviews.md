@@ -32,7 +32,7 @@ modules listed under **Curation integration**.
 - `ReviewInbox` renders the concrete `ReviewInboxModel`; `ReviewSearchControls`
   owns only the header's focused Router controls.
 - `ReviewReport` renders report metadata and Markdown, reviewer evidence, history,
-  activity, and related-strand links. It has no Query, Router, Zustand, prompt, or
+  activity, and related-strand links. It has no Query, Router, Zustand, or
   curation imports. Reviewer run links receive only the shared run-to-identity
   projection, not the full agent directory or its refresh timestamp. A run remains
   inspectable by exact ID while identity publication is absent or delayed.
@@ -45,9 +45,7 @@ modules listed under **Curation integration**.
 supplies:
 
 - `model`, the pure `ReviewDetailModel` containing the authoritative report detail,
-  heading, current/outdated state, report state, and optional prompt target;
-- `integrations.prompt`, currently the shared `PromptAgentButton` only when
-  `model.promptTarget` is non-null;
+  heading, current/outdated state, and report state;
 - `integrations.comments`, currently `ReviewComments` keyed by
   `model.review.id`;
 - explicit callbacks for reviewer runs, report history, and related strands.

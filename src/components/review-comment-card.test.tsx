@@ -11,7 +11,6 @@ const props: ReviewCommentCardProps = {
   busy: false,
   onInclude: vi.fn(),
   onDismiss: vi.fn(),
-  onPromptAgent: vi.fn(),
 };
 
 it.each(['undecided', 'included', 'dismissed'] as const)(
@@ -23,7 +22,7 @@ it.each(['undecided', 'included', 'dismissed'] as const)(
     expect(html.match(/aria-pressed="true"/g) ?? []).toHaveLength(
       inclusion === 'undecided' ? 0 : 1,
     );
-    expect(html).toContain('Prompt agent');
+    expect(html).not.toContain('Prompt agent');
     expect(html.match(/disabled=""/g) ?? []).toHaveLength(inclusion === 'undecided' ? 0 : 1);
   },
 );
@@ -37,7 +36,7 @@ it('disables all actions while busy and exposes validation and error feedback', 
       errorText="Could not save choice"
     />,
   );
-  expect(html.match(/disabled=""/g)).toHaveLength(3);
+  expect(html.match(/disabled=""/g)).toHaveLength(2);
   expect(html).toContain('aria-busy="true"');
   expect(html).toContain('Position needs validation');
   expect(html).toContain('role="alert"');

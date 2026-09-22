@@ -1,16 +1,10 @@
 import { useCallback } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { AgentDirectory } from '../../shared/api';
-import {
-  agentOptionsQueryOptions,
-  agentPromptMutationOptions,
-  agentQueryOptions,
-  agentReplyQueryOptions,
-} from '../lib/api/agents';
+import { agentQueryOptions, agentReplyQueryOptions } from '../lib/api/agents';
 import {
   agentDirectorySummary,
   agentRunIdentities,
-  conflictingPromptRuns,
   relevantAgentActivity,
   selectedAgentActivity,
   targetAgentRunIds,
@@ -115,27 +109,7 @@ export function useTargetAgentRunIds(target: string) {
   });
 }
 
-export function useConflictingPromptRuns(target: string, requestId: string) {
-  const select = useCallback(
-    (directory: AgentDirectory) => conflictingPromptRuns(directory.identities, target, requestId),
-    [target, requestId],
-  );
-  return useQuery({
-    ...agentReaderOptions(useWorkspace()),
-    select,
-  });
-}
-
-export function useAgentOptions(workspace: string | null, enabled = true) {
-  return useQuery(agentOptionsQueryOptions(workspace, enabled));
-}
-
 /** Reply polling deliberately remains enabled for terminal runs so late results stay observable. */
 export function useAgentReply(id: string, enabled: boolean) {
   return useQuery(agentReplyQueryOptions(useWorkspace(), id, enabled));
-}
-
-export function usePromptAgent(targetId: string) {
-  const workspace = useWorkspace();
-  return useMutation(agentPromptMutationOptions(useQueryClient(), workspace, targetId));
 }

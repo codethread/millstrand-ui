@@ -35,19 +35,19 @@ for those exceptions.
 | `src/lib/api/query-client.ts`                                                                                                            | `createQueryClient`: one app client, query retry 1 and stale time 3s; mounted in `src/main.tsx`                                                                                               |
 | `src/lib/api/workspaces.ts`                                                                                                              | `workspaceQueryOptions`, `workspaceReaderOptions`, `useWorkspaces`: discovery/readers; `weaverMutationOptions`: confirmed lifecycle settlement                                                |
 | `src/lib/api/cards.ts`                                                                                                                   | `boardQueryOptions`, `cardQueryOptions`, `graphQueryOptions`, `dependencyQueryOptions`, `taskNotesQueryOptions`, `labelsMutationOptions`, `cardActionMutationOptions`                         |
-| `src/lib/api/agents.ts`                                                                                                                  | `agentQueryOptions`, `agentOptionsQueryOptions`, `agentReplyQueryOptions`, `agentPromptMutationOptions`; receipts stay tied to the submitted workspace                                        |
+| `src/lib/api/agents.ts`                                                                                                                  | `agentQueryOptions`, `agentReplyQueryOptions`                                                                                                                                                 |
 | `src/lib/api/views.ts`                                                                                                                   | `viewsQueryOptions`, `saveViewsMutationOptions`                                                                                                                                               |
 | `src/lib/api/reviews.ts`                                                                                                                 | `reviewsQueryOptions`, `reviewQueryOptions`                                                                                                                                                   |
 | `src/lib/api/review-comments.ts`                                                                                                         | `reviewCommentsQueryOptions`, `curateReviewMutationOptions`, `reviewPublishMutationOptions`                                                                                                   |
 | `src/lib/api/log-activity.ts`, `session-logs.ts`                                                                                         | `logActivityOptions`; `sessionLogOptions` and `sessionLogStreamUrl` for canonical agent dialogue activity and bounded session snapshots                                                       |
 | `src/hooks/use-workspace.ts`                                                                                                             | Narrow Router workspace selector                                                                                                                                                              |
-| `src/hooks/use-agents.ts`                                                                                                                | Agent composition: identity/summary/relevant-item/selected-run/run-owner/target-run readers, reply/options queries and launch mutation. `useAgentsPoll` is reserved for the owner below.      |
+| `src/hooks/use-agents.ts`                                                                                                                | Agent composition: identity/summary/relevant-item/selected-run/run-owner/target-run readers and the reply query. `useAgentsPoll` is reserved for the owner below.                             |
 | `src/hooks/use-cards.ts`, `use-views.ts`, `use-reviews.ts`, `use-review-comments.ts`                                                     | React composition: workspace resolution, concrete disabled content/status projections, mutations, dependent queries and route reactions. `use*Poll` exports are reserved for the owner below. |
 | `src/hooks/use-log-activity.ts`, `use-session-log.ts`                                                                                    | Log-activity poll/read projections and the visible compact-tail or expanded-view SSE lifecycle                                                                                                |
 | `src/Dashboard.tsx`                                                                                                                      | Route-level overview/workspace composition, workspace pin/reset, and startup state                                                                                                            |
 | `src/components/dashboard-shell.tsx`, `dashboard-sidebar.tsx`, `dashboard-header.tsx`                                                    | Stable workspace shell, status/sidebar/header consumers, selection panels, and page slot                                                                                                      |
 | `src/components/issue-surface.tsx`                                                                                                       | Board/outline/graph page entry; owns issue filtering and delegates to existing surface views                                                                                                  |
-| `src/components/reviews-view.tsx`, `review-inbox.tsx`, `review-report.tsx`                                                               | Review page composition, focused inbox rendering, and the read-only report plus prompt/comments slots; see `docs/reviews.md`                                                                  |
+| `src/components/reviews-view.tsx`, `review-inbox.tsx`, `review-report.tsx`                                                               | Review page composition, focused inbox rendering, and the read-only report plus comments slot; see `docs/reviews.md`                                                                          |
 | `src/components/overlays.tsx`, `saved-view-dialog.tsx`, `shortcut-dialog.tsx`                                                            | Narrow overlay dispatch; Query-backed saved-view workflow and focused browser-preference editor                                                                                               |
 | `src/components/workspace-resource-polls.tsx`                                                                                            | Single selected-workspace poll owner for board, agents, reviews, saved views, and log activity; mounted for every workspace mode                                                              |
 | `src/components/workspace-discovery.tsx`                                                                                                 | Single app-lifetime discovery poll owner, mounted in `src/main.tsx`                                                                                                                           |
@@ -55,19 +55,19 @@ for those exceptions.
 | `src/lib/workspaces.ts`                                                                                                                  | Pure `selectedWorkspace` and `matchingWorkspaces` projections                                                                                                                                 |
 | `server/workspace-database.ts`, `server/provenance.ts`                                                                                   | Bounded read-only persisted graph selection; durable reporter/claim/note/run role projections and explicit attribution status                                                                 |
 | `src/components/markdown.tsx`                                                                                                            | Shared page-independent Markdown leaf; no issue-detail dependency                                                                                                                             |
-| `src/components/agent-activity.tsx`, `agent-prompt.tsx`, `agent-status.tsx`                                                              | Shared issue/task badge, prompt button/dialog and run-status leaves; consumers never import the Agents page                                                                                   |
+| `src/components/agent-activity.tsx`, `agent-status.tsx`                                                                                  | Shared issue/task badge and run-status leaves; consumers never import the Agents page                                                                                                         |
 | `src/components/agent-directory.tsx`, `agent-detail.tsx`, `agent-run-history.tsx`, `agent-run-reply.tsx`                                 | Agent directory and selected identity/run presentation boundaries; `agents-view.tsx` is only the page entry                                                                                   |
 | `src/components/session-log-views.tsx`, `log-activity-overlay.tsx`, `card-agent-log.tsx`, `card-provenance.tsx`                          | Conversation/Inspector/Console leaves, shared expanded viewer, compact tails, card participation roster, and durable reporter/owner presentation                                              |
 | `src/lib/board.ts`, `agents.ts`, `provenance.ts`, `reviews.ts`, `review-comments.ts`, `review-publication.ts`, `overview.ts`, `graph.ts` | Pure domain projections and rules; extend these homes for later surfaces, not API modules or another selector framework                                                                       |
 | `src/lib/navigation.ts`, `dashboard-search.ts`                                                                                           | Router composition/actions and URL schemas/destination transforms respectively                                                                                                                |
-| `src/store.ts`, `agent-prompt-store.ts`, `review-comment-store.ts`, `log-ui-store.ts`, `cockpit-store.ts`, `attention-store.ts`          | Shared interaction state, preferences/receipts, keyed persisted drafts, and log-viewer interaction state; never mirrored server snapshots                                                     |
+| `src/store.ts`, `review-comment-store.ts`, `log-ui-store.ts`, `cockpit-store.ts`, `attention-store.ts`                                   | Shared interaction state, keyed persisted drafts, and log-viewer interaction state; never mirrored server snapshots                                                                           |
 
 ### Validation boundaries (unchanged)
 
 `shared/api.ts`, `shared/reviews.ts`, `shared/review-comments.ts`, and
 `shared/session-log.ts` define normalized UI contracts, **not client response
 schemas**. Named compiled Zod schemas remain in `server/parse.ts`, `agents.ts`,
-`agent-prompts.ts`, `reviews.ts`, `review-comments.ts`, `card-actions.ts`,
+`agent-replies.ts`, `reviews.ts`, `review-comments.ts`, `card-actions.ts`,
 `workspaces.ts`, and `session-logs.ts`. Server saved views pass through the schemas
 in `server/parse.ts` via `server/views.ts`. Preserve normalization, additive-field
 policy, and failures for malformed known fields when extending these boundaries.
@@ -123,7 +123,6 @@ parameters are URI-encoded. The only global key is discovery. No key was renamed
 | `['workspaces']`             | `/workspaces?refresh`                | 30s             | One app owner; readers disabled (no independent fetch policy)                                   |
 | `['board', w]`               | `/board`                             | 5s              | Always in workspace dashboard; overview only while discovered running                           |
 | `['agents', w]`              | `/agents`                            | 5s              | Workspace consumers; overview only while discovered running                                     |
-| `['agent-options', w]`       | `/agent-options`                     | none            | Explicit enabled (default true); stale 30s, retry false; settings use running status            |
 | `['agent-reply', w, id]`     | `/agent-runs/:id`                    | 5s when enabled | Explicit enabled; run details and proposals share these keys; terminal replies continue polling |
 | `['views', w]`               | `/views`                             | 15s             | Always in workspace dashboard                                                                   |
 | `['card', w, id]`            | `/cards/:id`                         | 5s              | While detail/inspector mounted                                                                  |
@@ -192,7 +191,6 @@ unless explicitly noted. Feedback stays in Query, not local copies of pending/er
 | Mutation / key              | Endpoint and input                                               | Cache, feedback and navigation semantics                                                                                                                                                                                                                                                                                                                                                     |
 | --------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `['weaver-lifecycle', w]`   | POST `/workspaces/:id/lifecycle`, `{operation: WeaverOperation}` | Settled success or error **awaits** discovery and selected-workspace cache invalidation. Explicit retry false; menus lock for matching pending commands. No optimistic lifecycle state.                                                                                                                                                                                                      |
-| Prompt (no mutation key)    | POST `/cards/:id/agent-runs`, `AgentPrompt`                      | Success tracks receipt for original non-null workspace even after composer unmount; seeds run reply; starts (does not await) agents invalidation. Composer controls request-ID reuse and navigation.                                                                                                                                                                                         |
 | Save views (no key)         | PUT `/views`, `SavedView[]`                                      | Success replaces views cache; form owns visible error and closing behavior.                                                                                                                                                                                                                                                                                                                  |
 | Labels (no key)             | PATCH `/cards/:id/labels`, `LabelChange`                         | Success seeds detail then **awaits** board and matching card-notes invalidation; editor remains pending through refresh.                                                                                                                                                                                                                                                                     |
 | `['card-action', w]`        | PATCH `/cards/:id/lane`, `{lane}`; DELETE `/cards/:id`, no body  | **Settled success or error awaits** board/card/card-notes/notes/graph/dependencies/agents workspace-prefix invalidation. Explicit retry false. Latest mutation supplies feedback, all matching pending mutations supply lock. Successful delete clears only matching issue/graph URL selections, only if still in original workspace, with replace history; this reaction is in `use-cards`. |
@@ -215,7 +213,7 @@ Infinity`, `subscribed: false`, or a new key as a substitute.
 - `WorkspaceResourcePolls` is the selected-workspace owner for board, agents,
   reviews, saved views, and log activity. It remains mounted across issue, agent, and
   review modes,
-  so sidebar counts and prompt notifications stay fresh in the background.
+  so sidebar counts and agent freshness stay current in the background.
   `useSavedViews` reads the saved-view array directly (that response has no refresh
   timestamp). Shell code uses the concrete projection readers
   (`useBoardSnapshot`, `useBoardSidebar`, `useIssueBoard`, `useAgentIdentities`,
@@ -276,7 +274,7 @@ the save mutation, URL selection commands, and the Zustand draft, while
 `IssueSurface()`, `AgentsView()`, and `ReviewsView()` are prop-free workspace page
 entries; later surface work can change their queries and views without editing the
 route shell. Reviews compose `ReviewInbox` and the query-independent `ReviewReport`;
-`ReviewReportIntegrations` is the comments/prompt seam documented in
+`ReviewReportIntegrations` is the comments seam documented in
 `docs/reviews.md`. `DashboardShell({ children: ReactNode })` is the explicit page slot.
 `DashboardSidebar()`, `DashboardHeader()`, `DashboardOverlays()`, and
 `WorkspaceResourcePolls()` are prop-free shell entries. IssueSurface renders Graph
@@ -326,31 +324,13 @@ page to consume. Domain options must not import Router; navigation belongs in ho
 - Selected-workspace consumers use the disabled readers in `src/hooks/use-agents.ts`:
   `useAgentIdentities`, `useAgentSummary`, `useRelevantAgentActivity`,
   `useSelectedAgentActivity`, `useAgentRunIdentities`, and `useTargetAgentRunIds`.
-  The prompt dialog's `useConflictingPromptRuns` is also a disabled reader: it
-  selects queued/running direct targets, excluding the current request ID so an
-  unchanged retry can recover its receipt. Root-target relationships alone do not
-  reserve execution. Strand remains authoritative at dispatch and reports active
-  target conflicts as HTTP 409 with a concise diagnosis; failed prompts retain the
-  composer draft and never automatically stop, resume, or retry a run.
-  Missing or failed activity reads visibly block sending; Retry activity explicitly
-  refetches the shared query without introducing a poll owner.
   Fetch health/fetched-at is a separate `useAgentStatus` subscription. Only
   `WorkspaceResourcePolls` calls `useAgentsPoll`.
-- Import `IssueAgents` from `src/components/agent-activity.tsx` and
-  `PromptAgentButton`, `AgentPromptDialog`, or `WeaverAgentSetting` from
-  `src/components/agent-prompt.tsx`. Do not import shared UI from
-  `agents-view.tsx`; it exports only the `AgentsView` page entry.
-- `agent-prompt-store.ts` owns only composer state, per-workspace aliases, local
-  launch receipts/read markers, persistence feedback and actions. Components select
-  the current composer, current workspace alias/receipts, or one action—not the whole
-  store. Editing the prompt or changing its alias creates a new request ID; an
-  unchanged retry reuses its ID. Storage uses one atomic key per value and refreshes
-  on cross-tab storage events. Query remains authoritative for directories, runs,
-  replies, launch pending/errors and cache effects.
+- Import `IssueAgents` from `src/components/agent-activity.tsx`.
+  Do not import shared UI from `agents-view.tsx`; it exports only the `AgentsView` page entry.
 - `useAgentReply` continues polling terminal runs so a late result remains observable.
-  A successfully read terminal reply marks only a matching local receipt read. Run
-  links retain explicit card/graph/review/comment attribution, and exact `agentRun`
-  URLs can resolve their identity from the directory.
+  Run links retain explicit card/graph/review/comment attribution, and exact
+  `agentRun` URLs can resolve their identity from the directory.
 
 For mutations, capture the workspace and resource at submission; never invalidate a
 newly selected workspace on completion. Keep awaited versus fire-and-forget refresh
@@ -420,9 +400,9 @@ ordinary polls still preserve the viewport. No server or query policy changes.
 workspace for three seconds across board, agents, log activity, detail and graph
 readers. The existing endpoint caches remain short-lived. Card mutation preflight
 clears the shared snapshot before validation; mutation settlement clears it and
-affected responses even on uncertain failure. Labels clear it on settlement, and
-successful prompt dispatch invalidates agent provenance. No failed load is cached
-as an empty success. Generation checks prevent pre-invalidation loads from
+affected responses even on uncertain failure. Labels clear it on settlement. No
+failed load is cached as an empty success. Generation checks prevent
+pre-invalidation loads from
 repopulating cleared caches.
 
 The shared provenance SQL has no arbitrary strand-count cutoff and excludes notes.

@@ -8,9 +8,8 @@ import { ReviewStatus } from './review-parts';
 import { Button } from './ui/button';
 
 /** Stable slots owned by review browsing. Curation supplies comments without owning
- * report layout; prompting stays the shared page-independent entry. */
+ * report layout. */
 export interface ReviewReportIntegrations {
-  prompt: ReactNode;
   comments: ReactNode;
 }
 
@@ -48,7 +47,6 @@ export function ReviewReport({
           <code className="ml-auto text-[10px] text-muted-foreground">{detail.id}</code>
         </div>
         <h2 className="break-words text-xl font-semibold tracking-tight">{model.heading}</h2>
-        {integrations.prompt}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>{detail.repo ?? 'Repository unavailable'}</span>
           {detail.mr.iid !== null && <span>· MR !{detail.mr.iid}</span>}

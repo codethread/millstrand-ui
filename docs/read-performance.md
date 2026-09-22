@@ -23,7 +23,7 @@ latency guarantees. Direct SQL samples used one warm-up and three measured reads
 - Graph dependency expansion, card Agents-tab graphs, task notes, agent replies,
   and session streams already have deliberate surface/request enablement. Workspace
   board/agent/review/view/log poll owners remain unchanged: their consumers include
-  sidebar counts, badges, activity hints and prompt feedback across page modes.
+  sidebar counts, badges and activity hints across page modes.
 
 ## Measurements
 

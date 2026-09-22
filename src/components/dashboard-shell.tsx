@@ -13,7 +13,6 @@ import {
 import { cn } from '../lib/utils';
 import { useDashboardStore } from '../store';
 import { AgentDetail } from './agent-detail';
-import { AgentPromptDialog } from './agent-prompt';
 import { CardActionFeedback } from './card-actions';
 import { DashboardHeader } from './dashboard-header';
 import { DashboardOverlays } from './overlays';
@@ -99,7 +98,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         />
       )}
       <DashboardOverlays />
-      <AgentPromptDialog />
     </div>
   );
 }
