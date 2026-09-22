@@ -2,7 +2,7 @@
   "Repository-owned delivery contracts for automatically assigned UI features."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [millhouse.spools.land.autonomous :as autonomous]
+            [ct.spools.codethread.auto-run-land :as autonomous]
             [millhouse.spools.land.support :as land-support]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.format.alpha :as format]))
@@ -175,8 +175,7 @@
      structured summary into a card note using `strand kanban note --by`.
 
      The admitted changed-work policy is `{on-change}`. It cannot be changed
-     from this workflow run. `auto-run-failure` is only for delivery machinery
-     failures; ordinary product findings use needs-review or blocked instead.
+     from this workflow run. Product findings use needs-review or blocked.
    " {:card card :on-change on-change}))
 
 (defn- inspect-disposition []
@@ -230,7 +229,7 @@
    "Finish clean inspection"
    (shell-gate :verify-clean "Verify no dirty files or commits ahead" []
                (fn [_] (clean-worktree-argv)) 120
-               "The clean disposition is invalid while files are dirty or commits are ahead. Leave the card open and record the actual finding; do not manufacture a PR or label this ordinary result auto-run-failure.")
+               "The clean disposition is invalid while files are dirty or commits are ahead. Leave the card open and record the actual finding; do not manufacture a PR.")
    (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
    (workflow/gate
     :reserve-clean-finish "Reserve the claimed card for clean completion" :code
@@ -288,7 +287,7 @@
    "Verify fixed inspection and stop"
    (shell-gate :quality "Pass repository quality checks" []
                ["pnpm" "quality"] 5400
-               "A quality failure is a product result to record and repair; leave the card open. Do not label it auto-run-failure unless delivery machinery itself failed.")
+               "A quality failure is a product result to record and repair; leave the card open.")
    (workflow/step
     :stop "Leave the fixed card open for a human delivery decision" :self
     :depends-on [:quality]
@@ -298,8 +297,7 @@
          Quality passed, but the admitted on-change policy is stop. Record the
          exact commit, quality evidence and recommended next action on card
          {card}, then return. Do not create a PR, move the card to review,
-         start land, finish the card, or apply auto-run-failure for this normal
-         policy outcome.
+         start land, or finish the card.
        " {:card card})))))
 
 (workflow/defworkflow! auto-inspect-needs-review
@@ -325,8 +323,7 @@
        "
          The card is in review. Return the structured finding, evidence and
          recommended next action recorded for {card}. Do not manufacture a code
-         change, PR, landing run, or auto-run-failure label for this ordinary
-         inspection outcome.
+         change, PR, or landing run for this inspection outcome.
        " {:card card})))))
 
 (workflow/defworkflow! auto-inspect-blocked
@@ -346,6 +343,5 @@
        "
          Leave card {card} claimed and open. Return the structured blocker,
          attempted evidence and recommended next action recorded for it. Do not
-         claim success, create a PR, move the card to review, finish the card,
-         or label an ordinary product blocker auto-run-failure.
+         claim success, create a PR, move the card to review, or finish the card.
        " {:card card})))))

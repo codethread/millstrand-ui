@@ -92,11 +92,6 @@ next action before it can select a disposition.
   trustworthy blocker evidence and leaves the claimed card open. It does not claim
   success or manufacture a PR.
 
-Ordinary findings, uncertainty, failed regression expectations, and a blocked
-inspection are not `auto-run-failure`. That label remains reserved for observed
-delivery machinery, handoff, or landing failures under the autonomous delivery
-policy.
-
 ## Autonomous landing handoff
 
 This is delivery policy, not a dispatcher teardown feature. Shared `land` stays
@@ -105,7 +100,7 @@ removal, so the handoff must happen **before approval**, not just before cleanup
 A per-command shell `cd` does not move the original agent session's persistent
 cwd.
 
-`auto-full-land` calls Millhouse's reusable `autonomous-land` composition. It
+`auto-full-land` calls Codethread's optional `auto-run-land/autonomous-land` composition. It
 pours two distinct delivery targets under the feature run:
 
 1. the active `handoff-worker` step, which the assigned worker serves; and
@@ -142,21 +137,16 @@ finisher step or waits for the grunt.
 The grunt awaits `agent-run-settled` for the recorded worker run, with
 `--min-count 1`. A terminal status alone is insufficient. Before sign-off it
 requires successful settlement, the matching worker/finisher receipts, no
-failure label, and the matching land run at sign-off. It then drives the existing
+agent blocker, and the matching land run at sign-off. It then drives the existing
 land run through FIFO merge, cleanup, and the land-owned card completion gate.
 Only after the card is closed does it complete the **finisher** step.
 
 ### Failure policy
 
-For `auto-full-land`, an observed delivery-gate, handoff or landing failure means:
-
-1. Add the `auto-run-failure` label and note the failed run/step, command/evidence,
-   retained resources and any held merge reservation on the feature.
-2. Stop with the card open. Do not clear a failed gate, spawn a replacement, retry
-   landing or withdraw the queue entry. This overrides shared land's repair advice.
-3. Leave recovery to the user. A failed queue head may deliberately retain the
-   merge lock and block subsequent landings. An uncertain merge needs
-   reconciliation, not a blind retry.
+For `auto-full-land`, leave failed delivery open with its resources and merge
+reservation retained. Do not clear a failed gate, spawn a replacement, retry
+landing or withdraw the queue entry without explicit recovery authorization.
+This overrides shared land's repair advice. An uncertain merge needs reconciliation.
 
 A recovery worker may serve the card or handoff-worker step, never the finisher
 step; a finisher recovery serves only its existing finisher target and never
@@ -165,12 +155,7 @@ replaced. The disposable workspace test mechanically verifies that the role-tagg
 worker and finisher steps have distinct IDs and that the finisher is dependent on
 the worker.
 
-Failure to complete the outer delivery bookkeeping after land already closed the
-card is reported with the same label/note, but never reopens or re-merges landed
-work. The label is diagnostic, not an admission switch or retry trigger. There is
-no automatic label clearing. Labeling is best-effort: a hard crash cannot annotate
-itself, and CLI failure must be reported in the final reply. No crash watcher or
-automatic recovery is added. `auto-human-review` retains its existing behavior.
+Failure to complete outer delivery bookkeeping never reopens or re-merges landed work.
 
 ## Human review handoff
 

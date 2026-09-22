@@ -2,6 +2,7 @@
   "Activate bounded automatic pickup using this repository's delivery workflows."
   (:require [clojure.java.io :as io]
             [ct.spools.codethread.auto-run :as auto-run]
+            [ct.spools.codethread.auto-run-reporting :as reporting]
             [ct.spools.codethread.auto-run-worktree :as auto-run-worktree]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.lifecycle.alpha :as lifecycle]
@@ -10,6 +11,10 @@
             [millstrand.api.weaver.alpha :as weaver]))
 
 (millstrand/use-op! auto-run/auto-run)
+(millstrand/use-pattern! reporting/auto-run-needs-decision
+                         reporting/auto-run-unknown-failure
+                         reporting/auto-run-unblock)
+(millstrand/use-hook! reporting/derive-labels)
 
 (def ^:private on-change-policies #{"human-review" "full-land" "stop"})
 (def ^:private default-on-change "stop")

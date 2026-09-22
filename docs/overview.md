@@ -10,7 +10,7 @@ or design-preview controls.
 - **Needs your attention** matches any configured label on an active card, including
   refinement and pending cards. Closed cards never return. Its settings button opens
   one global label list for every visible Kanban-enabled weaver, not per-weaver rules.
-  Defaults: `human-attention`, `auto-run-failure`, `factory-escalated`.
+  Defaults: `human-attention`, `agent-blocked`, `needs-decision`, `factory-escalated`.
 - An empty label list disables attention matches. Matching review cards appear only
   in attention; other `in_review` cards appear under **Ready for a look**.
 - `attention-store.ts` owns the editor and the browser-local

@@ -5,3 +5,6 @@ pnpm-lock.yaml
 .millstrand/.cpcache
 .millstrand/.clj-kondo/.cache
 .millstrand/.clj-kondo/imports
+.clj-kondo/.cache
+.lsp/.cache
+.millstrand/.lsp/.cache

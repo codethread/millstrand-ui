@@ -71,7 +71,12 @@ export function overviewActivity(
   };
 }
 
-export const defaultAttentionLabels = ['human-attention', 'auto-run-failure', 'factory-escalated'];
+export const defaultAttentionLabels = [
+  'human-attention',
+  'agent-blocked',
+  'needs-decision',
+  'factory-escalated',
+];
 
 export function overviewCards(cards: Card[], attentionLabels: string[]): Card[] {
   return selectCards(cards, emptyFilter()).filter(

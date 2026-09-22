@@ -132,18 +132,7 @@ open. Never choose that checkpoint yourself. `auto-full-land` authorises shared
 canonical-root `grunt` described in the delivery step. That finisher waits for the
 worker to settle, then owns merge, cleanup and final card completion. Do not remove
 your own session's worktree, close the card early, spawn a coordinator, or keep a
-session alive polling for human approval. On an observed autonomous delivery or
-handoff failure, add `auto-run-failure`, record evidence, and stop for manual
-intervention without retrying gates or withdrawing the merge reservation.
-
-## Human attention
-
-Use `human-attention` as the generic scan label on active cards needing a human
-decision, authorization, review, or intervention. Add a feature note stating the
-exact ask, and remove the label when resolved. Keep `auto-run-failure` as the
-specific autonomous-delivery intervention reason; `auto-human-review` together
-with `in_review` remains the human-acceptance signal. Labels do not approve
-checkpoints, cancel workers, or authorize retries.
+session alive polling for human approval.
 
 ## Working here
 

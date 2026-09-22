@@ -17,6 +17,8 @@ it('includes explicit asks outside active lanes, without reviving closed cards',
       overviewCards(
         [
           { ...card, id: 'ask', lane: 'refinement', labels: ['human-attention'] },
+          { ...card, id: 'blocked', lane: 'refinement', labels: ['agent-blocked'] },
+          { ...card, id: 'decision', lane: 'refinement', labels: ['needs-decision'] },
           { ...card, id: 'backlog', lane: 'pending' },
           { ...card, id: 'done', lane: 'closed', state: 'closed', labels: ['human-attention'] },
           card,
@@ -24,7 +26,7 @@ it('includes explicit asks outside active lanes, without reviving closed cards',
         defaultAttentionLabels,
       ).map((item) => item.id),
     ),
-  ).toEqual(['ask', 'production']);
+  ).toEqual(['ask', 'blocked', 'decision', 'production']);
 });
 
 it('keeps explicit review-lane asks in attention, not duplicated into ready-for-a-look', () => {
@@ -33,7 +35,7 @@ it('keeps explicit review-lane asks in attention, not duplicated into ready-for-
       workspace,
       {
         data: [
-          { ...card, id: 'ask', lane: 'in_review', labels: ['auto-run-failure'] },
+          { ...card, id: 'ask', lane: 'in_review', labels: ['agent-blocked', 'needs-decision'] },
           { ...card, id: 'review', lane: 'in_review' },
         ],
         health: { kind: 'live' },

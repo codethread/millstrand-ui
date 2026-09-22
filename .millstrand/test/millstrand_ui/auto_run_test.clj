@@ -1,15 +1,16 @@
 (ns millstrand-ui.auto-run-test
   "Exercise real workspace activation in disposable, unlabelled Weaver worlds."
-  (:require [clojure.edn :as edn]
+  (:require [clojure.data.json :as json]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.string :as str]
             [clojure.test :refer [deftest is run-tests testing]]
             [ct.spools.codethread.auto-run :as auto-run]
+            [ct.spools.codethread.auto-run-land :as autonomous]
             [ct.spools.codethread.auto-run-worktree :as auto-run-worktree]
             [ct.spools.harnesses :as harnesses]
             [ct.spools.harnesses.assignment :as assignment]
-            [millhouse.spools.land.autonomous :as autonomous]
             [millhouse.spools.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -48,6 +49,15 @@
              (get-in status [:config :start-params])))
       (is (empty? (:cards status)))
       (is (empty? (:dispatched (auto-run/scan! rt))))
+      (let [card (weaver/add! rt {:title "Blocked work"})
+            evidence (weaver/add! rt {:title "Decision evidence"})]
+        (weaver/op! rt 'weave
+                    ["--pattern" "auto-run-needs-decision" "--input"
+                     (json/write-str {:strand (:id card) :evidence (:id evidence)})])
+        (let [reported (weaver/show rt (:id card))]
+          (is (= (:id evidence) (attr-get reported :auto-run/agent-evidence)))
+          (is (= "true" (attr-get reported :kanban.label/agent-blocked)))
+          (is (= "true" (attr-get reported :kanban.label/needs-decision)))))
       (current/with-runtime rt
         (doseq [name [:auto-human-review :auto-full-land]]
           (let [run-id (str "test-" (clojure.core/name name))
@@ -116,10 +126,12 @@
                                     "Verify land is done and the card is closed with outcome done"]]
                     (is (includes-normalized? (:instruction finisher) required) required))
                   (is (not (str/includes? (:instruction finisher) "agent run grunt")))
-                  (testing "Failed autonomous gates preserve work for manual intervention"
+                  (testing "The finisher receives the shared reporting patterns"
+                    (doseq [pattern ["auto-run-needs-decision" "auto-run-unknown-failure"]]
+                      (is (str/includes? (:instruction finisher) pattern))))
+                  (testing "Full-land custody preserves work for manual intervention"
                     (doseq [view (concat [handoff finisher] (filter :gate views))]
-                      (is (str/includes? (:instruction view) "`auto-run-failure` to card fixture-card"))
-                      (is (str/includes? (:instruction view) "Stop and leave the card open"))
+                      (is (str/includes? (:instruction view) "Leave card fixture-card open"))
                       (is (str/includes? (:instruction view) "withdraw the merge turn")))))))))))))
 
 
@@ -346,8 +358,7 @@
             (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) views))
             (is (some #(and (= "Move the finding card into review" (:title %))
                             (= "code" (:gate %))) views))
-            (is (some #(= "Stop with findings and a recommended next action" (:title %)) views))
-            (is (not-any? #(str/includes? (or (:instruction %) "") "`auto-run-failure` to card") views)))
+            (is (some #(= "Stop with findings and a recommended next action" (:title %)) views)))
           (prepare-inspection! ctx "inspect-blocked" "stop")
           (workflow/choose! "inspect-blocked" :blocked inspection-summary)
           (let [views (run-views rt "inspect-blocked")]
