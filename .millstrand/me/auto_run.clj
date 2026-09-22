@@ -1,9 +1,9 @@
 (ns millstrand-ui.auto-run
   "Activate bounded automatic pickup using this repository's delivery workflows."
   (:require [clojure.java.io :as io]
-            [ct.spools.codethread.auto-run :as auto-run]
-            [ct.spools.codethread.auto-run-reporting :as reporting]
-            [ct.spools.codethread.auto-run-worktree :as auto-run-worktree]
+            [millhouse.spools.auto-run :as auto-run]
+            [millhouse.spools.auto-run-reporting :as reporting]
+            [millhouse.spools.auto-run-worktree :as auto-run-worktree]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.lifecycle.alpha :as lifecycle]
             [millstrand.api.millstrand.alpha :as millstrand]
