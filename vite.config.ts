@@ -13,7 +13,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': `http://127.0.0.1:${process.env.MILLSTRAND_UI_PORT ?? '4173'}`,
+      '/api': {
+        target: `http://127.0.0.1:${process.env.MILLSTRAND_UI_PORT ?? '4173'}`,
+        changeOrigin: false,
+      },
     },
   },
 });
