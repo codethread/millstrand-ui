@@ -2,17 +2,16 @@ import { expect, it, vi } from 'vitest';
 import { parseDatabasePath, WorkspaceDatabase } from './workspace-database.ts';
 
 const workspace = '/repo/"unsafe"/.millstrand';
-const strandRecord = {
-  record: JSON.stringify({
-    kind: 'strand',
-    id: 'strand1',
-    title: 'Strand',
-    state: 'active',
-    created_at: '2026-09-18 00:00:00',
-    updated_at: '2026-09-18 00:00:00',
-    attributes: { 'kanban/card': 'true' },
-  }),
+const persistedStrand = {
+  kind: 'strand',
+  id: 'strand1',
+  title: 'Strand',
+  state: 'active',
+  created_at: '2026-09-18 00:00:00',
+  updated_at: '2026-09-18 00:00:00',
+  attributes: { 'kanban/card': 'true' },
 };
+const strandRecord = { record: JSON.stringify(persistedStrand) };
 
 function fakeDatabase(rows: unknown[] = [strandRecord], version = 1) {
   return {
@@ -58,7 +57,7 @@ it('selects the registered file-backed SQLite database for the exact workspace',
   ).toThrow('not file-backed SQLite');
 });
 
-it('runs one bounded selective graph read without interpolating the workspace', async () => {
+it('runs one selective graph read without note strands or workspace interpolation', async () => {
   const database = fakeDatabase();
   const open = vi.fn(() => database);
   const reader = new WorkspaceDatabase(workspace, async () => '/state/workspace.sqlite', open);
@@ -80,9 +79,10 @@ it('runs one bounded selective graph read without interpolating the workspace', 
   expect(database.configure).toHaveBeenCalledOnce();
   expect(database.close).toHaveBeenCalledOnce();
   const [sql, parameters] = database.all.mock.calls[0]!;
-  expect(sql).toContain('LIMIT 10001');
+  expect(sql).not.toContain('LIMIT 10001');
   expect(sql).toContain('LIMIT 50001');
   expect(sql).toContain("marker.key = 'harness/run'");
+  expect(sql).not.toContain("marker.key = 'note/text'");
   expect(sql).toContain("attributes.key LIKE 'kanban.label/%'");
   expect(sql).not.toContain(workspace);
   expect(parameters).toContain('kanban/ownership-claim');
@@ -96,6 +96,44 @@ it('runs one bounded selective graph read without interpolating the workspace', 
   expect(parameters).toContain('identity/by-identity');
   expect(parameters).not.toContain('harness/env');
   expect(parameters).not.toContain('harness/prompt');
+});
+
+it('reads note attribution provenance only for requested note IDs', async () => {
+  const database = fakeDatabase([]);
+  const reader = new WorkspaceDatabase(
+    workspace,
+    async () => '/state/workspace.sqlite',
+    () => database,
+  );
+
+  await expect(reader.readNoteProvenance(['note1', 'note2'])).resolves.toEqual({
+    strands: [],
+    edges: [],
+  });
+  const [sql, parameters] = database.all.mock.calls[0]!;
+  expect(parameters).toEqual(['["note1","note2"]']);
+  expect(sql).toContain('SELECT value FROM json_each(?)');
+  expect(sql).toContain("actor.key = 'identity/by-identity'");
+  expect(sql).toContain("strand_edges.edge_type = 'attributed'");
+  expect(sql).not.toContain("marker.key = 'note/text'");
+});
+
+it('does not reject a valid provenance snapshot based on its strand count', async () => {
+  const database = fakeDatabase(
+    Array.from({ length: 10_001 }, (_, index) => ({
+      record: JSON.stringify({ ...persistedStrand, id: `strand${index}` }),
+    })),
+  );
+  const reader = new WorkspaceDatabase(
+    workspace,
+    async () => '/state/workspace.sqlite',
+    () => database,
+  );
+
+  await expect(reader.readProvenance()).resolves.toMatchObject({
+    strands: { length: 10_001 },
+    edges: [],
+  });
 });
 
 it('fails loudly on an unsupported persisted schema and still closes the database', async () => {
@@ -169,7 +207,7 @@ it('reads dependency endpoints with display-only metadata and directed links', a
   expect(graph.edges).toEqual([{ kind: 'depends-on', from: 'strand1', to: 'outside' }]);
   expect(database.close).toHaveBeenCalledOnce();
   const [sql] = database.all.mock.calls[0]!;
-  expect(sql).toContain('LIMIT 10001');
+  expect(sql).not.toContain('LIMIT 10001');
   expect(sql).toContain('LIMIT 50001');
   expect(sql).toContain("edge_type = 'depends-on'");
   expect(sql).not.toContain('harness/prompt');

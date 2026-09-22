@@ -64,6 +64,7 @@ function mockBoard() {
   });
   const database = {
     readDependencies: vi.fn(async () => ({ rootId: '', nodes: [], edges: [] })),
+    readNoteProvenance: vi.fn(async () => ({ strands: [], edges: [] })),
     readProvenance: vi.fn(async () => ({
       strands: cards.map((item) => ({
         ...item,

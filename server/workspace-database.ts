@@ -8,7 +8,6 @@ import { HttpError, parseGraph } from './parse.ts';
 import type { CardGraph } from '../shared/api.ts';
 
 const exec = promisify(execFile);
-const strandLimit = 10_000;
 const edgeLimit = 50_000;
 const supportedSchemaVersion = 1;
 
@@ -122,7 +121,6 @@ const provenanceSql = `
           'kanban/task',
           'kanban/ownership-claim'
         ) AND marker.value = '"true"')
-        OR marker.key = 'note/text'
         OR (
           marker.key = 'harness/run'
           AND marker.value = '"true"'
@@ -137,7 +135,6 @@ const provenanceSql = `
         )
       )
     ORDER BY marker.strand_id
-    LIMIT ${strandLimit + 1}
   ),
   candidate_strands AS (
     SELECT strands.id,
@@ -216,6 +213,89 @@ const provenanceSql = `
   SELECT record FROM projected_edges
 `;
 
+// Requested note IDs plus only the identity records needed to attribute their authors.
+const noteProvenanceSql = `
+  WITH requested_notes(strand_id) AS (
+    SELECT value FROM json_each(?)
+  ),
+  actor_values(value) AS (
+    SELECT DISTINCT actor.value
+    FROM attributes AS actor
+    JOIN requested_notes ON requested_notes.strand_id = actor.strand_id
+    WHERE actor.archived = 0
+      AND actor.key = 'identity/by-identity'
+  ),
+  candidate_ids(strand_id) AS (
+    SELECT strand_id FROM requested_notes
+    UNION
+    SELECT source.from_strand_id
+    FROM strand_edges AS source
+    JOIN requested_notes ON requested_notes.strand_id = source.to_strand_id
+    WHERE source.edge_type = 'attributed'
+    UNION
+    SELECT identity_id.strand_id
+    FROM attributes AS identity_id
+    JOIN actor_values ON actor_values.value = identity_id.value
+    WHERE identity_id.archived = 0
+      AND identity_id.key = 'identity/id'
+      AND EXISTS (
+        SELECT 1
+        FROM attributes AS marker
+        WHERE marker.strand_id = identity_id.strand_id
+          AND marker.archived = 0
+          AND marker.key = 'identity/session'
+          AND marker.value = '"true"'
+      )
+  ),
+  projected_strands AS (
+    SELECT json_object(
+             'kind', 'strand',
+             'id', strands.id,
+             'title', strands.title,
+             'state', strands.state,
+             'created_at', strands.created_at,
+             'updated_at', strands.updated_at,
+             'attributes', json(COALESCE(
+               (
+                 SELECT json_group_object(attributes.key, json(attributes.value))
+                 FROM attributes
+                 WHERE attributes.strand_id = strands.id
+                   AND attributes.archived = 0
+                   AND attributes.key IN (
+                     'identity/session',
+                     'identity/id',
+                     'identity/harness',
+                     'identity/native-session-id',
+                     'identity/model',
+                     'identity/thinking-level',
+                     'identity/by-identity'
+                   )
+               ),
+               '{}'
+             ))
+           ) AS record
+    FROM strands
+    JOIN candidate_ids ON candidate_ids.strand_id = strands.id
+    ORDER BY strands.id
+  ),
+  projected_edges AS (
+    SELECT json_object(
+             'kind', 'edge',
+             'from_strand_id', strand_edges.from_strand_id,
+             'to_strand_id', strand_edges.to_strand_id,
+             'edge_type', strand_edges.edge_type
+           ) AS record
+    FROM strand_edges
+    JOIN requested_notes ON requested_notes.strand_id = strand_edges.to_strand_id
+    WHERE strand_edges.edge_type = 'attributed'
+    ORDER BY strand_edges.from_strand_id, strand_edges.to_strand_id
+    LIMIT ${edgeLimit + 1}
+  )
+  SELECT record FROM projected_strands
+  UNION ALL
+  SELECT record FROM projected_edges
+`;
+
 // Only dependency endpoints and display metadata; never arbitrary attributes or run payloads.
 const dependencySql = `
   WITH dependencies AS (
@@ -235,7 +315,7 @@ const dependencySql = `
           AND a.key IN ('kanban/type', 'kanban/card', 'kanban/task', 'kanban/lane')
       ), '{}'))
     ) AS record FROM strands s JOIN endpoints ON endpoints.id = s.id
-    ORDER BY s.id LIMIT ${strandLimit + 1}
+    ORDER BY s.id
   )
   SELECT record FROM nodes
   UNION ALL
@@ -291,8 +371,6 @@ function decodeProvenance(value: unknown) {
     .map(({ record }) => persistedRecordSchema.parse(JSON.parse(record) as unknown));
   const strands = records.filter((record) => record.kind === 'strand');
   const edges = records.filter((record) => record.kind === 'edge');
-  if (strands.length > strandLimit)
-    throw new Error(`Provenance inspection matched more than ${strandLimit} strands.`);
   if (edges.length > edgeLimit)
     throw new Error(`Provenance inspection matched more than ${edgeLimit} role edges.`);
   return {
@@ -314,6 +392,7 @@ function decodeProvenance(value: unknown) {
 
 export interface PersistedWorkspaceReads {
   readProvenance(): Promise<unknown>;
+  readNoteProvenance(noteIds: readonly string[]): Promise<unknown>;
   readDependencies(): Promise<CardGraph>;
 }
 
@@ -343,6 +422,10 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
 
   readProvenance(): Promise<unknown> {
     return this.readSnapshot(provenanceSql, [...provenanceAttributeKeys, ...provenanceEdgeKinds]);
+  }
+
+  readNoteProvenance(noteIds: readonly string[]): Promise<unknown> {
+    return this.readSnapshot(noteProvenanceSql, [JSON.stringify(noteIds)]);
   }
 
   private async readSnapshot(sql: string, parameters: readonly string[]) {

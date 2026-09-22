@@ -8,11 +8,13 @@ vi.mock('node:child_process', async () => {
 });
 
 const readProvenance = vi.fn();
-const database = { readProvenance, readDependencies: vi.fn() };
+const readNoteProvenance = vi.fn();
+const database = { readProvenance, readNoteProvenance, readDependencies: vi.fn() };
 
 beforeEach(() => {
   exec.mockReset();
   readProvenance.mockReset();
+  readNoteProvenance.mockReset();
   database.readDependencies.mockReset();
 });
 
@@ -121,8 +123,9 @@ it('does not cache a failed shared projection as an empty successful snapshot', 
 it('loads full notes only on demand, preserving attribution and sharing repeated reads', async () => {
   const row = { ...card, attributes: { 'kanban/card': 'true' } };
   const note = { id: 'note1', note: 'Full note body', at: '2026-09-21', kind: 'summary' };
-  readProvenance.mockResolvedValue({
-    strands: [row, { ...card, id: 'note1', attributes: { 'identity/by-identity': 'worker' } }],
+  readProvenance.mockResolvedValue({ strands: [row], edges: [] });
+  readNoteProvenance.mockResolvedValue({
+    strands: [{ ...card, id: 'note1', attributes: { 'identity/by-identity': 'worker' } }],
     edges: [],
   });
   exec.mockImplementation((_file, argv) => {
@@ -131,13 +134,30 @@ it('loads full notes only on demand, preserving attribution and sharing repeated
       return Promise.resolve({ stdout: JSON.stringify({ cards: [card] }) });
     if (op[0] === 'kanban' && op[1] === 'card')
       return Promise.resolve({
-        stdout: JSON.stringify({ card: row, tasks: [], 'active-work': [], ready: [], related: [] }),
+        stdout: JSON.stringify({
+          card: row,
+          tasks: [
+            {
+              id: 'task1',
+              title: 'Task',
+              state: 'active',
+              status: 'ready',
+              'latest-note': note,
+            },
+          ],
+          'active-work': [],
+          ready: [],
+          related: [],
+        }),
       });
     if (op[0] === 'notes') return Promise.resolve({ stdout: JSON.stringify([note]) });
     throw new Error(`Unexpected command ${JSON.stringify(op)}`);
   });
   const data = new StrandData('/repo/.millstrand', database);
-  expect((await data.detail('card1')).card.id).toBe('card1');
+  expect((await data.detail('card1')).tasks[0]?.latestNote?.actor).toMatchObject({
+    identity: 'worker',
+    status: 'unresolved',
+  });
   expect(exec.mock.calls).toHaveLength(2);
   const [notes, same] = await Promise.all([data.cardNotes('card1'), data.cardNotes('card1')]);
   expect(notes).toBe(same);
@@ -146,6 +166,8 @@ it('loads full notes only on demand, preserving attribution and sharing repeated
     actor: { identity: 'worker', status: 'unresolved' },
   });
   expect(exec.mock.calls).toHaveLength(3);
+  expect(readNoteProvenance).toHaveBeenCalledTimes(2);
+  expect(readNoteProvenance).toHaveBeenCalledWith(['note1']);
   await expect(data.cardNotes('missing')).rejects.toMatchObject({ status: 404 });
   expect(exec.mock.calls).toHaveLength(3);
 });
