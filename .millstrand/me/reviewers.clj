@@ -28,3 +28,36 @@
     not edit files or repository state.
     "
    {}))
+
+#_{:clj-kondo/ignore [:unresolved-symbol]}
+(reviewers/defreviewer!
+  repository-images
+  "Reject repository images unless they are small decorative UI assets."
+  {:seat 'grunt
+   :labels ["PR" "Images" "Repository size"]
+   :glob ["**/*.{png,PNG,jpg,JPG,jpeg,JPEG,svg,SVG,gif,GIF,webp,WEBP,avif,AVIF,bmp,BMP,ico,ICO,tif,TIF,tiff,TIFF}"]}
+  (format-alpha/prose
+   "
+    Review every added, modified, or renamed image. Deletions are allowed.
+    An image is valid in Git only when all of these are true:
+
+    - it is a decorative asset used by the product UI, rather than evidence,
+      documentation, a screenshot, a test artifact, or generated output;
+    - its committed blob is no larger than 100 KiB (102,400 bytes); and
+    - its repository location and a concrete code reference show that it ships
+      as part of the UI.
+
+    Any image under `docs/`, any path segment named `evidence`, and any
+    screenshot or documentation image must live in external artifact storage
+    such as GitHub user content, never in this repository. Flag every violating
+    addition, modification, or rename as an actionable P1 finding. Inspect the
+    actual file or Git blob size; do not infer size from the textual diff. Do
+    not accept an image merely because it is small, optimized, or referenced
+    from Markdown. Do not choose or require a particular CDN.
+
+    Report repository-relative paths, byte sizes, the failed condition, and the
+    smallest fix (remove the file and use an external URL for evidence or docs).
+    Say `No findings` only when every changed image satisfies all conditions or
+    the image changes are deletions. Do not edit files or repository state.
+    "
+   {}))

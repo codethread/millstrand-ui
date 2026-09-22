@@ -182,10 +182,6 @@ Browser checks on real Codethread data:
   and Enter; 390px Outline/Graph layouts have no horizontal document overflow.
   Desktop/light and narrow/dark evidence below. No uncaught browser errors.
 
-![Hierarchy plus direct dependencies](evidence/graph-focus/hierarchy-and-dependencies.png)
-![Board dependency counts](evidence/graph-focus/board-counts.png)
-![Narrow Outline counts and explanation](evidence/graph-focus/outline-counts-narrow.png)
-
 ## Expansion-only cleanup verification (v5yf5)
 
 The dependency-only option and its selection/layout branches are removed; epic
@@ -214,9 +210,6 @@ Real Codethread browser checks at 1440×1000/light and 390×844/dark:
   the 390px viewport. No uncaught browser errors; no workspace mutations were used
   for browser checks. All request overrides were removed.
 
-![Expansion-only graph, light](evidence/graph-focus/expansion-light.png)
-![Expansion-only graph, narrow dark](evidence/graph-focus/expansion-narrow-dark.png)
-
 ## Task visibility and direct count toggles (oyu89, qnk5d)
 
 **Show tasks** is on by default. Turning it off removes task nodes and incident
@@ -243,6 +236,3 @@ to one. Showing tasks restores eight nodes while expanded. Back/reload preserve
 both toggles. Multiple active badges remain distinct, and hiding one expansion
 preserves shared links. Pointer, Enter and Space never open card details. Desktop
 light and 390px dark layouts have no document overflow or uncaught page errors.
-
-![Active arrow count toggles, tasks hidden](evidence/graph-focus/arrow-toggles-light.png)
-![Narrow task visibility and arrow toggle](evidence/graph-focus/arrow-toggles-narrow-dark.png)

@@ -16,4 +16,7 @@ coverage/
 !public/
 !public/**
 
+# Review evidence belongs in external artifact storage, not Git history.
+docs/evidence/
+
 .millstrand/.land-merge-lock.acquire

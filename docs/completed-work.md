@@ -71,8 +71,3 @@ modes: compact layouts, search, filters, date controls, date-explanation popover
 keyboard access, selection, and refresh-failure retention. At 1440px, Timeline’s
 first card begins about 133px from the top and Day recap’s about 175px; the mobile
 recap starts showing cards at about 271px without horizontal page overflow.
-
-- [Timeline](evidence/1x7uc/timeline.png)
-- [Day recap](evidence/1x7uc/recap.png)
-- [Narrow layout](evidence/1x7uc/mobile.png)
-- [Date explanation](evidence/1x7uc/date-hint.png)
