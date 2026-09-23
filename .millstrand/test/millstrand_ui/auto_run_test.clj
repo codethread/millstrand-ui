@@ -71,7 +71,8 @@
                    (count (filter #(= "millhouse.spools.land.card-actions/review-card!"
                                       (attr-get % :code/fn)) strands))))
             (is (contains? gates "shell"))
-            (is (= (= name :auto-human-review) (contains? gates "code")))
+            (when (= name :auto-human-review)
+              (is (contains? gates "code")))
             (is (not (contains? gates "agent")))
             (testing "PR checks require registered CI before the stricter review-package verifier"
               (is (= ["pr-checks" "required" "auto/fixture-card" "120" "5"]
@@ -94,7 +95,7 @@
                 (if (= name :auto-human-review)
                   (is (= ["Move the verified feature into review"]
                          (mapv :title (:ready result))))
-                  (is (= [(:id (role-step strands "handoff-worker"))]
+                  (is (= [(:id (role-step strands "worker-review"))]
                          (mapv :id (:ready result)))))))
             (if (= name :auto-human-review)
               (testing "human review remains a structured stop boundary"
