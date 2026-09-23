@@ -23,19 +23,26 @@
   (s/keys :req-un [::summary ::evidence ::findings ::next-action]))
 (s/def ::inspect-params
   (s/keys :req-un [::card ::feature ::branch ::worktree ::on-change]))
+(s/def ::inspect-continuation-params
+  (s/merge ::inspect-params ::inspect-summary))
 
 (defn- shell-gate [id title dependencies argv timeout failure-instruction]
   (workflow/gate id title :shell
-    :depends-on dependencies
-    :attributes {"shell/argv" argv
-                 "shell/cwd" (fn [{:keys [worktree]}] worktree)
-                 "shell/timeout-secs" timeout}
-    failure-instruction))
+                 :depends-on dependencies
+                 :attributes {"shell/argv" argv
+                              "shell/cwd" (fn [{:keys [worktree]}] worktree)
+                              "shell/timeout-secs" timeout}
+                 failure-instruction))
 
 (defn- delivery-failure-instruction [autonomous?]
   (if autonomous?
     (fn [{:keys [card]}] (autonomous/failure-policy card))
-    "Await this executor-owned gate. Inspect failures, repair the cause, then explicitly clear gate/error to retry. Never manually assert a passing result."))
+    (format/prose
+     "
+       Await this executor-owned gate. Inspect failures, repair the cause, then
+       explicitly clear gate/error to retry. Never manually assert a passing
+       result.
+     " {})))
 
 (defn- review-delivery
   "Return the shared quality, PR, verification, review-card and exit sequence.
@@ -47,7 +54,7 @@
   (let [failure-instruction (delivery-failure-instruction autonomous?)]
     (concat
      [(shell-gate :quality "Pass repository quality checks" dependencies
-                  ["pnpm" "quality"] 5400 failure-instruction)
+                  ["sh" ".millstrand/land-quality.sh"] 5400 failure-instruction)
       (workflow/step
        :prepare-pr "Publish the exact change with its review package" :self
        :depends-on [:quality]
@@ -80,20 +87,18 @@
                   (fn [{:keys [branch]}]
                     ["node" "--experimental-transform-types"
                      "scripts/auto-run-review.ts" branch])
-                  120 failure-instruction)
-      (workflow/gate
-       :review-card "Move the verified feature into review" :code
-       :depends-on [:verify-handoff]
-       :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
-                    "code/params" (fn [{:keys [card]}] {:card card})}
-       (if autonomous?
-         failure-instruction
-         "This is an automatic card transition after the review-package checks."))]
+                  120 failure-instruction)]
      (if autonomous?
        [(workflow/call :land #'autonomous/autonomous-land {}
-                       :depends-on [:review-card]
+                       :depends-on [:verify-handoff]
                        :title "Review and hand off autonomous landing")]
-       [(workflow/checkpoint
+       [(workflow/gate
+         :review-card "Move the verified feature into review" :code
+         :depends-on [:verify-handoff]
+         :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
+                      "code/params" (fn [{:keys [card]}] {:card card})}
+         "The verified handoff now needs human attention.")
+        (workflow/checkpoint
          :human-acceptance "Human review: return the passing PR and stop"
          :depends-on [:review-card]
          :kind :human
@@ -133,31 +138,68 @@
            publish external reviews as a smoke test. Add focused regression
            tests when behavior or ownership boundaries warrant them.
 
-           Run pnpm quality while iterating. When implementation and browser
+           Run sh .millstrand/land-quality.sh while iterating (it owns the suite
+           lock; do not wrap it in another flock). When implementation and browser
            verification are complete, commit your work and complete this step.
            Do not start land yet; the following steps own the review handoff.
 
            {failure-policy}
-         " {:card card :failure-policy (if autonomous? (autonomous/failure-policy card) "")}))) ]
+         " {:card card :failure-policy (if autonomous? (autonomous/failure-policy card) "")})))]
     (review-delivery autonomous? [:implement]))))
 
-(defn- clean-worktree-argv []
+(defn- clean-worktree-argv [{:keys [branch]}]
   ["sh" "-ceu"
-   "test -z \"$(git status --porcelain)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"])
+   (format/prose
+    "
+      branch=$1
+      test \"$branch\" != main
+      test \"$branch\" = \"$(git branch --show-current)\"
+      test -z \"$(git status --porcelain)\"
+      test \"$(git rev-list --count origin/main..HEAD)\" -eq 0
+    " {})
+   "verify-inspection" branch])
 
-(defn- clean-inspection-cleanup-gate [id dependencies]
-  (workflow/gate
-   id "Remove the clean inspection worktree and branch" :shell
+(s/def ::worker-run-id ::text)
+(s/def ::canonical-root ::text)
+(s/def ::resource-inventory ::text)
+(s/def ::handoff-note ::text)
+(s/def ::retention-receipt
+  (s/keys :req-un [::worker-run-id ::canonical-root ::resource-inventory
+                   ::handoff-note]))
+
+(defn- retain-inspection-worktree [dependencies]
+  (workflow/checkpoint
+   :retain-worktree "Record retained inspection custody" :kind :agent
    :depends-on dependencies
+   :choices [{:key :retained
+              :label "Worktree retained; cleanup and card completion remain open"
+              :input {:spec ::retention-receipt
+                      :doc "Exact worker run, canonical root, retained resource inventory and card note ID."}}]
    :attributes
-   {"shell/argv"
-    (fn [{:keys [branch worktree]}]
-      ["sh" "-ceu"
-       "branch=$1\nworktree=$2\nroot=$(dirname \"$(git -C \"$worktree\" rev-parse --path-format=absolute --git-common-dir)\")\ntest \"$branch\" != main\ntest \"$branch\" = \"$(git -C \"$worktree\" branch --show-current)\"\nrm -rf \"$worktree/node_modules\" \"$worktree/dist\" \"$worktree/coverage\"\nfind \"$worktree\" -type f \\( -name '*.tsbuildinfo' -o -name '.DS_Store' \\) -delete\ntest -z \"$(git -C \"$worktree\" status --porcelain --ignored --untracked-files=all)\"\ntest \"$(git -C \"$worktree\" rev-list --count origin/main..HEAD)\" -eq 0\ngit -C \"$root\" worktree remove \"$worktree\"\ngit -C \"$root\" branch -d \"$branch\""
-       "clean-inspection-cleanup" branch worktree])
-    "shell/cwd" (fn [{:keys [worktree]}] worktree)
-    "shell/timeout-secs" 120}
-   "Cleanup discards known build artifacts, but refuses to remove a worktree containing any other ignored files so local configuration is not deleted. Leave the card open and record the retained paths if cleanup refuses to remove it."))
+   {"workflow/instruction"
+    (fn [{:keys [card branch worktree summary evidence findings next-action]}]
+      (format/prose
+       "
+         Record a durable handoff note on card {card} with these inspection results:
+
+         - Summary: {summary}
+         - Evidence: {evidence}
+         - Findings: {findings}
+         - Next action: {next-action}
+
+         Retain branch {branch} and worktree {worktree}. Include the exact current
+         Harnesses worker run ID, canonical root, workflow run ID and all owned
+         resources in the note. Supply its note ID and custody details as the
+         retained choice input. This records retention, not cleanup or completion.
+
+         Do not remove resources, reserve clean completion, finish the card or
+         launch a cleanup worker here. Return after the remaining ready steps.
+         A later separately assigned canonical-root owner must read this receipt
+         and establish settlement of this exact worker before any cleanup.
+         Follow docs/auto-run.md's retained-inspection cleanup contract; a terminal
+         worker status alone is not settlement. Keep the card open meanwhile.
+       " {:card card :branch branch :worktree worktree :summary summary
+          :evidence evidence :findings findings :next-action next-action}))}))
 
 (defn- inspect-introduction [{:keys [card on-change]}]
   (format/prose
@@ -172,10 +214,12 @@
      test it only when it is within the card's scope. Before choosing a
      disposition, use the structured choice input to preserve: summary,
      evidence, findings, and a recommended next action. Copy that same
-     structured summary into a card note using `strand kanban note --by`.
+     structured summary into a card note using `strand kanban note --by-identity`.
 
      The admitted changed-work policy is `{on-change}`. It cannot be changed
-     from this workflow run. Product findings use needs-review or blocked.
+     from this workflow run. Human decisions use needs-review; agent-resolvable
+     blockers use blocked. Evidence-only routes retain your worktree and card
+     for later separately owned cleanup; clean does not mean card completion.
    " {:card card :on-change on-change}))
 
 (defn- inspect-disposition []
@@ -223,30 +267,23 @@
    (inspect-disposition)))
 
 (workflow/defworkflow! auto-inspect-clean
-  "Verify evidence-only work is clean, then finish the card without a PR."
-  {:entrypoints #{:continue} :param-spec ::inspect-params}
+  "Verify evidence-only work and retain custody for separately owned cleanup."
+  {:entrypoints #{:continue} :param-spec ::inspect-continuation-params}
   (workflow/workflow
-   "Finish clean inspection"
+   "Retain clean inspection"
    (shell-gate :verify-clean "Verify no dirty files or commits ahead" []
-               (fn [_] (clean-worktree-argv)) 120
-               "The clean disposition is invalid while files are dirty or commits are ahead. Leave the card open and record the actual finding; do not manufacture a PR.")
-   (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
-   (workflow/gate
-    :reserve-clean-finish "Reserve the claimed card for clean completion" :code
-    :depends-on [:cleanup-clean]
-    :attributes {"code/fn" "millstrand-ui.auto-run/mark-clean-finishing!"
-                 "code/params" (fn [{:keys [card]}] {:card card})}
-    "This atomically reserves the still-claimed card after cleanup. A concurrent review transition leaves the card open rather than completing a clean inspection.")
-   (workflow/gate
-    :finish-card "Finish the clean evidence-only card" :code
-    :depends-on [:reserve-clean-finish]
-    :attributes {"code/fn" "millhouse.spools.land.card-actions/finish-card!"
-                 "code/params" (fn [{:keys [card]}] {:card card})}
-    "This closes only the clean, evidenced card after its disposable worktree and branch are removed. It does not create, push, or review a PR.")))
+               clean-worktree-argv 120
+               (format/prose
+                "
+                  The clean disposition is invalid while files are dirty or commits
+                  are ahead. Leave the card open and record the actual finding;
+                  do not manufacture a PR.
+                " {}))
+   (retain-inspection-worktree [:verify-clean])))
 
 (workflow/defworkflow! auto-inspect-fixed
   "Select the admitted changed-work delivery policy after recording fixed evidence."
-  {:entrypoints #{:continue} :param-spec ::inspect-params}
+  {:entrypoints #{:continue} :param-spec ::inspect-continuation-params}
   (workflow/workflow
    "Route bounded fixes"
    (workflow/checkpoint
@@ -254,39 +291,57 @@
     :condition [:= :on-change "human-review"]
     :choices [{:key :continue :label "Use the admitted human-review policy"
                :next :auto-inspect-fixed-human-review}]
-    :attributes {"workflow/instruction" "The card admitted human-review before dispatch. Choose the sole option; do not replace the policy or bypass PR verification."})
+    :attributes
+    {"workflow/instruction"
+     (format/prose
+      "
+        The card admitted human-review before dispatch. Choose the sole option; do
+        not replace the policy or bypass PR verification.
+      " {})})
    (workflow/checkpoint
     :full-land "Continue fixed work to autonomous landing" :kind :agent
     :condition [:= :on-change "full-land"]
     :choices [{:key :continue :label "Use the admitted full-land policy"
                :next :auto-inspect-fixed-full-land}]
-    :attributes {"workflow/instruction" "The card admitted full-land before dispatch. Choose the sole option; ordinary delivery, review and the existing finisher own landing."})
+    :attributes
+    {"workflow/instruction"
+     (format/prose
+      "
+        The card admitted full-land before dispatch. Choose the sole option;
+        ordinary delivery, review and the existing finisher own landing.
+      " {})})
    (workflow/checkpoint
     :stop "Stop after quality for a human delivery decision" :kind :agent
     :condition [:= :on-change "stop"]
     :choices [{:key :continue :label "Use the admitted stop policy"
                :next :auto-inspect-fixed-stop}]
-    :attributes {"workflow/instruction" "The card admitted the conservative stop policy before dispatch. Choose the sole option; quality runs, then the card remains open without a PR."})))
+    :attributes
+    {"workflow/instruction"
+     (format/prose
+      "
+        The card admitted the conservative stop policy before dispatch. Choose the
+        sole option; quality runs, then the card remains open without a PR.
+      " {})})))
 
 (workflow/defworkflow! auto-inspect-fixed-human-review
   "Run ordinary reviewed delivery for a bounded inspection fix."
-  {:entrypoints #{:continue} :param-spec ::inspect-params}
+  {:entrypoints #{:continue} :param-spec ::inspect-continuation-params}
   (apply workflow/workflow "Prepare fixed inspection for human review"
          (review-delivery false [])))
 
 (workflow/defworkflow! auto-inspect-fixed-full-land
   "Run ordinary autonomous delivery for a bounded inspection fix."
-  {:entrypoints #{:continue} :param-spec ::inspect-params}
+  {:entrypoints #{:continue} :param-spec ::inspect-continuation-params}
   (apply workflow/workflow "Deliver fixed inspection automatically"
          (review-delivery true [])))
 
 (workflow/defworkflow! auto-inspect-fixed-stop
   "Run quality for a bounded inspection fix, then leave its delivery open."
-  {:entrypoints #{:continue} :param-spec ::inspect-params}
+  {:entrypoints #{:continue} :param-spec ::inspect-continuation-params}
   (workflow/workflow
    "Verify fixed inspection and stop"
    (shell-gate :quality "Pass repository quality checks" []
-               ["pnpm" "quality"] 5400
+               ["sh" ".millstrand/land-quality.sh"] 5400
                "A quality failure is a product result to record and repair; leave the card open.")
    (workflow/step
     :stop "Leave the fixed card open for a human delivery decision" :self
@@ -302,16 +357,21 @@
 
 (workflow/defworkflow! auto-inspect-needs-review
   "Move an evidence-backed inspection finding into review and stop."
-  {:entrypoints #{:continue} :param-spec ::inspect-params}
+  {:entrypoints #{:continue} :param-spec ::inspect-continuation-params}
   (workflow/workflow
    "Hand inspection findings to review"
    (shell-gate :verify-clean "Verify findings left no dirty files or commits ahead" []
-               (fn [_] (clean-worktree-argv)) 120
-               "Code changes cannot use needs-review to bypass quality and ordinary delivery. Record the actual fix as fixed, or clean the worktree before returning an evidence-only finding.")
-   (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
+               clean-worktree-argv 120
+               (format/prose
+                "
+                  Code changes cannot use needs-review to bypass quality and ordinary
+                  delivery. Record the actual fix as fixed, or clean the worktree before
+                  returning an evidence-only finding.
+                " {}))
+   (retain-inspection-worktree [:verify-clean])
    (workflow/gate
     :review-card "Move the finding card into review" :code
-    :depends-on [:cleanup-clean]
+    :depends-on [:retain-worktree]
     :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
                  "code/params" (fn [{:keys [card]}] {:card card})}
     "Move this evidence-backed finding to review. This is not a PR or landing transition.")
@@ -328,16 +388,21 @@
 
 (workflow/defworkflow! auto-inspect-blocked
   "Leave a blocked inspection open with its durable blocker evidence."
-  {:entrypoints #{:continue} :param-spec ::inspect-params}
+  {:entrypoints #{:continue} :param-spec ::inspect-continuation-params}
   (workflow/workflow
    "Stop blocked inspection"
    (shell-gate :verify-clean "Verify blocker evidence left no dirty files or commits ahead" []
-               (fn [_] (clean-worktree-argv)) 120
-               "Code changes cannot use blocked to bypass quality and ordinary delivery. Record the actual fix as fixed, or clean the worktree before leaving a blocker open.")
-   (clean-inspection-cleanup-gate :cleanup-clean [:verify-clean])
+               clean-worktree-argv 120
+               (format/prose
+                "
+                  Code changes cannot use blocked to bypass quality and ordinary delivery.
+                  Record the actual fix as fixed, or clean the worktree before leaving a
+                  blocker open.
+                " {}))
+   (retain-inspection-worktree [:verify-clean])
    (workflow/step
     :stop "Leave the blocked card open with trustworthy evidence" :self
-    :depends-on [:cleanup-clean]
+    :depends-on [:retain-worktree]
     (fn [{:keys [card]}]
       (format/prose
        "

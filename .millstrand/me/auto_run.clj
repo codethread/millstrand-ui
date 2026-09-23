@@ -66,7 +66,10 @@
   nil))
 
 (defn mark-clean-finishing!
-  "Reserve a claimed card for clean completion before removing its worktree."
+  "Reserve a claimed card for completion after separately owned clean cleanup.
+
+  The cleanup owner must first establish worker settlement and cleanup evidence;
+  this reservation protects the card lane, not resource custody."
   [{:keys [card]}]
   (weaver/update! (current/runtime) card
                   {:attributes {:auto-inspect/clean-finishing "true"}}))
