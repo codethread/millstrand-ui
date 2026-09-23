@@ -314,10 +314,16 @@
                           (do
                             (is (= ["Move the finding card into review"]
                                    (mapv :title (:ready result))))
-                            ((requiring-resolve 'millhouse.spools.land.card-actions/review-card!)
-                             {:card (:id card)})
-                            (workflow/complete! run-id {:executor "fixture-code"})
-                            (is (:done (workflow/complete! run-id))))
+                            (let [awaited (workflow/await! run-id {:timeout-secs 10})
+                                  stop-step (first (:ready awaited))]
+                              (is (= :step (:reason awaited)))
+                              (is (= ["Stop with findings and a recommended next action"]
+                                     (mapv :title (:ready awaited))))
+                              (is (= "in_review"
+                                     (attr-get (weaver/show rt (:id card)) :kanban/lane)))
+                              (is (= "closed"
+                                     (:state (weaver/show rt (:id (first (:ready result)))))))
+                              (is (:done (workflow/complete! run-id {:step (:id stop-step)})))))
                           :blocked (is (:done (workflow/complete! run-id))))))))
                 (is (.exists dir) "workflow completion retains the worker cwd")
                 (is (= "SECRET=retained" (slurp (io/file dir ".env"))))
