@@ -148,8 +148,9 @@ card completion follows cleanup.
 
 Select `auto-inspect` for investigations, audits, exploratory reviews, and bounded
 regression checks whose primary output is card evidence. It records a structured
-summary and routes clean work to a no-PR completion, ambiguous findings to review,
-and blockers to an open card. If inspection produces a bounded fix, its
+summary and routes clean work to a no-PR retained handoff, ambiguous findings to
+review, and blockers to an open card. Evidence-only outcomes retain the worker's
+worktree and leave the card open for later separately owned cleanup. If inspection produces a bounded fix, its
 `auto-run/on-change` policy is `human-review`, `full-land`, or conservative `stop`
 by default; quality always runs before a changed path proceeds. Observed autonomous
 delivery failures—not ordinary product findings—are labeled `auto-run-failure` and

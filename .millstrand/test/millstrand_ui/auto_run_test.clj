@@ -27,7 +27,7 @@
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj"
-                                           "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+                                      "me/auto_run_workflows.clj" "me/auto_run.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)
           status (auto-run/status rt)]
@@ -64,8 +64,14 @@
                 ci-argv (attr-get ci-step :shell/argv)
                 gates (set (keep #(attr-get % :workflow/gate) strands))]
             (is (= 1 (count (:ready result))))
+            (is (= ["sh" ".millstrand/land-quality.sh"]
+                   (attr-get (first (filter #(= "Pass repository quality checks" (:title %))
+                                            strands)) :shell/argv)))
+            (is (= (if (= name :auto-human-review) 1 0)
+                   (count (filter #(= "millhouse.spools.land.card-actions/review-card!"
+                                      (attr-get % :code/fn)) strands))))
             (is (contains? gates "shell"))
-            (is (contains? gates "code"))
+            (is (= (= name :auto-human-review) (contains? gates "code")))
             (is (not (contains? gates "agent")))
             (testing "PR checks require registered CI before the stricter review-package verifier"
               (is (= ["pr-checks" "required" "auto/fixture-card" "120" "5"]
@@ -76,6 +82,20 @@
               (is (= [(:id ci-step)]
                      (mapv :to_strand_id
                            (graph/outgoing-edges rt [(:id verify-step)] "depends-on")))))
+            (testing "the verified handoff exposes only its actual next owner"
+              ;; Isolate routing from external CI: these receipts stand for the
+              ;; shell executor, not evidence that a real PR passed its checks.
+              (workflow/complete! run-id)
+              (workflow/complete! run-id {:executor "fixture-quality"})
+              (workflow/complete! run-id)
+              (workflow/complete! run-id {:executor "fixture-ci"})
+              (let [result (workflow/complete! run-id {:executor "fixture-pr-verifier"})]
+                (is (= 1 (count (:ready result))))
+                (if (= name :auto-human-review)
+                  (is (= ["Move the verified feature into review"]
+                         (mapv :title (:ready result))))
+                  (is (= [(:id (role-step strands "handoff-worker"))]
+                         (mapv :id (:ready result)))))))
             (if (= name :auto-human-review)
               (testing "human review remains a structured stop boundary"
                 (let [checkpoint (first (filter #(= "human" (:checkpoint-kind %)) views))]
@@ -139,7 +159,7 @@
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj"
-                                           "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+                                      "me/auto_run_workflows.clj" "me/auto_run.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)]
       (current/with-runtime rt
@@ -147,7 +167,7 @@
           (let [callback (requiring-resolve 'millstrand-ui.auto-run/start-params!)]
             (doseq [on-change ["human-review" "full-land" "stop"]]
               (let [card (weaver/add! rt {:title on-change
-                                           :attributes {:auto-run/on-change on-change}})]
+                                          :attributes {:auto-run/on-change on-change}})]
                 (is (= {:on-change on-change}
                        (callback rt {:card card :settings {:workflow "auto-inspect"}})))))
             (is (= {:on-change "stop"}
@@ -157,23 +177,23 @@
               (is (= :invalid-policy
                      (try
                        (callback rt {:card (weaver/add! rt {:title "invalid policy"
-                                                             :attributes {:auto-run/on-change value}})
+                                                            :attributes {:auto-run/on-change value}})
                                      :settings {:workflow "auto-inspect"}})
                        :accepted
                        (catch clojure.lang.ExceptionInfo _ :invalid-policy)))))
             (is (= :changed-after-admission
                    (try
                      (callback rt {:card (weaver/add! rt {:title "changed after admission"
-                                                           :attributes {:auto-run/on-change "full-land"
-                                                                        :auto-run/effective-on-change "stop"}})
+                                                          :attributes {:auto-run/on-change "full-land"
+                                                                       :auto-run/effective-on-change "stop"}})
                                    :settings {:workflow "auto-inspect"}})
                      :accepted
                      (catch clojure.lang.ExceptionInfo _ :changed-after-admission))))
             (let [prepare (requiring-resolve 'millstrand-ui.auto-run/prepare!)
                   admitted (weaver/add! rt {:title "admitted inspection"
-                                             :attributes {:auto-run/workflow "auto-inspect"
-                                                          :auto-run/effective-workflow "auto-inspect"
-                                                          :auto-run/on-change "stop"}})]
+                                            :attributes {:auto-run/workflow "auto-inspect"
+                                                         :auto-run/effective-workflow "auto-inspect"
+                                                         :auto-run/on-change "stop"}})]
               (weaver/update! rt (:id admitted)
                               {:attributes {:auto-run/on-change "full-land"}})
               (with-redefs [auto-run-worktree/prepare! (fn [_ _] {:cwd "fixture" :branch "auto/fixture"})]
@@ -195,14 +215,14 @@
                        (catch clojure.lang.ExceptionInfo _ :changed-after-admission)))))
             (is (= {}
                    (callback rt {:card (weaver/add! rt {:title "unrelated policy"
-                                                         :attributes {:auto-run/on-change "merge-now"}})
+                                                        :attributes {:auto-run/on-change "merge-now"}})
                                  :settings {:workflow "auto-human-review"}})))
             (let [clean-card (weaver/add! rt {:title "reserved clean inspection"
-                                               :attributes {:kanban/card "true"
-                                                            :kanban/type "feature"
-                                                            :kanban/lane "claimed"}})]
-              (weaver/update! rt (:id clean-card)
-                              {:attributes {:auto-inspect/clean-finishing "true"}})
+                                              :attributes {:kanban/card "true"
+                                                           :kanban/type "feature"
+                                                           :kanban/lane "claimed"}})]
+              ((requiring-resolve 'millstrand-ui.auto-run/mark-clean-finishing!)
+               {:card (:id clean-card)})
               (is (= :lane-change-rejected
                      (try
                        (weaver/update! rt (:id clean-card)
@@ -213,33 +233,101 @@
                      (:state (weaver/update! rt (:id clean-card)
                                              {:state "closed"
                                               :attributes {:kanban/lane nil
-                                                           :kanban/outcome "done"}})))))
-        (testing "clean evidence-only work is mechanically gated and finished without a PR"
-          (prepare-inspection! ctx "inspect-clean" "stop")
-          (let [result (workflow/choose! "inspect-clean" :clean inspection-summary)
-                gate (first (:ready result))
-                argv (attr-get (weaver/show rt (:id gate)) :shell/argv)
-                views (run-views rt "inspect-clean")]
-            (is (= "Verify no dirty files or commits ahead" (:title gate)))
-            (is (= "shell" (:gate gate)))
-            (is (str/includes? (nth argv 2) "git status --porcelain"))
-            (is (not (str/includes? (nth argv 2) "--ignored")))
-            (is (str/includes? (nth argv 2) "origin/main..HEAD"))
-            (is (some #(= "Finish the clean evidence-only card" (:title %)) views))
-            (let [root (workflow/current-root "inspect-clean")
-                  strands (:strands (graph/subgraph rt [(:id root)]))
-                  finish-step (first (filter #(= "Finish the clean evidence-only card" (:title %))
-                                             strands))
-                  cleanup-step (first (filter #(= "Remove the clean inspection worktree and branch" (:title %))
-                                               strands))
-                  cleanup-argv (attr-get cleanup-step :shell/argv)]
-              (is (some #(= "Reserve the claimed card for clean completion" (:title %)) strands))
-              (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) strands))
-              (is (str/includes? (nth cleanup-argv 2) "rm -rf \"$worktree/node_modules\""))
-              (is (str/includes? (nth cleanup-argv 2) "git -C \"$worktree\" status --porcelain --ignored --untracked-files=all"))
-              (is (= "millhouse.spools.land.card-actions/finish-card!"
-                     (attr-get finish-step :code/fn))))
-            (is (not-any? #(= "Publish the exact change with its review package" (:title %)) views))))
+                                                           :kanban/outcome "done"}})))))))
+        (testing "review wins the race against a late clean reservation"
+          (let [card (weaver/add! rt {:title "Review before clean reservation"
+                                      :attributes {:kanban/card "true"
+                                                   :kanban/type "feature"
+                                                   :kanban/lane "in_review"}})]
+            (is (thrown? clojure.lang.ExceptionInfo
+                         ((requiring-resolve 'millstrand-ui.auto-run/mark-clean-finishing!)
+                          {:card (:id card)})))
+            (is (= "active" (:state (weaver/show rt (:id card)))))))
+        (testing "evidence-only routes retain custody and require durable handoff input"
+          (doseq [outcome [:clean :needs-review :blocked]]
+            (let [run-id (str "retain-" (name outcome))
+                  card (weaver/add! rt {:title "Inspection custody"
+                                        :attributes {:kanban/card "true"
+                                                     :kanban/type "feature"
+                                                     :kanban/lane "claimed"}})
+                  dir (temporary-git-worktree!)]
+              (try
+                (workflow/start! run-id :auto-inspect
+                                 (assoc (inspect-params ctx "stop")
+                                        :card (:id card) :branch "auto/fixture"
+                                        :worktree (.getAbsolutePath dir)))
+                (workflow/complete! run-id)
+                (doseq [field (keys inspection-summary)]
+                  (is (thrown? clojure.lang.ExceptionInfo
+                               (workflow/choose! run-id outcome
+                                                 (dissoc inspection-summary field)))))
+                (is (= ["Record evidence and choose the inspection disposition"]
+                       (mapv :title (workflow/ready run-id))))
+                (let [result (workflow/choose! run-id outcome inspection-summary)
+                      gate (first (:ready result))
+                      argv (attr-get (weaver/show rt (:id gate)) :shell/argv)]
+                  (is (= 1 (count (:ready result))))
+                  (is (zero? (command-exit dir argv)))
+                  (is (pos? (command-exit dir (assoc argv 4 "wrong-branch"))))
+                  (git! dir "git" "checkout" "--quiet" "main")
+                  (is (pos? (command-exit dir (assoc argv 4 "main"))))
+                  (git! dir "git" "checkout" "--quiet" "auto/fixture")
+                  (spit (io/file dir "untracked.txt") "local evidence")
+                  (is (pos? (command-exit dir argv)))
+                  (io/delete-file (io/file dir "untracked.txt"))
+                  (spit (io/file dir "evidence.txt") "modified")
+                  (is (pos? (command-exit dir argv)))
+                  (git! dir "git" "checkout" "--" "evidence.txt")
+                  (spit (io/file dir ".gitignore") ".env\n")
+                  (git! dir "git" "add" ".gitignore")
+                  (git! dir "git" "commit" "--quiet" "-m" "ahead")
+                  (is (pos? (command-exit dir argv)))
+                  (git! dir "git" "update-ref" "refs/remotes/origin/main" "HEAD")
+                  (spit (io/file dir ".env") "SECRET=retained")
+                  (is (zero? (command-exit dir argv)))
+                  ;; Execute the real rendered shell contract above, then record
+                  ;; its executor receipt without starting a background provider.
+                  (let [result (workflow/complete! run-id {:executor "fixture-shell"})
+                        retention (first (:ready result))]
+                    (is (= ["retained"] (:choices retention)))
+                    (is (str/includes? (:instruction retention) (:evidence inspection-summary)))
+                    (is (thrown? clojure.lang.ExceptionInfo
+                                 (workflow/choose! run-id :retained {})))
+                    (is (= [(:id retention)] (mapv :id (workflow/ready run-id))))
+                    (let [note (weaver/op! rt 'kanban
+                                           ["note" (:id card) (pr-str inspection-summary)
+                                            "--by-identity" "fixture-worker"])
+                          receipt {:worker-run-id "fixture-worker"
+                                   :canonical-root (.getAbsolutePath dir)
+                                   :resource-inventory "Branch and worktree retained"
+                                   :handoff-note (get-in note [:strand :id])}]
+                      (doseq [field (keys receipt)]
+                        (is (thrown? clojure.lang.ExceptionInfo
+                                     (workflow/choose! run-id :retained (dissoc receipt field)))))
+                      (let [result (workflow/choose! run-id :retained receipt)]
+                        (is (= receipt
+                               (attr-get (weaver/show rt (:id retention))
+                                         :workflow/outcome-input)))
+                        (case outcome
+                          :clean (is (:done result))
+                          :needs-review
+                          (do
+                            (is (= ["Move the finding card into review"]
+                                   (mapv :title (:ready result))))
+                            ((requiring-resolve 'millhouse.spools.land.card-actions/review-card!)
+                             {:card (:id card)})
+                            (workflow/complete! run-id {:executor "fixture-code"})
+                            (is (:done (workflow/complete! run-id))))
+                          :blocked (is (:done (workflow/complete! run-id))))))))
+                (is (.exists dir) "workflow completion retains the worker cwd")
+                (is (= "SECRET=retained" (slurp (io/file dir ".env"))))
+                (is (= "auto/fixture" (str/trim (:out (git! dir "git" "branch" "--show-current")))))
+                (is (= "active" (:state (weaver/show rt (:id card)))))
+                (is (= (if (= :needs-review outcome) "in_review" "claimed")
+                       (attr-get (weaver/show rt (:id card)) :kanban/lane)))
+                (is (nil? (attr-get (weaver/show rt (:id card))
+                                    :auto-inspect/clean-finishing)))
+                (finally (shell/sh "rm" "-rf" (.getAbsolutePath dir)))))))
         (testing "fixed work follows each admitted delivery policy"
           (doseq [[on-change expected forbidden]
                   [["human-review" "Human review: return the passing PR and stop"
@@ -253,70 +341,15 @@
               (let [fixed-result (workflow/choose! run-id :fixed inspection-summary)
                     selector (first (filter :choices (:ready fixed-result)))]
                 (is (= ["continue"] (:choices selector)))
-                (workflow/choose! run-id :continue)
+                (let [result (workflow/choose! run-id :continue)
+                      gate (first (:ready result))]
+                  (is (= ["Pass repository quality checks"] (mapv :title (:ready result))))
+                  (is (= ["sh" ".millstrand/land-quality.sh"]
+                         (attr-get (weaver/show rt (:id gate)) :shell/argv))))
                 (let [views (run-views rt run-id)]
                   (is (some #(= "Pass repository quality checks" (:title %)) views))
                   (is (some #(= expected (:title %)) views))
-                  (is (not-any? #(= forbidden (:title %)) views)))))))
-        (testing "needs-review and blocked preserve product findings without delivery failure"
-          (prepare-inspection! ctx "inspect-review" "stop")
-          (workflow/choose! "inspect-review" :needs-review inspection-summary)
-          (let [views (run-views rt "inspect-review")]
-            (is (some #(and (= "Verify findings left no dirty files or commits ahead" (:title %))
-                            (= "shell" (:gate %))) views))
-            (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) views))
-            (is (some #(and (= "Move the finding card into review" (:title %))
-                            (= "code" (:gate %))) views))
-            (is (some #(= "Stop with findings and a recommended next action" (:title %)) views)))
-          (prepare-inspection! ctx "inspect-blocked" "stop")
-          (workflow/choose! "inspect-blocked" :blocked inspection-summary)
-          (let [views (run-views rt "inspect-blocked")]
-            (is (some #(and (= "Verify blocker evidence left no dirty files or commits ahead" (:title %))
-                            (= "shell" (:gate %))) views))
-            (is (some #(= "Remove the clean inspection worktree and branch" (:title %)) views))
-            (is (some #(= "Leave the blocked card open with trustworthy evidence" (:title %)) views))))))))))
-
-(deftest clean-inspection-gate-accepts-ignored-artifacts-and-rejects-dirty-or-ahead-worktrees
-  (let [dir (temporary-git-worktree!)
-        argv ["sh" "-ceu"
-              "test -z \"$(git status --porcelain)\"\ntest \"$(git rev-list --count origin/main..HEAD)\" -eq 0"]]
-    (try
-      (is (zero? (command-exit dir argv)) "clean evidence-only work passes")
-      (spit (io/file dir ".gitignore") "ignored.txt\n")
-      (git! dir "git" "add" ".gitignore")
-      (git! dir "git" "commit" "--quiet" "-m" "ignore")
-      (git! dir "git" "update-ref" "refs/remotes/origin/main" "HEAD")
-      (spit (io/file dir "ignored.txt") "ignored\n")
-      (is (zero? (command-exit dir argv)) "ignored artifacts allow a clean disposition")
-      (spit (io/file dir "untracked.txt") "untracked\n")
-      (is (pos? (command-exit dir argv)) "ordinary untracked files reject a clean disposition")
-      (io/delete-file (io/file dir "untracked.txt"))
-      (spit (io/file dir "evidence.txt") "modified\n")
-      (is (pos? (command-exit dir argv)) "tracked changes reject a clean disposition")
-      (git! dir "git" "checkout" "--" "evidence.txt")
-      (spit (io/file dir "ahead.txt") "ahead\n")
-      (git! dir "git" "add" "ahead.txt")
-      (git! dir "git" "commit" "--quiet" "-m" "ahead")
-      (is (pos? (command-exit dir argv)) "commits ahead reject a clean disposition")
-      (finally
-        (shell/sh "rm" "-rf" (.getAbsolutePath dir))))))
-
-(deftest clean-inspection-cleanup-removes-disposable-artifacts-and-refuses-local-files
-  (let [dir (temporary-git-worktree!)
-        argv ["sh" "-ceu"
-              "rm -rf node_modules dist coverage\nfind . -type f \\( -name '*.tsbuildinfo' -o -name '.DS_Store' \\) -delete\ntest -z \"$(git status --porcelain --ignored --untracked-files=all)\""]]
-    (try
-      (spit (io/file dir ".gitignore") "dist/\n.env\n")
-      (git! dir "git" "add" ".gitignore")
-      (git! dir "git" "commit" "--quiet" "-m" "ignore cleanup inputs")
-      (git! dir "git" "update-ref" "refs/remotes/origin/main" "HEAD")
-      (.mkdirs (io/file dir "dist"))
-      (spit (io/file dir "dist" "bundle.js") "generated\n")
-      (is (zero? (command-exit dir argv)) "disposable build artifacts are removed before cleanup")
-      (spit (io/file dir ".env") "SECRET=fixture\n")
-      (is (pos? (command-exit dir argv)) "local ignored configuration prevents destructive cleanup")
-      (finally
-        (shell/sh "rm" "-rf" (.getAbsolutePath dir))))))
+                  (is (not-any? #(= forbidden (:title %)) views)))))))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."

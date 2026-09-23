@@ -18,7 +18,7 @@ accepted runs remain under normal Harnesses control.
 - **auto-human-review:** implement and browser-test; pass `pnpm quality`; publish
   a non-draft PR and review package; wait for CI; mechanically verify the PR
   head/checks/package; move the card into review; stop at human acceptance.
-- **auto-full-land:** perform the same preparation and shared `land` basic review,
+- **auto-full-land:** stay claimed through preparation and shared `land` basic review,
   then hand the existing run to a canonical-root `grunt` before sign-off. Once the
   original worker settles, the grunt drives FIFO merge, cleanup and card completion.
   Selecting this workflow is explicit authorisation to land, not just to implement.
@@ -74,23 +74,63 @@ a change. The card body names the scope; the workflow requires the worker to rec
 one structured summary containing the conclusion, evidence, findings, and recommended
 next action before it can select a disposition.
 
-- **clean** — a shell gate verifies both an empty `git status --porcelain` (so
-  ignored build, dependency, and browser artifacts do not count as changes) and no
-  commits ahead of `origin/main`. Cleanup discards known generated artifacts but
-  refuses to remove a worktree containing other ignored files, including local
-  configuration. The evidence remains in the workflow/card, then the feature
-  finishes as done without a branch push or PR.
+- **clean** — a shell gate verifies the exact recorded non-main branch, an empty
+  `git status --porcelain` and no commits ahead of `origin/main`. Ignored artifacts
+  are retained, not discarded.
+  The worker records a retention receipt and returns without a PR. The workflow
+  finishes its inspection, **not the card or cleanup**; the card remains claimed
+  and open for a separately assigned cleanup owner.
 - **fixed** — bounded worktree changes exist. Quality runs first and the admitted
   `auto-run/on-change` policy controls the ordinary path: `human-review` uses the
   existing PR/verification/review checkpoint; `full-land` uses that same path and
   the existing autonomous landing handoff; `stop` runs quality and leaves the card
   open with the exact commit and a human delivery decision still required.
-- **needs-review** — the workflow first proves the worktree is clean, moves the
-  card to review, and stops with the findings and recommended next action. It
-  creates no code change or PR.
-- **blocked** — the workflow first proves the worktree is clean, then stops with
-  trustworthy blocker evidence and leaves the claimed card open. It does not claim
-  success or manufacture a PR.
+  Singleton Continue checkpoints deliberately materialize these continuations
+  with the freshly recorded evidence; they do not offer a new policy decision.
+- **needs-review** — the workflow proves the worktree is clean, records retained
+  custody, moves the card to review, and stops with the findings and recommended
+  next action. It creates no code change or PR and does not remove resources.
+- **blocked** — the workflow proves the worktree is clean, records retained
+  custody, then stops with trustworthy blocker evidence and leaves the claimed
+  card open. Use this for agent-resolvable blockage; use needs-review when a human
+  decision is required. It does not claim success or manufacture a PR.
+
+### Retained-inspection cleanup contract
+
+All three evidence-only routes retain the worker's branch, worktree, ignored files
+and other owned resources. Their required `retained` choice input records the exact
+current Harnesses worker run ID, canonical root, resource inventory and handoff card
+note ID. The note includes the disposition, structured evidence, workflow run ID,
+branch and worktree. These are durable handoff assertions, not automated proof of
+worker settlement or completed cleanup. Read the recorded choice input and note
+when resuming; later `complete --context` does not re-render existing instructions.
+
+There is intentionally no automatic inspection finisher in this repository. A
+later explicitly assigned owner must work from the canonical root, read the handoff,
+and verify settlement of the exact recorded worker (not merely terminal status),
+including any subsequently accepted worker that still holds these resources. If
+custody or outcome is uncertain, retain everything and request reconciliation.
+A shell `cd` by the original worker does not release its persistent cwd.
+
+That later cleanup must preserve the existing deletion preconditions:
+
+1. Verify the exact recorded branch is checked out and is not `main`.
+2. Require a clean tracked/untracked tree and no commits ahead of `origin/main`.
+3. Only known disposable artifacts may be discarded: `node_modules`, `dist`,
+   `coverage`, `*.tsbuildinfo` and `.DS_Store`. Require an empty
+   `git status --porcelain --ignored --untracked-files=all` afterward. Unknown
+   ignored files, including `.env`, prevent removal; record and retain them.
+4. Remove the exact worktree and delete the branch only after those checks. Record
+   actual cleanup evidence, not merely the earlier clean inspection result.
+5. Only an accepted **clean** disposition may finish without a PR. After cleanup,
+   reserve the still-claimed card through `millstrand-ui.auto-run/mark-clean-finishing!`
+   before the shared `finish-card!` action. The reservation and lane-race protection
+   remain in force; a review transition must leave the card open. Needs-review and
+   blocked outcomes never authorize card completion.
+
+Do not reserve clean completion during retention: that would freeze a card whose
+cleanup has not happened and prevent a legitimate later review decision. No live
+or previously poured workflow is rewritten by these source changes.
 
 ## Autonomous landing handoff
 
@@ -175,17 +215,22 @@ there is no automatic approval-by-label or lane-triggered rerun in v1.
 
 ## Verification and deployment
 
-- `pnpm quality` includes focused PR-boundary tests and TypeScript checking for
-  the verification script.
+- Automatic quality gates invoke `sh .millstrand/land-quality.sh`, the existing
+  suite-lock owner, exactly once. It runs `git diff --check` and
+  `flock -w 180 /tmp/millstrand-test.lock pnpm quality`. Do not wrap that script in
+  another lock. `pnpm quality` includes PR-boundary tests and TypeScript checking.
+  Lock timeout is a visible gate failure, not passing quality evidence.
 - `make -C .millstrand quality` runs Clojure lint and the workspace tests; CI
   runs this as the separate `workspace` check. From `.millstrand`,
   `clojure -M:test` boots the actual init/modules in disposable
   in-memory Weaver worlds. It verifies activation, defaults, ordinary worker
   entry steps, executor gates, and the human versus autonomous exit boundaries.
-  It creates no opted-in cards and launches no paid agents. It also checks the
-  rendered autonomous handoff instructions: pre-sign-off delegation, step-targeted
-  idempotent launch, settlement wait, late card closure and failure policy. These
-  tests verify the policy contract, not guaranteed agent compliance or a live merge.
+  It creates no opted-in cards and launches no paid agents. Inspection tests drive
+  actual ready boundaries, reject missing evidence/retention input, execute the
+  rendered clean gate against disposable Git trees, and verify that workflow
+  completion retains files and leaves cards open. They check reservation/lane
+  protection and human versus autonomous routing, not guaranteed agent compliance,
+  a live worker settlement, or a live merge.
 - Updating the Codethread dependency pin requires the supported Weaver restart,
   with explicit user approval. Source-only module edits use normal refresh.
   Never bypass the dependency-basis check with runtime or classloader mutation.
