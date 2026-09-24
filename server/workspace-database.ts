@@ -62,8 +62,9 @@ const provenanceAttributeKeys = [
   'harness/status',
   'harness/substatus',
   'harness/mode',
-  'harness/model',
-  'harness/effort',
+  'harness/observed-model',
+  'harness/observed-effort',
+  'harness/ownership',
   'harness/cwd',
   'harness/started-at',
   'harness/finished-at',
@@ -200,6 +201,22 @@ const provenanceSql = `
               AND child_task.archived = 0
               AND child_task.key = 'kanban/task'
               AND child_task.value = '"true"'
+          )
+        )
+        OR (
+          EXISTS (
+            SELECT 1 FROM attributes AS parent_identity
+            WHERE parent_identity.strand_id = strand_edges.from_strand_id
+              AND parent_identity.archived = 0
+              AND parent_identity.key = 'identity/session'
+              AND parent_identity.value = '"true"'
+          )
+          AND EXISTS (
+            SELECT 1 FROM attributes AS child_identity
+            WHERE child_identity.strand_id = strand_edges.to_strand_id
+              AND child_identity.archived = 0
+              AND child_identity.key = 'identity/session'
+              AND child_identity.value = '"true"'
           )
         )
       )

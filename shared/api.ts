@@ -94,17 +94,22 @@ export interface AgentRun {
   id: string;
   requestId: string | null;
   title: string;
-  alias: string;
+  /** Managed launch alias. Native direct sessions deliberately have none. */
+  alias: string | null;
   harness: string;
   status: AgentRunStatus;
   substatus: string | null;
-  mode: string;
+  mode: 'headless' | 'interactive' | 'external';
+  /** Actual native callback values, never requested launch compatibility fields. */
   model: string | null;
   effort: string | null;
   cwd: string | null;
+  /** Explicit run-origin/custody marker. `external` means Harnesses does not own the process. */
+  ownership: 'external' | null;
   target: string | null;
   rootTargets: string[];
   participants: IdentityAttribution[];
+  session: { provider: 'pi' | 'codex' | 'claude'; session: string } | null;
   continuation: LogContinuation | null;
   createdAt: string;
   startedAt: string | null;
@@ -124,6 +129,7 @@ export interface AgentIdentity {
   harness: string;
   model: string | null;
   effort: string | null;
+  parentIdentityStrandIds: string[];
   createdAt: string;
   runs: AgentRun[];
   work: AgentWork[];
@@ -147,7 +153,7 @@ export interface CommentPromptReference {
 export interface AgentReply {
   id: string;
   title: string;
-  alias: string;
+  alias: string | null;
   identity: string | null;
   target: string | null;
   status: AgentRunStatus;

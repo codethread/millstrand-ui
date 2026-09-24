@@ -16,6 +16,7 @@ function identity(id: string, runs: AgentRun[] = []): AgentIdentity {
     harness: 'pi',
     model: null,
     effort: null,
+    parentIdentityStrandIds: [],
     createdAt: '2026-09-18',
     runs,
     work: [],
@@ -34,9 +35,11 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     model: null,
     effort: null,
     cwd: '/workspace',
+    ownership: null,
     target: null,
     rootTargets: [],
     participants: [],
+    session: null,
     continuation: null,
     createdAt: '2026-09-18',
     startedAt: null,
@@ -70,7 +73,7 @@ describe('card agent roster', () => {
       task('third', 'feature-owner'),
     ];
     const roster = cardLogAgents(agents, 'feature-owner', 'feature', tasks);
-    expect(roster.map((agent) => agent.identity.id)).toEqual(['feature-owner', 'task-owner']);
+    expect(roster.map((agent) => agent.identity!.id)).toEqual(['feature-owner', 'task-owner']);
     expect(roster[1]).toMatchObject({
       relation: 'task-owner',
       run: null,
@@ -89,7 +92,7 @@ describe('card agent roster', () => {
       task('old', 'past', 'closed'),
       task('new', 'current'),
     ]);
-    expect(roster.map((agent) => [agent.identity.id, agent.group])).toEqual([
+    expect(roster.map((agent) => [agent.identity!.id, agent.group])).toEqual([
       ['current', 'current'],
       ['past', 'history'],
     ]);
@@ -145,6 +148,24 @@ describe('card agent roster', () => {
     expect(cardLogAgentStatus(roster[0]!)).toBe('Queued');
   });
 
+  it('keeps a targeted pre-binding run associated without inventing an identity', () => {
+    const pending = run({ id: 'pending', target: 'child', participants: [] });
+    const roster = cardLogAgents([], null, 'feature', [task('child', null)], [pending]);
+    expect(roster).toEqual([
+      {
+        kind: 'run',
+        identity: null,
+        run: pending,
+        relation: 'target',
+        tasks: [task('child', null)],
+        group: 'current',
+      },
+    ]);
+    expect(cardLogAgentContext(roster[0]!)).toBe(
+      'Linked run · identity registration pending · Task child',
+    );
+  });
+
   it('retains root-targeted and completed feature runs without inventing ownership', () => {
     const live = identity('live', [run({ target: 'nested', rootTargets: ['feature'] })]);
     const past = identity('past', [
@@ -152,7 +173,7 @@ describe('card agent roster', () => {
     ]);
     expect(
       cardLogAgents([past, live], null, 'feature', []).map((agent) => [
-        agent.identity.id,
+        agent.identity!.id,
         agent.relation,
         agent.group,
       ]),

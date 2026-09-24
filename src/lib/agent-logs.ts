@@ -10,12 +10,31 @@ export interface CardLogTask {
   state: string;
   owner: string | null;
 }
-export interface CardLogAgent {
-  identity: AgentIdentity;
-  run: AgentRun | null;
+interface CardLogAgentBase {
   relation: 'target' | 'owner' | 'task-owner';
   tasks: CardLogTask[];
   group: 'current' | 'history';
+}
+export type CardLogAgent =
+  | (CardLogAgentBase & {
+      kind: 'identity';
+      identity: AgentIdentity;
+      run: AgentRun | null;
+    })
+  | (CardLogAgentBase & {
+      kind: 'run';
+      identity: null;
+      run: AgentRun;
+      relation: 'target';
+    });
+
+export function cardLogAgentKey(agent: CardLogAgent): string {
+  return agent.kind === 'identity' ? agent.identity.strandId : `run:${agent.run.id}`;
+}
+
+function cardLogAgentTimestamp(agent: CardLogAgent): string {
+  if (agent.kind === 'run') return agent.run.createdAt;
+  return agent.run?.createdAt ?? agent.identity.createdAt;
 }
 
 /** Only parent-of descendants count; dependency neighbours are not work on this card. */
@@ -43,19 +62,20 @@ export function cardLogTasks(graph: CardGraph): CardLogTask[] {
     }));
 }
 
-/** One row per identity, including untracked task owners and completed work. */
+/** One row per identity plus exact targeted runs that have not published a participant yet. */
 export function cardLogAgents(
   agents: AgentIdentity[],
   owner: string | null,
   target: string,
   tasks: CardLogTask[],
+  runs: AgentRun[] = [],
 ): CardLogAgent[] {
   const identityCounts = new Map<string, number>();
   for (const identity of agents)
     identityCounts.set(identity.id, (identityCounts.get(identity.id) ?? 0) + 1);
   const resolves = (friendly: string | null, identity: AgentIdentity) =>
     friendly === identity.id && identityCounts.get(identity.id) === 1;
-  const matches = agents.flatMap((identity): CardLogAgent[] => {
+  const identified = agents.flatMap((identity): CardLogAgent[] => {
     const ownedTasks = tasks.filter((task) => resolves(task.owner, identity));
     const targetedRuns = identity.runs.filter(
       (run) => runTargets(run, target) || tasks.some((task) => runTargets(run, task.id)),
@@ -72,6 +92,7 @@ export function cardLogAgents(
       targetedRuns.some((run) => run.status === 'running' || run.status === 'ready');
     return [
       {
+        kind: 'identity',
         identity,
         run: targeted ?? currentRun(identity),
         relation: targeted ? 'target' : ownsCard ? 'owner' : 'task-owner',
@@ -87,15 +108,32 @@ export function cardLogAgents(
       },
     ];
   });
+  const identifiedRunIds = new Set(
+    agents.flatMap((identity) => identity.runs.map((run) => run.id)),
+  );
+  const unbound = runs
+    .filter(
+      (run) =>
+        !identifiedRunIds.has(run.id) &&
+        run.participants.length === 0 &&
+        (runTargets(run, target) || tasks.some((task) => runTargets(run, task.id))),
+    )
+    .map((run): CardLogAgent => ({
+      kind: 'run',
+      identity: null,
+      run,
+      relation: 'target',
+      tasks: tasks.filter((task) => runTargets(run, task.id)),
+      group: run.status === 'running' || run.status === 'ready' ? 'current' : 'history',
+    }));
   return sorted(
-    matches,
+    [...identified, ...unbound],
     (a, b) =>
       Number(a.group === 'history') - Number(b.group === 'history') ||
       Number(b.run?.status === 'running') - Number(a.run?.status === 'running') ||
-      Number(resolves(owner, b.identity)) - Number(resolves(owner, a.identity)) ||
-      (b.run?.createdAt ?? b.identity.createdAt).localeCompare(
-        a.run?.createdAt ?? a.identity.createdAt,
-      ),
+      Number(b.kind === 'identity' && resolves(owner, b.identity)) -
+        Number(a.kind === 'identity' && resolves(owner, a.identity)) ||
+      cardLogAgentTimestamp(b).localeCompare(cardLogAgentTimestamp(a)),
   );
 }
 
@@ -111,7 +149,7 @@ export function cardLogRoster(
   return {
     agents,
     selected:
-      agents.find((candidate) => candidate.identity.strandId === chosen) ?? agents[0] ?? null,
+      agents.find((candidate) => cardLogAgentKey(candidate) === chosen) ?? agents[0] ?? null,
     historyCount: hasCurrent
       ? candidates.filter((candidate) => candidate.group === 'history').length
       : 0,
@@ -120,11 +158,13 @@ export function cardLogRoster(
 
 export function cardLogAgentContext(agent: CardLogAgent): string {
   const relationship =
-    agent.relation === 'target'
-      ? 'Linked run'
-      : agent.relation === 'owner'
-        ? 'Feature owner'
-        : 'Task owner';
+    agent.kind === 'run'
+      ? 'Linked run · identity registration pending'
+      : agent.relation === 'target'
+        ? 'Linked run'
+        : agent.relation === 'owner'
+          ? 'Feature owner'
+          : 'Task owner';
   const tasks = agent.tasks.map(
     (task) => `${task.title}${task.state === 'closed' ? ' (completed)' : ''}`,
   );

@@ -30,7 +30,8 @@ export function useCardLogAgents(owner: string | null, target: string) {
   const tasks = useQuery({ ...graphQueryOptions(workspace, target), select: cardLogTasks });
   const taskData = tasks.data;
   const select = useCallback(
-    (data: AgentDirectory) => cardLogAgents(data.identities, owner, target, taskData ?? []),
+    (data: AgentDirectory) =>
+      cardLogAgents(data.identities, owner, target, taskData ?? [], data.runs),
     [owner, target, taskData],
   );
   const agents = useQuery({

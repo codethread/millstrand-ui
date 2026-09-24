@@ -1,4 +1,4 @@
-import type { AgentIdentity, AgentRun, AgentRunStatus } from '../../shared/api';
+import type { AgentDirectory, AgentIdentity, AgentRun, AgentRunStatus } from '../../shared/api';
 import { sorted } from '../../shared/array';
 
 export type AgentRunLabel =
@@ -9,19 +9,31 @@ export interface AgentDirectorySummary {
   active: number;
 }
 
-export interface RelevantAgentActivity {
-  identity: AgentIdentity;
-  run: AgentRun | null;
-  label: AgentRunLabel | 'Working' | 'Session running';
-  relation: 'working' | 'queued' | 'owner-session' | 'owner';
-}
+export type RelevantAgentActivity =
+  | {
+      kind: 'identity';
+      identity: AgentIdentity;
+      run: AgentRun | null;
+      label: AgentRunLabel | 'Working' | 'Session running';
+      relation: 'working' | 'queued' | 'owner-session' | 'owner';
+    }
+  | {
+      kind: 'run';
+      identity: null;
+      run: AgentRun;
+      label: 'Working' | 'Stopping' | 'Queued';
+      relation: 'working' | 'queued';
+    };
 
-export interface SelectedAgentActivity {
-  identity: AgentIdentity;
-  currentRun: AgentRun | null;
-  selectedRun: AgentRun | null;
-  requestedRunMissing: boolean;
-}
+export type SelectedAgentActivity =
+  | {
+      kind: 'identity';
+      identity: AgentIdentity;
+      currentRun: AgentRun | null;
+      selectedRun: AgentRun | null;
+      requestedRunMissing: boolean;
+    }
+  | { kind: 'run'; run: AgentRun };
 
 export function currentRun(agent: AgentIdentity): AgentRun | null {
   return (
@@ -40,6 +52,10 @@ export function agentIsActive(agent: AgentIdentity): boolean {
   return agentStatus(agent) === 'running' || agentStatus(agent) === 'ready';
 }
 
+export function runIsActive(run: AgentRun): boolean {
+  return run.status === 'running' || run.status === 'ready';
+}
+
 export function runLabel(run: AgentRun | null): AgentRunLabel {
   if (!run) return 'Untracked';
   if (run.status === 'unknown') return 'Unknown';
@@ -47,6 +63,22 @@ export function runLabel(run: AgentRun | null): AgentRunLabel {
   if (run.status === 'running') return run.substatus === 'requested' ? 'Stopping' : 'Running';
   if (run.status === 'failed') return 'Failed';
   return run.substatus === 'completed' ? 'Completed' : 'Stopped';
+}
+
+export function runDisplayName(run: AgentRun): string {
+  if (run.alias !== null) return run.alias;
+  return run.ownership === 'external' ? `Direct ${run.harness} session` : `${run.harness} run`;
+}
+
+export function effortLabel(effort: string | null): string {
+  if (effort === null) return 'Not recorded';
+  return effort === 'unknown' ? 'Unknown' : effort;
+}
+
+function matchesRun(run: AgentRun, words: string[]): boolean {
+  return words.every((word) =>
+    [run.id, run.alias, run.harness, run.model, run.title].join(' ').toLowerCase().includes(word),
+  );
 }
 
 export function selectAgents(
@@ -78,12 +110,29 @@ export function selectAgents(
   );
 }
 
+/** Published runs awaiting a native `performed` binding remain visible without a made-up actor. */
+export function selectUnboundRuns(
+  runs: AgentRun[],
+  query: string,
+  activeOnly: boolean,
+): AgentRun[] {
+  const words = query.trim().toLowerCase().split(/\s+/);
+  return runs.filter(
+    (run) =>
+      run.participants.length === 0 && (!activeOnly || runIsActive(run)) && matchesRun(run, words),
+  );
+}
+
 export function activeAgentIdentities(agents: AgentIdentity[]): AgentIdentity[] {
   return selectAgents(agents, '', true);
 }
 
-export function agentDirectorySummary(agents: AgentIdentity[]): AgentDirectorySummary {
-  return { total: agents.length, active: agents.filter(agentIsActive).length };
+export function agentDirectorySummary(directory: AgentDirectory): AgentDirectorySummary {
+  const unbound = selectUnboundRuns(directory.runs, '', false);
+  return {
+    total: directory.identities.length + unbound.length,
+    active: directory.identities.filter(agentIsActive).length + unbound.filter(runIsActive).length,
+  };
 }
 
 export function runTargets(run: AgentRun, id: string): boolean {
@@ -99,10 +148,7 @@ export function issueAgents(
   const resolvedOwner = ownerMatches.length === 1 ? ownerMatches[0] : null;
   return agents.filter(
     (agent) =>
-      agent === resolvedOwner ||
-      agent.runs.some(
-        (run) => (run.status === 'running' || run.status === 'ready') && runTargets(run, id),
-      ),
+      agent === resolvedOwner || agent.runs.some((run) => runIsActive(run) && runTargets(run, id)),
   );
 }
 
@@ -128,49 +174,87 @@ export function issueAgentActivity(
 
 export function relevantAgentActivity(
   agents: AgentIdentity[],
+  runs: AgentRun[],
   owner: string | null,
   target: string,
 ): RelevantAgentActivity[] {
-  return issueAgents(agents, owner, target).map((identity) => {
+  const identified = issueAgents(agents, owner, target).map((identity) => {
     const run = issueRun(identity, target);
     const label = issueAgentActivity(identity, target);
     return {
+      kind: 'identity' as const,
       identity,
       run,
       label,
       relation:
         label === 'Working' || label === 'Stopping'
-          ? 'working'
+          ? ('working' as const)
           : label === 'Queued'
-            ? 'queued'
+            ? ('queued' as const)
             : label === 'Session running'
-              ? 'owner-session'
-              : 'owner',
+              ? ('owner-session' as const)
+              : ('owner' as const),
     };
   });
+  const identifiedRunIds = new Set(
+    agents.flatMap((identity) => identity.runs.map((run) => run.id)),
+  );
+  const unbound = runs
+    .filter(
+      (run) =>
+        !identifiedRunIds.has(run.id) &&
+        run.participants.length === 0 &&
+        runIsActive(run) &&
+        runTargets(run, target),
+    )
+    .map((run): RelevantAgentActivity => ({
+      kind: 'run',
+      identity: null,
+      run,
+      label:
+        run.status === 'ready' ? 'Queued' : run.substatus === 'requested' ? 'Stopping' : 'Working',
+      relation: run.status === 'ready' ? 'queued' : 'working',
+    }));
+  return [...identified, ...unbound];
 }
 
-/** An exact run is authoritative when a shared URL also contains a stale or absent identity. */
+/** Exact strand IDs and exact runs win; friendly IDs remain a legacy URL lookup only when unique. */
 export function selectedAgentActivity(
-  agents: AgentIdentity[],
-  identityId: string | null,
+  directory: Pick<AgentDirectory, 'identities' | 'runs'>,
+  identitySelector: string | null,
   runId: string | null,
 ): SelectedAgentActivity | null {
-  const runMatches = runId
-    ? agents.filter((identity) => identity.runs.some((run) => run.id === runId))
-    : [];
-  const runIdentity = runMatches.length === 1 ? runMatches[0] : undefined;
-  const routeMatches = agents.filter((candidate) => candidate.id === identityId);
-  const identity = runIdentity ?? (routeMatches.length === 1 ? routeMatches[0] : undefined);
-  if (!identity) return null;
-  const selectedRun = runId
-    ? (identity.runs.find((run) => run.id === runId) ?? null)
-    : currentRun(identity);
+  const selectedRun =
+    runId === null ? null : (directory.runs.find((candidate) => candidate.id === runId) ?? null);
+  if (selectedRun !== null) {
+    const participants = directory.identities.filter((identity) =>
+      identity.runs.some((run) => run.id === selectedRun.id),
+    );
+    const exact = participants.find((identity) => identity.strandId === identitySelector);
+    const friendly = participants.filter((identity) => identity.id === identitySelector);
+    const identity =
+      exact ??
+      (participants.length === 1 ? participants[0] : undefined) ??
+      (friendly.length === 1 ? friendly[0] : undefined);
+    if (identity === undefined) return { kind: 'run', run: selectedRun };
+    return {
+      kind: 'identity',
+      identity,
+      currentRun: currentRun(identity),
+      selectedRun,
+      requestedRunMissing: false,
+    };
+  }
+  const exact = directory.identities.find((identity) => identity.strandId === identitySelector);
+  const friendly = directory.identities.filter((identity) => identity.id === identitySelector);
+  const identity = exact ?? (friendly.length === 1 ? friendly[0] : undefined);
+  if (identity === undefined) return null;
   return {
+    kind: 'identity',
     identity,
     currentRun: currentRun(identity),
-    selectedRun,
-    requestedRunMissing: runId !== null && selectedRun === null,
+    selectedRun: runId === null ? currentRun(identity) : null,
+    requestedRunMissing: runId !== null,
   };
 }
 
@@ -183,17 +267,11 @@ export function agentRunIdentities(agents: AgentIdentity[]): Record<string, stri
   }
   return Object.fromEntries(
     [...participants].flatMap(([runId, identities]) =>
-      identities.length === 1 ? [[runId, identities[0]!.id] as const] : [],
+      identities.length === 1 ? [[runId, identities[0]!.strandId] as const] : [],
     ),
   );
 }
 
-export function targetAgentRunIds(agents: AgentIdentity[], target: string): string[] {
-  return [
-    ...new Set(
-      agents.flatMap((identity) =>
-        identity.runs.filter((run) => run.target === target).map((run) => run.id),
-      ),
-    ),
-  ];
+export function targetAgentRunIds(runs: AgentRun[], target: string): string[] {
+  return [...new Set(runs.filter((run) => run.target === target).map((run) => run.id))];
 }

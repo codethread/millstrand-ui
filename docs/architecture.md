@@ -155,10 +155,11 @@ while the overlay is open.
 `SessionLogReader` reads only the final 1 MiB of a regular JSONL file under
 `~/.local/state/{pi,codex,claude}-dialogue`, retaining at most 400 complete records.
 It reports truncation and malformed or unsupported complete records; incomplete final
-lines wait for their newline. Session association uses a running published run's
-persisted `harness/session-id` before native attachment, then the persisted
-`identity/native-session-id`, then the newest published run session for history. It
-never guesses from a workspace, model, or file timestamp. A native session is not
+lines wait for their newline. An exact run uses its persisted `harness/session-id`,
+including before native attachment. Identity-level association uses a running
+performed run, then `identity/native-session-id`, then the newest performed run
+session for history. It never guesses from a friendly identity, workspace, model, or
+file timestamp. A native session is not
 task-exclusive and does not expose whole history,
 token output, reasoning, or full tool stdout/stderr.
 
@@ -167,11 +168,13 @@ The visible card Agents tab owns a projected `['graph', w, id]` poll through
 exception, not another workspace poll). `cardLogTasks` follows only `parent-of`
 edges; dependency neighbours do not qualify. The agent directory remains a disabled
 reader. `cardLogAgents` deduplicates feature ownership, descendant task ownership,
-and tracked direct/root-targeted runs by identity. Ownership alone never implies
-execution. Current owners/targeted runs precede past participation; completed-task-only
-owners and terminal linked runs remain available under **Past participation**. Each
-published row can open the existing exact-run inspector; the compact log appears only
-when its persisted binding resolves. Desktop rows switch one shared log; narrow
+and tracked direct/root-targeted runs by identity. Targeted runs with no `performed`
+participant remain standalone rows rather than synthetic identities. Ownership alone
+never implies execution. Current owners/targeted runs precede past participation;
+completed-task-only owners and terminal linked runs remain available under **Past
+participation**. Each published row can open the existing exact-run inspector; that
+inspector uses the exact run session rather than whichever session is newest for the
+identity. Desktop rows switch one shared log; narrow
 layouts use a selector, and task context is available in a popover. Query failures
 retain entries with explicit incomplete/last-known feedback. `log-ui-store.ts` owns
 viewer interaction state, including follow, inspected event, selection, and
@@ -315,22 +318,24 @@ page to consume. Domain options must not import Router; navigation belongs in ho
 
 - `src/lib/provenance.ts` formats raw attribution status and preserves authoritative
   claim order for `card-provenance.tsx`; it never infers ownership from a note or run.
-- Pure projections live in `src/lib/agents.ts`: `activeAgentIdentities` and
-  `agentDirectorySummary` support overview/count consumers; `relevantAgentActivity`
-  preserves owner versus explicitly targeted working/queued semantics;
-  `selectedAgentActivity` resolves an exact run even when a URL has no/stale identity;
-  `agentRunIdentities` and `targetAgentRunIds` support reviews without exposing the
-  timestamp-bearing directory.
+- Pure projections live in `src/lib/agents.ts`: `activeAgentIdentities`,
+  `selectUnboundRuns`, and `agentDirectorySummary` support overview/directory consumers;
+  `relevantAgentActivity` preserves explicit claims versus targeted working/queued
+  semantics and standalone pre-binding runs; `selectedAgentActivity` resolves exact
+  immutable identity-strand selectors and exact runs; `agentRunIdentities` and
+  `targetAgentRunIds` support reviews without exposing refresh metadata.
 - Selected-workspace consumers use the disabled readers in `src/hooks/use-agents.ts`:
-  `useAgentIdentities`, `useAgentSummary`, `useRelevantAgentActivity`,
-  `useSelectedAgentActivity`, `useAgentRunIdentities`, and `useTargetAgentRunIds`.
+  `useAgentDirectory`, `useAgentIdentities`, `useAgentSummary`,
+  `useRelevantAgentActivity`, `useSelectedAgentActivity`, `useAgentRunIdentities`, and
+  `useTargetAgentRunIds`.
   Fetch health/fetched-at is a separate `useAgentStatus` subscription. Only
   `WorkspaceResourcePolls` calls `useAgentsPoll`.
 - Import `IssueAgents` from `src/components/agent-activity.tsx`.
   Do not import shared UI from `agents-view.tsx`; it exports only the `AgentsView` page entry.
 - `useAgentReply` continues polling terminal runs so a late result remains observable.
-  Run links retain explicit card/graph/review/comment attribution, and exact
-  `agentRun` URLs can resolve their identity from the directory.
+  Run links retain explicit card/graph/review/comment attribution. Exact `agentRun`
+  URLs resolve through persisted `performed` edges; pre-binding and multi-participant
+  runs remain run-only rather than selecting an invented primary actor.
 
 For mutations, capture the workspace and resource at submission; never invalidate a
 newly selected workspace on completion. Keep awaited versus fire-and-forget refresh

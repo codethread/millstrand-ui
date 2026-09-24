@@ -1,8 +1,9 @@
 import { useSelectedAgentActivity, useAgentStatus } from '../hooks/use-agents';
+import { effortLabel, runDisplayName } from '../lib/agents';
 import { formatDate } from '../lib/board';
 import { useDashboardActions } from '../lib/navigation';
 import { AgentSessionLog } from './card-agent-log';
-import { AgentRunHistory } from './agent-run-history';
+import { AgentRunDetails, AgentRunHistory } from './agent-run-history';
 import { AgentRunReply } from './agent-run-reply';
 import { AgentRunStatus } from './agent-status';
 import { ErrorNotice, Loading } from './issue-parts';
@@ -20,7 +21,18 @@ export function AgentDetail({
   const health = useAgentStatus();
   const { closeAgent, openCard } = useDashboardActions();
   const activity = selection.data;
-  const title = activity?.identity.id ?? identityId ?? runId ?? 'Agent run';
+  const title =
+    activity?.kind === 'identity'
+      ? activity.identity.id
+      : activity?.kind === 'run'
+        ? activity.run.id
+        : (identityId ?? runId ?? 'Agent run');
+  const headingRun =
+    activity?.kind === 'identity'
+      ? (activity.selectedRun ?? activity.currentRun)
+      : activity?.kind === 'run'
+        ? activity.run
+        : null;
   return (
     <Sheet
       open
@@ -32,14 +44,16 @@ export function AgentDetail({
         <div className="detail-heading pr-12">
           <SheetTitle className="break-words">{title}</SheetTitle>
           <SheetDescription>
-            Agent identity · read-only session and work inspection
+            {activity?.kind === 'run'
+              ? activity.run.participants.length === 0
+                ? 'Published run · native identity registration pending'
+                : 'Published run · multiple participants'
+              : 'Agent identity · read-only session and work inspection'}
           </SheetDescription>
-          {activity && (
+          {headingRun && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <strong className="text-primary">
-                {activity.currentRun?.alias ?? activity.identity.harness}
-              </strong>
-              <AgentRunStatus run={activity.currentRun} stale={health.error !== null} />
+              <strong className="text-primary">{runDisplayName(headingRun)}</strong>
+              <AgentRunStatus run={headingRun} stale={health.error !== null} />
             </div>
           )}
         </div>
@@ -68,6 +82,19 @@ export function AgentDetail({
               This identity was not found in the selected workspace.
             </p>
           )
+        ) : activity.kind === 'run' ? (
+          <div className="detail-body border-t border-border p-5">
+            <p className="mb-5 text-sm text-muted-foreground">
+              {activity.run.participants.length === 0
+                ? 'This persisted run has no published performed participant yet. The dashboard keeps its exact run and target visible without assigning an actor.'
+                : 'This run has multiple published participants. The dashboard keeps the shared run inspectable without choosing a primary actor.'}
+            </p>
+            <AgentSessionLog identity={`Run ${activity.run.id}`} run={activity.run} />
+            <section className="detail-section">
+              <h3 className="detail-section-title">Run inspection</h3>
+              <AgentRunDetails run={activity.run} showReply />
+            </section>
+          </div>
         ) : (
           <div className="detail-body border-t border-border">
             {activity.requestedRunMissing && runId && (
@@ -82,6 +109,7 @@ export function AgentDetail({
             <AgentSessionLog
               identity={activity.identity.id}
               identityStrandId={activity.identity.strandId}
+              run={activity.selectedRun}
             />
             <AgentRunHistory
               identity={activity.identity}
@@ -91,20 +119,30 @@ export function AgentDetail({
             <dl className="property-list mb-7">
               <dt>Provider</dt>
               <dd>{activity.currentRun?.harness ?? activity.identity.harness}</dd>
-              <dt>Model</dt>
+              <dt>Observed model</dt>
               <dd>{activity.currentRun?.model ?? activity.identity.model ?? 'Not recorded'}</dd>
-              <dt>Effort</dt>
-              <dd>{activity.currentRun?.effort ?? activity.identity.effort ?? 'Not recorded'}</dd>
+              <dt>Observed effort</dt>
+              <dd>{effortLabel(activity.currentRun?.effort ?? activity.identity.effort)}</dd>
               <dt>Created</dt>
               <dd>{formatDate(activity.identity.createdAt)}</dd>
               <dt>Identity strand</dt>
               <dd className="font-mono">{activity.identity.strandId}</dd>
+              {activity.identity.parentIdentityStrandIds.length > 0 && (
+                <>
+                  <dt>
+                    Native parent{activity.identity.parentIdentityStrandIds.length > 1 && 's'}
+                  </dt>
+                  <dd className="font-mono">
+                    {activity.identity.parentIdentityStrandIds.join(', ')}
+                  </dd>
+                </>
+              )}
             </dl>
             <section className="detail-section">
               <h3 className="detail-section-title">Owned work · {activity.identity.work.length}</h3>
               <p className="detail-empty mb-3">
-                Ownership can outlast a session. A running session alone does not prove work on
-                every owned item.
+                Explicit claims can outlast a session. A managed run or running session does not
+                claim work and does not prove activity on every owned item.
               </p>
               {activity.identity.work.map((work) => (
                 <div key={work.id} className="relation-row flex-wrap">
@@ -126,7 +164,7 @@ export function AgentDetail({
               ))}
               {activity.identity.work.length === 0 && (
                 <p className="detail-empty">
-                  No work currently records this identity as its owner.
+                  No work currently records this identity as its explicit owner.
                 </p>
               )}
             </section>
@@ -142,8 +180,8 @@ function UnlinkedAgentRun({ id, loadingIdentity }: { id: string; loadingIdentity
     <div className="space-y-4 border-t border-border p-6">
       <p className="text-sm text-muted-foreground">
         {loadingIdentity
-          ? 'Resolving the identity for this exact run…'
-          : 'This run is not linked to a published identity in the latest directory.'}
+          ? 'Resolving persisted evidence for this exact run…'
+          : 'This run is not present in the latest persisted directory.'}
       </p>
       <AgentRunReply id={id} />
     </div>

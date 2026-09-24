@@ -1,4 +1,5 @@
 import { Maximize2, Pause, Play, Terminal } from 'lucide-react';
+import type { AgentRun } from '../../shared/api';
 import type { LogSource } from '../../shared/log-activity';
 import { useCardLogAgents, useLogBinding } from '../hooks/use-log-activity';
 import { useLogStream } from '../hooks/use-session-log';
@@ -11,13 +12,15 @@ import { Button } from './ui/button';
 
 export function AgentSessionLog({
   identity,
-  identityStrandId,
+  identityStrandId = '',
+  run,
 }: {
   identity: string;
-  identityStrandId: string;
+  identityStrandId?: string;
+  run?: AgentRun | null;
 }) {
   const binding = useLogBinding(useWorkspace(), identityStrandId);
-  const source = binding.data?.source;
+  const source = run === undefined || run === null ? binding.data?.source : run.session;
   return source ? (
     <section
       className="mb-6 overflow-hidden rounded-lg border border-border"
@@ -39,7 +42,12 @@ export function CardAgentLog({ owner, target }: { owner: string | null; target: 
     selected: agent,
     historyCount,
   } = cardLogRoster(candidates, chosen, showHistory);
-  const binding = useLogBinding(useWorkspace(), agent?.identity.strandId ?? '');
+  const binding = useLogBinding(
+    useWorkspace(),
+    agent?.kind === 'identity' ? agent.identity.strandId : '',
+  );
+  const source =
+    agent?.relation === 'target' ? (agent.run?.session ?? null) : (binding.data?.source ?? null);
   return (
     <section
       className="mb-6 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border"
@@ -74,11 +82,11 @@ export function CardAgentLog({ owner, target }: { owner: string | null; target: 
         </p>
       )}
       {agent &&
-        (binding.data?.source ? (
+        (source ? (
           <CompactLog
-            key={`${binding.data.source.provider}/${binding.data.source.session}`}
-            identity={agent.identity.id}
-            source={binding.data.source}
+            key={`${source.provider}/${source.session}`}
+            identity={agent.kind === 'identity' ? agent.identity.id : `Run ${agent.run.id}`}
+            source={source}
             status={cardLogAgentStatus(agent)}
           />
         ) : (

@@ -1,6 +1,7 @@
 import { Check, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import type { CardLogAgent } from '../lib/agent-logs';
-import { cardLogAgentContext, cardLogAgentStatus } from '../lib/agent-logs';
+import { cardLogAgentContext, cardLogAgentKey, cardLogAgentStatus } from '../lib/agent-logs';
+import { runDisplayName } from '../lib/agents';
 import { useDashboardActions } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -24,54 +25,62 @@ export function CardAgentRoster({
   const { openAgentRun } = useDashboardActions();
   const current = agents.filter((agent) => agent.group === 'current');
   const history = agents.filter((agent) => agent.group === 'history');
-  const row = (agent: CardLogAgent) => (
-    <li key={agent.identity.strandId} className="flex items-center gap-1">
-      <Button
-        variant="ghost"
-        className={cn(
-          'h-auto min-w-0 flex-1 justify-start gap-2 px-2 py-2 text-left whitespace-normal',
-          selected.identity.strandId === agent.identity.strandId &&
-            'bg-accent text-accent-foreground',
-        )}
-        aria-pressed={selected.identity.strandId === agent.identity.strandId}
-        onClick={() => choose(agent.identity.strandId)}
-      >
-        <span className="flex size-4 shrink-0 items-center justify-center">
-          {selected.identity.strandId === agent.identity.strandId && <Check className="size-3!" />}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[11px] font-medium">
-            {agent.identity.id}
-            <span className="ml-2 font-normal text-muted-foreground">
-              {' · '}
-              {agent.run?.alias ?? agent.identity.harness}
-            </span>
-          </span>
-          <span
-            className="mt-0.5 block truncate text-[10px] font-normal text-muted-foreground"
-            title={cardLogAgentContext(agent)}
-          >
-            {cardLogAgentContext(agent)}
-          </span>
-        </span>
-        <span className="shrink-0 text-[9px] font-normal text-muted-foreground">
-          {cardLogAgentStatus(agent)}
-        </span>
-      </Button>
-      {agent.run !== null && (
+  const row = (agent: CardLogAgent) => {
+    const key = cardLogAgentKey(agent);
+    const identity =
+      agent.kind === 'identity' ? agent.identity.id : 'Identity registration pending';
+    const run = agent.run;
+    const harness = agent.kind === 'identity' ? agent.identity.harness : agent.run.harness;
+    return (
+      <li key={key} className="flex items-center gap-1">
         <Button
           variant="ghost"
-          size="icon-sm"
-          className="size-7 shrink-0"
-          aria-label={`Inspect run ${agent.run.id}`}
-          title="Inspect this exact run"
-          onClick={() => openAgentRun(agent.identity.id, agent.run!.id)}
+          className={cn(
+            'h-auto min-w-0 flex-1 justify-start gap-2 px-2 py-2 text-left whitespace-normal',
+            cardLogAgentKey(selected) === key && 'bg-accent text-accent-foreground',
+          )}
+          aria-pressed={cardLogAgentKey(selected) === key}
+          onClick={() => choose(key)}
         >
-          <ExternalLink className="size-3!" />
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            {cardLogAgentKey(selected) === key && <Check className="size-3!" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[11px] font-medium">
+              {identity}
+              <span className="ml-2 font-normal text-muted-foreground">
+                {' · '}
+                {run === null ? harness : runDisplayName(run)}
+              </span>
+            </span>
+            <span
+              className="mt-0.5 block truncate text-[10px] font-normal text-muted-foreground"
+              title={cardLogAgentContext(agent)}
+            >
+              {cardLogAgentContext(agent)}
+            </span>
+          </span>
+          <span className="shrink-0 text-[9px] font-normal text-muted-foreground">
+            {cardLogAgentStatus(agent)}
+          </span>
         </Button>
-      )}
-    </li>
-  );
+        {run !== null && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 shrink-0"
+            aria-label={`Inspect run ${run.id}`}
+            title="Inspect this exact run"
+            onClick={() =>
+              openAgentRun(agent.kind === 'identity' ? agent.identity.strandId : null, run.id)
+            }
+          >
+            <ExternalLink className="size-3!" />
+          </Button>
+        )}
+      </li>
+    );
+  };
   return (
     <div className="shrink-0 bg-muted/30">
       <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -110,12 +119,13 @@ export function CardAgentRoster({
         <select
           aria-label="Activity agent"
           className="w-full min-w-0 rounded border border-border bg-background p-2 text-xs text-foreground"
-          value={selected.identity.strandId}
+          value={cardLogAgentKey(selected)}
           onChange={(event) => choose(event.target.value)}
         >
           {agents.map((agent) => (
-            <option key={agent.identity.strandId} value={agent.identity.strandId}>
-              {agent.group === 'current' ? 'Current' : 'Past'} · {agent.identity.id} ·{' '}
+            <option key={cardLogAgentKey(agent)} value={cardLogAgentKey(agent)}>
+              {agent.group === 'current' ? 'Current' : 'Past'} ·{' '}
+              {agent.kind === 'identity' ? agent.identity.id : 'Identity pending'} ·{' '}
               {cardLogAgentContext(agent)} · {cardLogAgentStatus(agent)}
             </option>
           ))}
@@ -144,15 +154,20 @@ export function CardAgentRoster({
               align="end"
               className="max-h-64 w-80 max-w-[calc(100vw-2rem)] overflow-y-auto p-3"
             >
-              <h3 className="mb-2 text-xs font-medium">Tasks linked to {selected.identity.id}</h3>
+              <h3 className="mb-2 text-xs font-medium">
+                Tasks linked to{' '}
+                {selected.kind === 'identity' ? selected.identity.id : `run ${selected.run.id}`}
+              </h3>
               <ul className="space-y-3">
                 {selected.tasks.map((task) => (
                   <li key={task.id} className="text-xs">
                     <p>{task.title}</p>
                     <p className="mt-1 text-[10px] text-muted-foreground">
                       {task.id} ·{' '}
-                      {task.owner === selected.identity.id ? 'Task owner' : 'Linked run'} ·{' '}
-                      {task.state === 'closed' ? 'Completed' : task.state}
+                      {selected.kind === 'identity' && task.owner === selected.identity.id
+                        ? 'Task owner'
+                        : 'Linked run'}{' '}
+                      · {task.state === 'closed' ? 'Completed' : task.state}
                     </p>
                   </li>
                 ))}
