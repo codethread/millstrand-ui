@@ -160,19 +160,23 @@ operation.
 
 ## Agents and identities
 
-Open **Agents** in the sidebar to search identities, harness aliases, providers,
-and models. Running and queued sessions sort first; **Active only** hides terminal
-and untracked sessions. Click an identity or an issue’s agent badge to inspect its
-provider/model, effort, working directory, run history, and owned work. Identity
-details and the Agents surface have shareable URLs and support browser Back.
+Open **Agents** in the sidebar to search identities, managed harness aliases, providers,
+models, and run IDs. Running and queued sessions sort first; **Active only** hides terminal
+and untracked sessions. A published managed run appears before its native callback as an
+exact run with **Identity registration pending**, never as a made-up actor. Click an identity,
+run, or issue association to inspect its observed provider/model/effort, working directory,
+run history, and explicitly owned work. Identity links use the immutable identity strand so
+duplicate friendly names do not intermittently open the wrong session. Details and the
+Agents surface have shareable URLs and support browser Back.
 
 The UI reads immutable Kanban claims and graph role edges rather than treating a
 card’s old scalar `owner` or a run’s latest `identity/id` as authority. Reporter,
 latest explicit owner, note actor, run participant, and currently executing session
 remain separate. Ownership history is ordered by `(kanban/claimed-at, claim id)`;
 an unresolved newest claim still outranks an older resolved claim. Published-run
-participants come from `performed`, while work targeting comes from `serves` and
-`serves-root`. **Working** requires a running run on one of those explicit targets.
+participants come only from `performed`; the superseded scalar run `identity/id` is not a
+participant fallback. Work targeting comes from `serves` and `serves-root`. **Working**
+requires a running run on one of those explicit targets.
 **Session running** only proves that an owner’s tracked session is running, not that
 it is working on every owned issue. Queued, stopping, completed, failed, and
 untracked sessions remain distinct. The card Agents tab groups current and past
@@ -201,7 +205,12 @@ handoffs); the compact Board and Outline rows show only the current owner.
 
 Agent runs are read-only in this dashboard. The Agents page and the issue, review
 and graph inspector links list tracked identities and runs; any run can be opened by
-its exact ID to read its status, reply, and historical prompt context. Start, stop,
+its exact ID to read its status, reply, historical prompt context, and exact persisted
+session binding. Alias-less external sessions are labelled as direct sessions. Their
+actual model and observed effort come from the native callback; literal `unknown` is
+shown as **Unknown**. `harness/model` and `harness/effort` launch values are not used as
+compatibility fallbacks. An explicit external origin means Harnesses has no process
+custody and never implies a seat, target, claim, or working state. Start, stop,
 resume, or retarget a run with `strand agent run`, `strand agent show`, and
 `strand agent stop` in the weaver itself; this UI does not dispatch or message
 agents, so there are no stop, assignment, or session-resume controls here.
@@ -216,9 +225,10 @@ combine graph-derived current feature/task owners with linked runs, retain termi
 **Past work**, use a mobile selector on narrow layouts, and expose related task
 context in a popover.
 
-Logs are linked only by persisted session IDs and providers. A running published
-run's `harness/session-id` is available before native identity attachment; otherwise
-the identity's `identity/native-session-id` or newest published run session is used.
+Logs are linked only by persisted session IDs and providers. An exact run inspector
+uses that run's `harness/session-id`, including before native identity attachment.
+Identity-level activity uses a running performed run first, then the identity's
+`identity/native-session-id`, then its newest performed run session.
 They read the final 1 MiB of the corresponding JSONL file in
 `~/.local/state/{pi,codex,claude}-dialogue`, retaining at most 400 complete records.
 A log is the native session, not a task-exclusive history, and it does not provide

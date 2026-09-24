@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { ArrowUpRight, Bot, GitBranch } from 'lucide-react';
 import type { WorkspaceOption } from '../../shared/api';
-import { currentRun, runLabel } from '../lib/agents';
+import { currentRun, runDisplayName, runLabel } from '../lib/agents';
 import { workspaceActivityDestination } from '../lib/dashboard-search';
 import type { WorkspaceActivityModel } from '../lib/overview';
 import { cn } from '../lib/utils';
@@ -194,13 +194,15 @@ export function WorkspaceActivity({
               const run = currentRun(agent);
               const destination = workspaceActivityDestination(workspace, {
                 kind: 'agent',
-                id: agent.id,
+                id: agent.strandId,
               });
               const content = (
                 <>
                   <span className="flex flex-wrap items-center gap-2 text-xs">
                     <Bot className="size-4 text-primary" />
-                    <strong className="break-all">{run?.alias ?? agent.harness}</strong>
+                    <strong className="break-all">
+                      {run === null ? agent.harness : runDisplayName(run)}
+                    </strong>
                     <span
                       className={cn(
                         'agent-status ml-auto',

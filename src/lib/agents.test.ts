@@ -10,6 +10,7 @@ import {
   relevantAgentActivity,
   runLabel,
   selectAgents,
+  selectUnboundRuns,
   selectedAgentActivity,
   targetAgentRunIds,
 } from './agents';
@@ -27,9 +28,11 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     model: 'test-model',
     effort: 'high',
     cwd: '/workspace',
+    ownership: null,
     target: null,
     rootTargets: [],
     participants: [],
+    session: null,
     continuation: null,
     createdAt: '2026-09-13 10:00:00',
     startedAt: null,
@@ -40,10 +43,11 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
 function identity(runs: AgentRun[], id = 'calm-young-tiger'): AgentIdentity {
   return {
     id,
-    strandId: 'identity1',
+    strandId: `${id}-strand`,
     harness: 'pi',
     model: null,
     effort: null,
+    parentIdentityStrandIds: [],
     createdAt: '2026-09-13 10:00:00',
     runs,
     work: [],
@@ -82,9 +86,29 @@ describe('agent activity and issue attribution', () => {
     const duplicateA = identity([sharedRun], 'duplicate');
     const duplicateB = { ...identity([sharedRun], 'duplicate'), strandId: 'identity2' };
     expect(issueAgents([duplicateA, duplicateB], 'duplicate', 'other')).toEqual([]);
-    expect(selectedAgentActivity([duplicateA, duplicateB], 'duplicate', null)).toBeNull();
-    expect(selectedAgentActivity([duplicateA, duplicateB], null, 'shared')).toBeNull();
+    const directory = { identities: [duplicateA, duplicateB], runs: [sharedRun] };
+    expect(selectedAgentActivity(directory, 'duplicate', null)).toBeNull();
+    expect(selectedAgentActivity(directory, duplicateA.strandId, null)).toMatchObject({
+      kind: 'identity',
+      identity: duplicateA,
+    });
+    expect(selectedAgentActivity(directory, null, 'shared')).toEqual({
+      kind: 'run',
+      run: sharedRun,
+    });
     expect(agentRunIdentities([duplicateA, duplicateB])).toEqual({});
+  });
+
+  it('keeps a targeted pre-binding run visible without an identity association', () => {
+    const pending = run({ id: 'pending', target: 'card1', participants: [] });
+    expect(relevantAgentActivity([], [pending], null, 'card1')).toEqual([
+      { kind: 'run', identity: null, run: pending, label: 'Working', relation: 'working' },
+    ]);
+    expect(selectUnboundRuns([pending], '', false)).toEqual([pending]);
+    expect(selectedAgentActivity({ identities: [], runs: [pending] }, null, pending.id)).toEqual({
+      kind: 'run',
+      run: pending,
+    });
   });
 
   it('links direct and root-targeted work even when the agent is not the card owner', () => {
@@ -101,8 +125,14 @@ describe('agent activity and issue attribution', () => {
     const agent = identity([run(), targeted]);
     expect(issueRun(agent, 'card1')).toBe(targeted);
     expect(issueAgentActivity(agent, 'card1')).toBe('Queued');
-    expect(relevantAgentActivity([agent], agent.id, 'card1')).toEqual([
-      { identity: agent, run: targeted, label: 'Queued', relation: 'queued' },
+    expect(relevantAgentActivity([agent], [run(), targeted], agent.id, 'card1')).toEqual([
+      {
+        kind: 'identity',
+        identity: agent,
+        run: targeted,
+        label: 'Queued',
+        relation: 'queued',
+      },
     ]);
   });
 
@@ -115,14 +145,17 @@ describe('agent activity and issue attribution', () => {
     const terminal = run({ id: 'terminal', status: 'stopped', target: 'review1' });
     const expected = identity([terminal], 'exact-run-owner');
     const unrelated = identity([run({ id: 'other' })], 'stale-url-owner');
-    expect(selectedAgentActivity([unrelated, expected], null, terminal.id)).toMatchObject({
+    const directory = { identities: [unrelated, expected], runs: [terminal, ...unrelated.runs] };
+    expect(selectedAgentActivity(directory, null, terminal.id)).toMatchObject({
+      kind: 'identity',
       identity: expected,
       selectedRun: terminal,
       requestedRunMissing: false,
     });
-    expect(selectedAgentActivity([unrelated, expected], unrelated.id, terminal.id)?.identity).toBe(
-      expected,
-    );
+    expect(selectedAgentActivity(directory, unrelated.strandId, terminal.id)).toMatchObject({
+      kind: 'identity',
+      identity: expected,
+    });
   });
 
   it('publishes run-owner and target indexes without directory refresh metadata', () => {
@@ -130,10 +163,10 @@ describe('agent activity and issue attribution', () => {
     const otherRun = run({ id: 'other-run', target: 'card1' });
     const agents = [identity([reviewRun]), identity([otherRun], 'other-owner')];
     expect(agentRunIdentities(agents)).toEqual({
-      'review-run': 'calm-young-tiger',
-      'other-run': 'other-owner',
+      'review-run': 'calm-young-tiger-strand',
+      'other-run': 'other-owner-strand',
     });
-    expect(targetAgentRunIds(agents, 'review1')).toEqual(['review-run']);
+    expect(targetAgentRunIds([reviewRun, otherRun], 'review1')).toEqual(['review-run']);
   });
 });
 

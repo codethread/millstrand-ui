@@ -15,8 +15,7 @@ const selectAgentWorkspace = (directory: AgentDirectory) => directory.workspace;
 const selectAgentIdentities = (directory: AgentDirectory) => directory.identities;
 const selectAgentFetchedAt = (directory: AgentDirectory) => directory.fetchedAt;
 const selectAgentSnapshot = () => true;
-const selectAgentSummary = (directory: AgentDirectory) =>
-  agentDirectorySummary(directory.identities);
+const selectAgentSummary = (directory: AgentDirectory) => agentDirectorySummary(directory);
 const selectAgentRunIdentities = (directory: AgentDirectory) =>
   agentRunIdentities(directory.identities);
 
@@ -47,6 +46,10 @@ export function useAgentIdentities() {
   });
 }
 
+export function useAgentDirectory() {
+  return useQuery(agentReaderOptions(useWorkspace()));
+}
+
 export function useAgentSnapshot() {
   return useQuery({
     ...agentReaderOptions(useWorkspace()),
@@ -71,7 +74,8 @@ export function useAgentSummary() {
 
 export function useRelevantAgentActivity(owner: string | null, target: string) {
   const select = useCallback(
-    (directory: AgentDirectory) => relevantAgentActivity(directory.identities, owner, target),
+    (directory: AgentDirectory) =>
+      relevantAgentActivity(directory.identities, directory.runs, owner, target),
     [owner, target],
   );
   return useQuery({
@@ -82,7 +86,7 @@ export function useRelevantAgentActivity(owner: string | null, target: string) {
 
 export function useSelectedAgentActivity(identityId: string | null, runId: string | null) {
   const select = useCallback(
-    (directory: AgentDirectory) => selectedAgentActivity(directory.identities, identityId, runId),
+    (directory: AgentDirectory) => selectedAgentActivity(directory, identityId, runId),
     [identityId, runId],
   );
   return useQuery({
@@ -100,7 +104,7 @@ export function useAgentRunIdentities() {
 
 export function useTargetAgentRunIds(target: string) {
   const select = useCallback(
-    (directory: AgentDirectory) => targetAgentRunIds(directory.identities, target),
+    (directory: AgentDirectory) => targetAgentRunIds(directory.runs, target),
     [target],
   );
   return useQuery({

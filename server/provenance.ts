@@ -75,16 +75,16 @@ const runAttributesSchema = z
   .object({
     'harness/run': z.literal('true'),
     'harness/published': z.literal('true'),
-    'identity/id': z.string().min(1).optional(),
     'harness/request-id': z.string().optional(),
     'harness/session-id': z.string().min(1).optional(),
-    'harness/alias': z.string().min(1),
+    'harness/alias': z.string().min(1).optional(),
     'harness/harness': z.string().min(1),
     'harness/status': runStatusSchema,
     'harness/substatus': runSubstatusSchema,
-    'harness/mode': z.enum(['headless', 'interactive']),
-    'harness/model': z.string().optional(),
-    'harness/effort': z.string().optional(),
+    'harness/mode': z.enum(['headless', 'interactive', 'external']),
+    'harness/observed-model': z.string().min(1).optional(),
+    'harness/observed-effort': z.string().min(1).optional(),
+    'harness/ownership': z.literal('external').optional(),
     'harness/cwd': z.string().optional(),
     'harness/started-at': z.string().optional(),
     'harness/finished-at': z.string().optional(),
@@ -326,38 +326,57 @@ export class ProvenanceIndex {
   }
 
   private runParticipants(run: RunRecord): IdentityAttribution[] {
-    const linked = this.incoming(run.strand.id, 'performed').map((id) =>
-      this.identityRecord(id, 'performed', run.strand.id),
-    );
-    if (linked.length > 0)
-      return linked.map((identity) => ({
+    return this.incoming(run.strand.id, 'performed').map((id) => {
+      const identity = this.identityRecord(id, 'performed', run.strand.id);
+      return {
         identity: identity.attributes['identity/id'],
         status: 'resolved' as const,
         identityStrandIds: [identity.strand.id],
-      }));
-    const raw = run.attributes['identity/id'];
-    return raw === undefined ? [] : [this.attribution(raw, run.strand.id, 'performed')];
+      };
+    });
+  }
+
+  private identityParents(strandId: string): string[] {
+    return this.incoming(strandId, 'parent-of').filter((id) =>
+      this.identities.some((identity) => identity.strand.id === id),
+    );
   }
 
   private agentRun(run: RunRecord): AgentRun {
     const attrs = run.attributes;
     const targets = this.outgoing(run.strand.id, 'serves');
+    const rootTargets = this.outgoing(run.strand.id, 'serves-root');
     if (targets.length > 1) throw new Error(`run ${run.strand.id} serves multiple direct targets`);
+    if (attrs['harness/ownership'] === 'external') {
+      if (attrs['harness/mode'] !== 'external')
+        throw new Error(`external run ${run.strand.id} must use external mode`);
+      if (attrs['harness/alias'] !== undefined || targets.length > 0 || rootTargets.length > 0)
+        throw new Error(`external run ${run.strand.id} contains managed alias or target metadata`);
+      if (attrs['harness/observed-effort'] === undefined)
+        throw new Error(`external run ${run.strand.id} lacks explicit observed effort`);
+    }
+    const provider = providerSchema.safeParse(attrs['harness/harness']);
+    const sessionId = attrs['harness/session-id'];
     return {
       id: run.strand.id,
       requestId: attrs['harness/request-id'] ?? null,
       title: run.strand.title,
-      alias: attrs['harness/alias'],
+      alias: attrs['harness/alias'] ?? null,
       harness: attrs['harness/harness'],
       status: attrs['harness/status'],
       substatus: attrs['harness/substatus'] ?? null,
       mode: attrs['harness/mode'],
-      model: attrs['harness/model'] ?? null,
-      effort: attrs['harness/effort'] ?? null,
+      model: attrs['harness/observed-model'] ?? null,
+      effort: attrs['harness/observed-effort'] ?? null,
       cwd: attrs['harness/cwd'] ?? null,
+      ownership: attrs['harness/ownership'] ?? null,
       target: targets[0] ?? null,
-      rootTargets: this.outgoing(run.strand.id, 'serves-root'),
+      rootTargets,
       participants: this.runParticipants(run),
+      session:
+        provider.success && sessionId !== undefined
+          ? { provider: provider.data, session: sessionId }
+          : null,
       continuation: this.continuation(run.strand.id),
       createdAt: run.strand.created_at,
       startedAt: attrs['harness/started-at'] ?? null,
@@ -398,6 +417,7 @@ export class ProvenanceIndex {
         harness: attrs['identity/harness'],
         model: attrs['identity/model'] ?? null,
         effort: attrs['identity/thinking-level'] ?? null,
+        parentIdentityStrandIds: this.identityParents(strandId),
         createdAt: identity.strand.created_at,
         runs: runs.filter((run) =>
           run.participants.some(
@@ -418,14 +438,9 @@ export class ProvenanceIndex {
       const record = this.identities.find(
         (candidate) => candidate.strand.id === identity.strandId,
       )!;
-      const candidates = identity.runs.flatMap((run) => {
-        const stored = this.runs.find((candidate) => candidate.strand.id === run.id)!;
-        const provider = providerSchema.safeParse(stored.attributes['harness/harness']);
-        const session = stored.attributes['harness/session-id'];
-        return provider.success && session
-          ? [{ run, source: { provider: provider.data, session } }]
-          : [];
-      });
+      const candidates = identity.runs.flatMap((run) =>
+        run.session === null ? [] : [{ run, source: run.session }],
+      );
       const running = candidates.find(({ run }) => run.status === 'running')?.source;
       const provider = providerSchema.safeParse(record.attributes['identity/harness']);
       const nativeSession = record.attributes['identity/native-session-id'];

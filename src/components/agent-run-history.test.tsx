@@ -20,12 +20,14 @@ const run: AgentRun = {
   model: null,
   effort: null,
   cwd: null,
+  ownership: null,
   target: 'task',
   rootTargets: ['card'],
   participants: [
     { identity: 'first-worker', status: 'resolved', identityStrandIds: ['first'] },
     { identity: 'raw-worker', status: 'ambiguous', identityStrandIds: [] },
   ],
+  session: null,
   continuation: { kind: 'fresh-retry', predecessorRunId: 'earlier-run' },
   createdAt: '2026-09-01T12:00:00Z',
   startedAt: null,
@@ -39,6 +41,7 @@ function identity(runs: AgentRun[]): AgentIdentity {
     harness: 'pi',
     model: null,
     effort: null,
+    parentIdentityStrandIds: [],
     createdAt: '2026-09-01T12:00:00Z',
     runs,
     work: [],
@@ -53,6 +56,26 @@ it('keeps terminal runs and every published participant inspectable', () => {
   expect(html).toContain('first-worker, Ambiguous identity: raw-worker');
   expect(html).toContain('Fresh retry of');
   expect(html).toContain('earlier-run');
+});
+
+it('labels direct native evidence without inventing an alias or effort default', () => {
+  const direct = {
+    ...run,
+    id: 'direct-run',
+    alias: null,
+    mode: 'external' as const,
+    ownership: 'external' as const,
+    effort: 'unknown',
+    model: 'actual-model',
+  };
+  const html = renderToStaticMarkup(
+    <AgentRunHistory identity={identity([direct])} selectedRunId={null} stale={false} />,
+  );
+  expect(html).toContain('Direct pi session');
+  expect(html).toContain('None recorded');
+  expect(html).toContain('actual-model');
+  expect(html).toContain('Unknown');
+  expect(html).toContain('External direct session · not managed by Harnesses');
 });
 
 it('makes an absent run history explicit', () => {

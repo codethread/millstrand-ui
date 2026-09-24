@@ -37,6 +37,24 @@ describe('agent reply boundaries', () => {
     expect(JSON.stringify(parsed)).not.toMatch(/SECRET|TOKEN|secret/);
   });
 
+  it('accepts an alias-less external native run inspector summary', () => {
+    expect(
+      parseAgentReply({
+        ...reply,
+        alias: null,
+        mode: 'external',
+        identity: 'direct-native',
+        status: 'running',
+        substatus: null,
+      }),
+    ).toMatchObject({
+      id: 'run1',
+      alias: null,
+      identity: 'direct-native',
+      status: 'running',
+    });
+  });
+
   it('parses historical dashboard context for cards, reviews and review comments', () => {
     expect(parsePromptContext({ source: 'workflow', prompt: 'private' })).toBeNull();
     expect(parsePromptContext({ source: 'millstrand-ui', card: 'old', prompt: 'hello' })).toEqual({
