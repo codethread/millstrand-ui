@@ -1,4 +1,4 @@
-(require '[ct.spools.codethread.bootstrap :as codethread]
+(require '[millhouse.config.bootstrap :as codethread]
          '[millstrand.api.current.alpha :as current]
          '[millstrand.api.runtime.alpha :as runtime])
 
@@ -15,29 +15,29 @@
 
 (codethread/register! runtime)
 
-(runtime/module! runtime :millhouse/spools-workflow-providers
-                 {:ns 'millhouse.spools.workflow.spool
-                  :after [:millhouse/spools-workflow]
+(runtime/module! runtime :millhouse/workflow-providers
+                 {:ns 'millhouse.workflow.spool
+                  :after [:millhouse/workflow]
                   :required? true})
 
 (runtime/module! runtime :millstrand-ui/reviewers
                  {:file "me/reviewers.clj"
-                  :after [:codethread/config-reviewers]
+                  :after [:millhouse/config-reviewers]
                   :required? true})
 
 (runtime/module! runtime :millstrand-ui/auto-run-workflows
                  {:file "me/auto_run_workflows.clj"
-                  :after [:millhouse/spools-workflow-providers]
+                  :after [:millhouse/workflow-providers]
                   :required? true})
 
 (runtime/module! runtime :millstrand-ui/auto-run
                  {:file "me/auto_run.clj"
                   :after [:millstrand-ui/auto-run-workflows
-                          :millstrand/spools-harnesses]
+                          :millhouse/harnesses]
                   :required? true})
 
 (codethread/register-executor!
  runtime [:millstrand-ui/help
-          :millhouse/spools-workflow-providers
+          :millhouse/workflow-providers
           :millstrand-ui/reviewers
           :millstrand-ui/auto-run])

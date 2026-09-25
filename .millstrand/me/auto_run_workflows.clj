@@ -2,9 +2,9 @@
   "Repository-owned delivery contracts for automatically assigned UI features."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [millhouse.spools.auto-run-land :as autonomous]
-            [millhouse.spools.land.support :as land-support]
-            [millhouse.spools.workflow :as workflow]
+            [millhouse.auto-run-land :as autonomous]
+            [millhouse.land.support :as land-support]
+            [millhouse.workflow :as workflow]
             [millstrand.api.format.alpha :as format]))
 
 (s/def ::text (s/and string? (complement str/blank?)))
@@ -95,7 +95,7 @@
        [(workflow/gate
          :review-card "Move the verified feature into review" :code
          :depends-on [:verify-handoff]
-         :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
+         :attributes {"code/fn" "millhouse.land.card-actions/review-card!"
                       "code/params" (fn [{:keys [card]}] {:card card})}
          "The verified handoff now needs human attention.")
         (workflow/checkpoint
@@ -372,7 +372,7 @@
    (workflow/gate
     :review-card "Move the finding card into review" :code
     :depends-on [:retain-worktree]
-    :attributes {"code/fn" "millhouse.spools.land.card-actions/review-card!"
+    :attributes {"code/fn" "millhouse.land.card-actions/review-card!"
                  "code/params" (fn [{:keys [card]}] {:card card})}
     "Move this evidence-backed finding to review. This is not a PR or landing transition.")
    (workflow/step
