@@ -1,6 +1,6 @@
 (ns me.reviewers
   "Declare review lenses specific to Millstrand UI."
-  (:require [ct.spools.harnesses.reviewers :as reviewers]
+  (:require [millhouse.harnesses.reviewers :as reviewers]
             [millstrand.api.format.alpha :as format-alpha]))
 
 #_{:clj-kondo/ignore [:unresolved-symbol]}

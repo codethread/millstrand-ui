@@ -6,9 +6,9 @@
             [clojure.java.shell :as shell]
             [clojure.string :as str]
             [clojure.test :refer [deftest is run-tests testing]]
-            [millhouse.spools.auto-run :as auto-run]
-            [millhouse.spools.auto-run-worktree :as auto-run-worktree]
-            [millhouse.spools.workflow :as workflow]
+            [millhouse.auto-run :as auto-run]
+            [millhouse.auto-run-worktree :as auto-run-worktree]
+            [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.runtime.help-transform.alpha :as help-transform]
@@ -68,7 +68,7 @@
                    (attr-get (first (filter #(= "Pass repository quality checks" (:title %))
                                             strands)) :shell/argv)))
             (is (= (if (= name :auto-human-review) 1 0)
-                   (count (filter #(= "millhouse.spools.land.card-actions/review-card!"
+                   (count (filter #(= "millhouse.land.card-actions/review-card!"
                                       (attr-get % :code/fn)) strands))))
             (is (contains? gates "shell"))
             (when (= name :auto-human-review)
