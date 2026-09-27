@@ -1,7 +1,16 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { request } from './transport';
 
-afterEach(() => vi.unstubAllGlobals());
+beforeEach(() => {
+  vi.spyOn(console, 'debug').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 it('keeps requests same-origin and scopes only explicit workspaces', async () => {
   const fetch = vi.fn(async () => Response.json({ ok: true }));

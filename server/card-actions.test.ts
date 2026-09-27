@@ -50,8 +50,7 @@ function mockBoard() {
   let cards = [card];
   exec.mockImplementation((_file, argv) => {
     const op = Array.isArray(argv) ? argv.slice(2) : [];
-    if (op[0] === 'kanban' && op[1] === 'board')
-      return Promise.resolve({ stdout: JSON.stringify({ cards }) });
+    if (op[0] === 'help' && op[1] === 'kanban') return Promise.resolve({ stdout: 'kanban help' });
     if (op[0] === 'burn') {
       cards = [];
       return Promise.resolve({ stdout: '{"burned":["card1"],"count":1}' });
@@ -103,7 +102,9 @@ it('does not mutate a non-card or a card removed since the last poll', async () 
   expect(
     exec.mock.calls.every((call) => {
       const args = call[1];
-      return call[0] === 'strand' && Array.isArray(args) && args.includes('board');
+      return (
+        call[0] === 'strand' && Array.isArray(args) && args[2] === 'help' && args[3] === 'kanban'
+      );
     }),
   ).toBe(true);
 });
@@ -126,8 +127,7 @@ it('invalidates the board even when the command fails after a possible side effe
   const data = new StrandData('/repo/.millstrand', database);
   await data.board();
   await data.dependencies();
-  // Validation reads the compact board, then hydrates it before the mutation times out.
-  exec.mockResolvedValueOnce({ stdout: JSON.stringify({ cards: [card] }) });
+  // Validation re-reads the persisted snapshot before the mutation times out.
   database.readProvenance.mockResolvedValueOnce({
     strands: [{ ...card, attributes: { 'kanban/card': 'true', 'kanban/lane': card.lane } }],
     edges: [],
@@ -137,8 +137,7 @@ it('invalidates the board even when the command fails after a possible side effe
   await data.dependencies();
   expect(database.readDependencies).toHaveBeenCalledTimes(2);
   expect(database.readProvenance).toHaveBeenCalledTimes(2);
-  await data.provenance();
-  expect(database.readProvenance).toHaveBeenCalledTimes(3);
-  exec.mockResolvedValueOnce({ stdout: '{"cards":[]}' });
+  database.readProvenance.mockResolvedValueOnce({ strands: [], edges: [] });
   expect((await data.board()).cards).toEqual([]);
+  expect(database.readProvenance).toHaveBeenCalledTimes(3);
 });

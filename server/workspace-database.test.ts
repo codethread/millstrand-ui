@@ -384,3 +384,44 @@ it('reads dependency endpoints with display-only metadata and directed links', a
   expect(sql).toContain("edge_type = 'depends-on'");
   expect(sql).not.toContain('harness/prompt');
 });
+
+it('scopes dependency edges to expanded cards while keeping workspace-wide counts', async () => {
+  const calls: { sql: string; parameters: readonly string[] }[] = [];
+  const database = {
+    configure: vi.fn(),
+    schemaVersion: vi.fn(() => ({ user_version: 1 })),
+    all: vi.fn((sql: string, parameters: readonly string[]) => {
+      calls.push({ sql, parameters });
+      if (sql.includes('json_each(?)'))
+        return [{ record: JSON.stringify({ id: 'strand1', incoming: 3, outgoing: 1 }) }];
+      return [
+        strandRecord,
+        { record: JSON.stringify({ ...persistedStrand, id: 'strand2', title: 'Other' }) },
+        {
+          record: JSON.stringify({
+            kind: 'edge',
+            from_strand_id: 'strand1',
+            to_strand_id: 'strand2',
+            edge_type: 'depends-on',
+          }),
+        },
+      ];
+    }),
+    close: vi.fn(),
+  };
+  const reader = new WorkspaceDatabase(
+    workspace,
+    async () => '/state/workspace.sqlite',
+    () => database,
+  );
+  const graph = await reader.readDependencies(['strand1']);
+  expect(graph.edges).toEqual([{ kind: 'depends-on', from: 'strand1', to: 'strand2' }]);
+  expect(graph.nodes.find((node) => node.id === 'strand1')?.dependencies).toEqual({
+    incoming: 3,
+    outgoing: 1,
+  });
+  expect(calls[0]?.sql).toContain('from_strand_id IN (?)');
+  expect(calls[0]?.parameters).toEqual(['strand1', 'strand1']);
+  expect(calls[1]?.sql).toContain('json_each(?)');
+  expect(calls[1]?.parameters).toEqual([JSON.stringify(['strand1', 'strand2'])]);
+});

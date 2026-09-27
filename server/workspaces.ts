@@ -6,6 +6,7 @@ import type { WeaverOperation, WorkspaceOption } from '../shared/api.ts';
 import { sorted } from '../shared/array.ts';
 import { z } from 'zod';
 import { HttpError } from './parse.ts';
+import { recordPerf } from './perf.ts';
 import { StrandData } from './strand.ts';
 import { ViewStore } from './views.ts';
 
@@ -61,10 +62,17 @@ type DiscoverWorkspaces = () => Promise<WorkspaceOption[]>;
 
 async function discoverWorkspaces(defaultPath: string): Promise<WorkspaceOption[]> {
   try {
+    const started = performance.now();
     const { stdout } = await exec('mill', ['weaver', 'list'], {
       encoding: 'utf8',
       timeout: 10_000,
       maxBuffer: 4 * 1024 * 1024,
+    });
+    recordPerf({
+      scope: 'mill',
+      target: 'weaver list (discovery)',
+      ms: performance.now() - started,
+      detail: `bytes=${Buffer.byteLength(stdout)}`,
     });
     return parseWorkspaces(JSON.parse(stdout) as unknown, defaultPath);
   } catch (error) {

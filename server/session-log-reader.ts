@@ -8,6 +8,7 @@ import {
   type LogProvider,
   type LogSnapshot,
 } from '../shared/session-log.ts';
+import { recordPerf } from './perf.ts';
 
 const maxBytes = 1024 * 1024;
 const maxRecords = 400;
@@ -72,6 +73,26 @@ export class SessionLogReader {
   }
 
   async snapshot(provider: LogProvider, stem: string): Promise<LogSnapshot> {
+    const started = performance.now();
+    let detail = '';
+    try {
+      const snapshot = await this.readSnapshot(provider, stem);
+      detail = `session=${stem} events=${snapshot.events.length} bytes=${snapshot.bytes} skipped=${snapshot.skipped} truncated=${snapshot.truncated} outcome=ok`;
+      return snapshot;
+    } catch (error) {
+      detail = `session=${stem} outcome=failed`;
+      throw error;
+    } finally {
+      recordPerf({
+        scope: 'session-log',
+        target: `snapshot ${provider}`,
+        ms: performance.now() - started,
+        detail,
+      });
+    }
+  }
+
+  private async readSnapshot(provider: LogProvider, stem: string): Promise<LogSnapshot> {
     const session = this.allowed(provider, stem);
     const file = await this.readFile(session);
     const offset = file.size - file.data.length;

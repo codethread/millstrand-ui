@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseCard as parseCardBoundary,
-  parseBoardCards as parseBoardCardsBoundary,
+  parseDependencyCards,
   parseGraph as parseGraphBoundary,
   parseLabelChange,
   parseRelation,
@@ -16,8 +16,6 @@ const provenance = emptyProvenance();
 const parseCard = (value: unknown) => parseCardBoundary(value, provenance);
 const parseTask = (value: unknown) => parseTaskBoundary(value, provenance);
 const parseGraph = (value: unknown) => parseGraphBoundary(value, provenance);
-const parseBoardCards = (compact: unknown, raw: unknown) =>
-  parseBoardCardsBoundary(compact, raw, provenance);
 
 const entity = {
   id: 'abc12',
@@ -174,7 +172,7 @@ describe('auto-run card projections', () => {
     ).toBeNull();
   });
 
-  it('joins bulk attributes by id while preserving compact epic membership', () => {
+  it('reads auto-run configuration from hydrated attributes', () => {
     const attributes = {
       'auto-run/seat': 'implementer',
       'auto-run/effort': 'high',
@@ -187,10 +185,7 @@ describe('auto-run card projections', () => {
       'auto-run/worktree': '/work/snapshot',
       branch: 'feat/current',
     };
-    const raw = { ...row, attributes };
-    const cards = parseBoardCards([{ ...row, epic: 'epic1' }], [{ ...row, id: 'other' }, raw]);
-    expect(cards[0]).toMatchObject({
-      epicId: 'epic1',
+    expect(parseCard({ ...row, attributes })).toMatchObject({
       branch: null,
       autoRun: {
         optedIn: false,
@@ -205,26 +200,32 @@ describe('auto-run card projections', () => {
         worktree: '/work/snapshot',
       },
     });
-    expect(cards[0]?.autoRun).toEqual(parseCard(raw).autoRun);
   });
 
-  it('omits concurrently deleted cards and defers newly created cards to the next poll', () => {
-    const added = { ...row, id: 'added' };
-    expect(parseBoardCards([row], [])).toEqual([]);
-    expect(parseBoardCards([row], [row, added]).map((card) => card.id)).toEqual([row.id]);
-    expect(parseBoardCards([row, added], [row, added]).map((card) => card.id)).toEqual([
-      row.id,
-      'added',
-    ]);
+  it('derives epic membership from durable parent-of edges', () => {
+    const feature = { ...row, updated_at: row.created_at, attributes: { 'kanban/card': 'true' } };
+    const epicProvenance = new ProvenanceIndex({
+      strands: [
+        {
+          ...feature,
+          id: 'epic1',
+          attributes: { 'kanban/card': 'true', 'kanban/type': 'epic' },
+        },
+        feature,
+      ],
+      edges: [{ from_strand_id: 'epic1', to_strand_id: 'abc12', edge_type: 'parent-of' }],
+    });
+    expect(parseCardBoundary(feature, epicProvenance).epicId).toBe('epic1');
+    expect(parseCardBoundary(feature, epicProvenance).owner).toBeNull();
   });
 
-  it('fails visibly on a card attribute overflow', () => {
-    expect(() =>
-      parseBoardCards(
-        [],
-        Array.from({ length: 10001 }, () => row),
-      ),
-    ).toThrow('10,000');
+  it('does not treat a non-epic card parent as an epic', () => {
+    const feature = { ...row, updated_at: row.created_at, attributes: { 'kanban/card': 'true' } };
+    const parentProvenance = new ProvenanceIndex({
+      strands: [{ ...feature, id: 'feature2' }, feature],
+      edges: [{ from_strand_id: 'feature2', to_strand_id: 'abc12', edge_type: 'parent-of' }],
+    });
+    expect(parseCardBoundary(feature, parentProvenance).epicId).toBeNull();
   });
 
   it.each(['preparing', 'assigned', 'error'])('preserves dispatcher status %s', (status) => {
@@ -298,4 +299,14 @@ describe('label writes', () => {
       );
     },
   );
+});
+
+describe('dependency read scope', () => {
+  it('deduplicates expanded card ids and rejects unbounded or malformed scopes', () => {
+    expect(parseDependencyCards(['b', 'a', 'b'])).toEqual(['b', 'a']);
+    expect(() =>
+      parseDependencyCards(Array.from({ length: 151 }, (_, index) => `card${index}`)),
+    ).toThrow('150 cards');
+    expect(() => parseDependencyCards(['has space'])).toThrow('short strand IDs');
+  });
 });

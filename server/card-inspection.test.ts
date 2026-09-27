@@ -13,6 +13,7 @@ const database = { readProvenance, readNoteProvenance, readDependencies: vi.fn()
 
 beforeEach(() => {
   exec.mockReset();
+  exec.mockResolvedValue({ stdout: 'kanban — help text' });
   readProvenance.mockReset();
   readNoteProvenance.mockReset();
   database.readDependencies.mockReset();
@@ -26,9 +27,8 @@ const card = {
   updated_at: '2026-09-17',
 };
 
-it('reads domain membership before bounded persisted hydration and retains long dispatch errors', async () => {
+it('hydrates board cards from the persisted snapshot and retains long dispatch errors', async () => {
   const error = 'Delivery preparation failed. '.repeat(100);
-  exec.mockResolvedValue({ stdout: JSON.stringify({ cards: [card] }) });
   readProvenance.mockResolvedValue({
     strands: [
       {
@@ -44,31 +44,69 @@ it('reads domain membership before bounded persisted hydration and retains long 
   expect(exec).toHaveBeenCalledTimes(1);
   expect(exec.mock.calls[0]?.slice(0, 2)).toEqual([
     'strand',
-    ['--workspace', '/repo/.millstrand', 'kanban', 'board', '--all', 'true'],
+    ['--workspace', '/repo/.millstrand', 'help', 'kanban'],
   ]);
   expect(readProvenance).toHaveBeenCalledTimes(1);
   expect(await data.board()).toBe(board);
+  expect(exec).toHaveBeenCalledTimes(1);
 });
 
-it('omits a deleted card without rejecting its surviving peers', async () => {
-  exec.mockResolvedValue({ stdout: JSON.stringify({ cards: [card, { ...card, id: 'deleted' }] }) });
+it('annotates a feature with its epic from persisted parent-of edges', async () => {
   readProvenance.mockResolvedValue({
-    strands: [{ ...card, attributes: { 'kanban/card': 'true' } }],
+    strands: [
+      { ...card, id: 'epic1', attributes: { 'kanban/card': 'true', 'kanban/type': 'epic' } },
+      { ...card, attributes: { 'kanban/card': 'true' } },
+    ],
+    edges: [{ from_strand_id: 'epic1', to_strand_id: 'card1', edge_type: 'parent-of' }],
+  });
+  const board = await new StrandData('/repo/.millstrand', database).board();
+  expect(board.cards.map(({ id, epicId }) => [id, epicId])).toEqual([
+    ['card1', 'epic1'],
+    ['epic1', null],
+  ]);
+});
+
+it('fails visibly when the persisted board exceeds the card cap', async () => {
+  readProvenance.mockResolvedValue({
+    strands: Array.from({ length: 10_001 }, (_, index) => ({
+      ...card,
+      id: `card${index}`,
+      attributes: { 'kanban/card': 'true' },
+    })),
     edges: [],
   });
-  expect(
-    (await new StrandData('/repo/.millstrand', database).board()).cards.map(({ id }) => id),
-  ).toEqual(['card1']);
+  await expect(new StrandData('/repo/.millstrand', database).board()).rejects.toThrow('10,000');
 });
 
 it('reports hydration failures rather than claiming cards have no configuration', async () => {
-  exec.mockResolvedValue({ stdout: JSON.stringify({ cards: [card] }) });
   readProvenance.mockRejectedValue(
     Object.assign(new Error('Matching-row cap exceeded'), { status: 502 }),
   );
   await expect(new StrandData('/repo/.millstrand', database).board()).rejects.toMatchObject({
     status: 502,
   });
+});
+
+it('reports an unsupported kanban spool from the one-time capability probe', async () => {
+  exec.mockRejectedValue(new Error('Operation not found'));
+  await expect(new StrandData('/repo/.millstrand', database).board()).rejects.toThrow(
+    'Operation not found',
+  );
+  expect(readProvenance).not.toHaveBeenCalled();
+});
+
+it('caches an unsupported review spool instead of probing it every poll', async () => {
+  exec.mockImplementation((_file, argv) => {
+    const op = Array.isArray(argv) ? argv.slice(2) : [];
+    if (op[0] === 'review') return Promise.reject(new Error('Operation not found'));
+    return Promise.resolve({ stdout: 'kanban — help text' });
+  });
+  const data = new StrandData('/repo/.millstrand', database);
+  expect(await data.reviews()).toMatchObject({ kind: 'unsupported' });
+  expect(await data.reviews()).toMatchObject({ kind: 'unsupported' });
+  expect(
+    exec.mock.calls.filter((call) => Array.isArray(call[1]) && call[1][2] === 'review'),
+  ).toHaveLength(1);
 });
 
 it('coalesces concurrent dependency reads and reuses the short-lived successful snapshot', async () => {
@@ -93,7 +131,6 @@ it('does not cache dependency failures as empty success', async () => {
 });
 
 it('shares one parsed persisted snapshot across board, agents and log consumers', async () => {
-  exec.mockResolvedValue({ stdout: JSON.stringify({ cards: [card] }) });
   readProvenance.mockResolvedValue({
     strands: [{ ...card, attributes: { 'kanban/card': 'true' } }],
     edges: [],
@@ -130,8 +167,7 @@ it('loads full notes only on demand, preserving attribution and sharing repeated
   });
   exec.mockImplementation((_file, argv) => {
     const op = Array.isArray(argv) ? argv.slice(2) : [];
-    if (op[0] === 'kanban' && op[1] === 'board')
-      return Promise.resolve({ stdout: JSON.stringify({ cards: [card] }) });
+    if (op[0] === 'help') return Promise.resolve({ stdout: 'kanban — help text' });
     if (op[0] === 'kanban' && op[1] === 'card')
       return Promise.resolve({
         stdout: JSON.stringify({

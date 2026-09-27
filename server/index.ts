@@ -5,7 +5,14 @@ import { networkInterfaces } from 'node:os';
 import { basename, dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { HttpError, parseLabelChange, parseViews, requestValue } from './parse.ts';
+import {
+  HttpError,
+  parseDependencyCards,
+  parseLabelChange,
+  parseViews,
+  requestValue,
+} from './parse.ts';
+import { defaultPerfLogPath, PerfLog, recordPerf, setPerfSink } from './perf.ts';
 import { parseCurateReview, parsePublishReview } from './review-comments.ts';
 import { parseWeaverOperation, WorkspaceDirectory } from './workspaces.ts';
 import { parseCardLane } from './card-actions.ts';
@@ -69,12 +76,16 @@ async function options(args: string[]): Promise<Options> {
   return { workspace: workspacePath, host, port: portNumber };
 }
 
+const responseBytes = new WeakMap<ServerResponse, number>();
+
 function json(response: ServerResponse, status: number, data: unknown): void {
+  const payload = JSON.stringify(data);
+  responseBytes.set(response, Buffer.byteLength(payload));
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
   });
-  response.end(JSON.stringify(data));
+  response.end(payload);
 }
 
 async function body(request: IncomingMessage): Promise<unknown> {
@@ -154,6 +165,7 @@ async function staticFile(
     'Cache-Control': extname(path) === '.html' ? 'no-cache' : 'public, max-age=3600',
     'X-Content-Type-Options': 'nosniff',
   });
+  responseBytes.set(response, data.length);
   response.end(request.method === 'HEAD' ? undefined : data);
 }
 
@@ -161,17 +173,40 @@ const config = await options(process.argv.slice(2));
 const workspaces = new WorkspaceDirectory(config.workspace);
 const sessionLogs = new SessionLogReader();
 const logStreams = new SessionLogStreams(sessionLogs);
+const perfLog = new PerfLog(process.env['MILLSTRAND_UI_PERF_LOG'] ?? defaultPerfLogPath);
+setPerfSink(perfLog.record);
+
+const lifecycleRoute = /^\/api\/workspaces\/[a-f0-9]{24}\/lifecycle$/;
 
 const server = createServer((request, response) => {
+  const started = performance.now();
+  const url = new URL(request.url ?? '/', 'http://millstrand.local');
+  const method = request.method ?? 'GET';
+  const streaming = url.pathname === '/api/session-logs/stream';
+  let recorded = false;
+  const complete = (note: string): void => {
+    if (recorded) return;
+    recorded = true;
+    const bytes = responseBytes.get(response);
+    recordPerf({
+      scope: 'server',
+      target: `${method} ${url.pathname}`,
+      ms: performance.now() - started,
+      detail: [`status=${response.statusCode}`, bytes === undefined ? '' : `bytes=${bytes}`, note]
+        .filter((part) => part !== '')
+        .join(' '),
+      ...(lifecycleRoute.test(url.pathname) ? { expected: true } : {}),
+    });
+  };
+  response.once('finish', () => complete(''));
+  response.once('close', () => complete(streaming ? 'stream-open' : 'aborted'));
   void (async () => {
-    const url = new URL(request.url ?? '/', 'http://millstrand.local');
     let path: string;
     try {
       path = decodeURIComponent(url.pathname);
     } catch {
       throw new HttpError(400, 'Invalid URL encoding.');
     }
-    const method = request.method ?? 'GET';
     if (method !== 'GET' && method !== 'HEAD') checkWriteOrigin(request);
     if (path === '/api/workspaces' && method === 'GET') {
       json(response, 200, await workspaces.list(url.searchParams.has('refresh')));
@@ -198,7 +233,11 @@ const server = createServer((request, response) => {
     }
     if (path === '/api/dependencies' && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
-      json(response, 200, await strand.dependencies());
+      json(
+        response,
+        200,
+        await strand.dependencies(parseDependencyCards(url.searchParams.getAll('card'))),
+      );
       return;
     }
     if (path === '/api/reviews' && method === 'GET') {
@@ -257,6 +296,7 @@ const server = createServer((request, response) => {
     }
     if (path === '/api/session-logs/stream' && method === 'GET') {
       logStreams.open(response, parseSessionLogSource(url));
+      complete('open');
       return;
     }
     const runId = /^\/api\/agent-runs\/([a-zA-Z0-9_-]+)$/.exec(path)?.[1];
@@ -334,6 +374,7 @@ server.listen(config.port, config.host, () => {
       }
     }
   } else console.log(`  Bound: http://${config.host}:${config.port}`);
+  console.log(`  Perf:  ${perfLog.path} (warn >5ms, slow >50ms)`);
 });
 
 server.on('error', (error) => {

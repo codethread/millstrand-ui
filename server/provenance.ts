@@ -271,6 +271,17 @@ export class ProvenanceIndex {
     return this.dependencyCounts.get(id) ?? { incoming: 0, outgoing: 0 };
   }
 
+  /** Direct epic parent from durable parent-of edges, matching the spool's last-edge board annotation. */
+  epicId(cardId: string): string | null {
+    const parents = this.incoming(cardId, 'parent-of').filter((id) => {
+      const strand = this.strands.get(id);
+      return (
+        strand?.attributes['kanban/card'] === 'true' && strand.attributes['kanban/type'] === 'epic'
+      );
+    });
+    return parents.at(-1) ?? null;
+  }
+
   cardRows(): unknown[] {
     return [...this.strands.values()].filter(
       (strand) => strand.attributes['kanban/card'] === 'true',
