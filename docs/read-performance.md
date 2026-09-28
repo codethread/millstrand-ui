@@ -16,8 +16,25 @@ the same format through `src/lib/api/perf.ts`. Samples cover HTTP routes (status
 and response bytes), `strand` CLI calls, `mill weaver list` discovery, persisted
 SQLite reads (row count plus discover/query/decode split) and session-log
 snapshots. Deliberately long weaver lifecycle calls are marked expected; an SSE
-stream is measured through setup only. Library modules record nothing until the
-server installs the sink, so tests and one-off imports stay quiet.
+stream is measured through setup only.
+
+Logging is an instance dependency: the shared `PerfLogger` contract has just
+`record(measurement)`. Server library constructors accept `{ logger }` and default
+to `nullPerfLogger` (no files or console output). `server/index.ts` creates the
+file adapter and passes it through discovery, workspace clients, database reads
+and session logs; there is no mutable global sink. Only output adapters add
+wall-clock timestamps.
+
+Tests that need logging assertions pass `new MemoryPerfLogger()` and inspect its
+`samples`; ordinary tests omit the logger. Browser transport tests use
+`createRequest()` (silent) or `createRequest(logger)` (capture), while the exported
+production `request` uses the console adapter. Only the file-adapter tests write
+perf logs to temporary directories; consumers need no logger mocks or cleanup.
+
+The 2026-09-28 DI follow-up passes `pnpm quality` (369 tests). A production-server
+browser smoke exercised board search, card selection/Notes, Graph and a 390×844
+layout against the real UI workspace; all five server scopes and browser fetch
+samples still reached their configured adapters, with no uncaught browser errors.
 
 ### Findings and changes
 

@@ -16,6 +16,25 @@ export interface PerfSample {
   expected?: boolean;
 }
 
+export type PerfMeasurement = Omit<PerfSample, 'at'>;
+
+/** Consumers report measurements; output adapters own timestamps and I/O. */
+export interface PerfLogger {
+  record(sample: PerfMeasurement): void;
+}
+
+/** Default for library consumers: no files, console output or shared mutable state. */
+export const nullPerfLogger: PerfLogger = { record: () => {} };
+
+/** Per-test capture without clocks, mocks or cleanup. */
+export class MemoryPerfLogger implements PerfLogger {
+  readonly samples: PerfMeasurement[] = [];
+
+  record(sample: PerfMeasurement): void {
+    this.samples.push(sample);
+  }
+}
+
 /** A warm local read should be far below the warning tier, so anything above it is worth a look. */
 export function perfLevel(ms: number, expected = false): PerfLevel {
   if (expected) return 'fine';

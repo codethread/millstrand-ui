@@ -58,7 +58,7 @@ it('retains completed runs and current work from durable role edges', async () =
       { from_strand_id: 'identity1', to_strand_id: 'claim1', edge_type: 'claimed' },
     ],
   });
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   const directory = await data.agents();
   expect(directory.identities[0]).toMatchObject({
     id: 'test-agent',
@@ -74,7 +74,7 @@ it('reports persisted read failures without caching an empty directory and can r
   readProvenance.mockRejectedValueOnce(
     Object.assign(new Error('Read result exceeded matching-row cap'), { status: 502 }),
   );
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   await expect(data.agents()).rejects.toMatchObject({ status: 502 });
   readProvenance.mockResolvedValue({ strands: [identity], edges: [] });
   expect((await data.agents()).identities).toHaveLength(1);
@@ -85,7 +85,7 @@ it('rejects malformed persisted domain data rather than claiming no agents', asy
     strands: [{ ...identity, attributes: { 'identity/session': 'true' } }],
     edges: [],
   });
-  await expect(new StrandData('/repo/.millstrand', database).agents()).rejects.toThrow(
+  await expect(new StrandData('/repo/.millstrand', { database }).agents()).rejects.toThrow(
     'identity/id',
   );
 });

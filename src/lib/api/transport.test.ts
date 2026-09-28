@@ -1,15 +1,11 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { request } from './transport';
+import { afterEach, expect, it, vi } from 'vitest';
+import { MemoryPerfLogger } from '../../../shared/perf';
+import { createRequest } from './transport';
 
-beforeEach(() => {
-  vi.spyOn(console, 'debug').mockImplementation(() => {});
-  vi.spyOn(console, 'warn').mockImplementation(() => {});
-  vi.spyOn(console, 'error').mockImplementation(() => {});
-});
+const request = createRequest();
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  vi.restoreAllMocks();
 });
 
 it('keeps requests same-origin and scopes only explicit workspaces', async () => {
@@ -21,6 +17,25 @@ it('keeps requests same-origin and scopes only explicit workspaces', async () =>
   expect(fetch).toHaveBeenLastCalledWith('/api/board', undefined);
 });
 
+it('captures request measurements in memory without affecting another transport', async () => {
+  const logger = new MemoryPerfLogger();
+  const measuredRequest = createRequest(logger);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ ok: true })),
+  );
+  await measuredRequest('/board', 'a');
+  await request('/agents', 'a');
+  expect(logger.samples).toEqual([
+    {
+      scope: 'client',
+      target: 'GET /api/board',
+      ms: expect.any(Number),
+      detail: 'status=200 bytes=?',
+    },
+  ]);
+});
+
 it.each([
   [{ error: 'Weaver unavailable' }, 'Weaver unavailable'],
   [{ detail: 'other payload' }, 'Request failed (503)'],
@@ -29,5 +44,9 @@ it.each([
     'fetch',
     vi.fn(async () => Response.json(body, { status: 503 })),
   );
-  await expect(request('/board', 'a')).rejects.toThrow(message);
+  const logger = new MemoryPerfLogger();
+  await expect(createRequest(logger)('/board', 'a')).rejects.toThrow(message);
+  expect(logger.samples).toEqual([
+    { scope: 'client', target: 'GET /api/board', ms: expect.any(Number), detail: 'status=503' },
+  ]);
 });

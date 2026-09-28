@@ -14,7 +14,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { basename, dirname } from 'node:path';
 import { emptyProvenance, ProvenanceIndex } from './provenance.ts';
-import { recordPerf } from './perf.ts';
+import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
 import { parseAgentReply, parsePromptContext } from './agent-replies.ts';
 import type {
@@ -85,7 +85,14 @@ class ReadCache<T> {
   }
 }
 
+interface StrandDataOptions {
+  database?: PersistedWorkspaceReads;
+  logger?: PerfLogger;
+}
+
 export class StrandData {
+  private readonly database: PersistedWorkspaceReads;
+  private readonly logger: PerfLogger;
   private readonly provenanceReads = new ReadCache<ProvenanceIndex>();
   private readonly notes = new ReadCache<Note[]>();
   private readonly boards = new ReadCache<Board>();
@@ -103,8 +110,14 @@ export class StrandData {
 
   constructor(
     readonly workspace: string,
-    private readonly database: PersistedWorkspaceReads = new WorkspaceDatabase(workspace),
-  ) {}
+    {
+      logger = nullPerfLogger,
+      database = new WorkspaceDatabase(workspace, { logger }),
+    }: StrandDataOptions = {},
+  ) {
+    this.database = database;
+    this.logger = logger;
+  }
 
   reviews(): Promise<ReviewDirectory> {
     const unsupported = this.unsupportedReviews;
@@ -269,7 +282,7 @@ export class StrandData {
           : '';
       throw strandCommandError(stderr, `Strand command failed: ${failure.slice(0, 1500)}`);
     } finally {
-      recordPerf({
+      this.logger.record({
         scope: 'strand',
         target: commandTarget(args),
         workspace: basename(dirname(this.workspace)),

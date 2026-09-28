@@ -8,7 +8,7 @@ import {
   type LogProvider,
   type LogSnapshot,
 } from '../shared/session-log.ts';
-import { recordPerf } from './perf.ts';
+import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 
 const maxBytes = 1024 * 1024;
 const maxRecords = 400;
@@ -16,6 +16,7 @@ const sessionStem = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export interface SessionLogReaderOptions {
   stateRoot?: string;
+  logger?: PerfLogger;
 }
 
 interface AllowedSession {
@@ -34,9 +35,11 @@ function sourceError(error: unknown): Error {
 
 export class SessionLogReader {
   readonly stateRoot: string;
+  private readonly logger: PerfLogger;
 
   constructor(options: SessionLogReaderOptions = {}) {
     this.stateRoot = resolve(options.stateRoot ?? resolve(homedir(), '.local/state'));
+    this.logger = options.logger ?? nullPerfLogger;
   }
 
   private path({ provider, stem }: AllowedSession): string {
@@ -83,7 +86,7 @@ export class SessionLogReader {
       detail = `session=${stem} outcome=failed`;
       throw error;
     } finally {
-      recordPerf({
+      this.logger.record({
         scope: 'session-log',
         target: `snapshot ${provider}`,
         ms: performance.now() - started,

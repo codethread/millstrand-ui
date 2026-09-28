@@ -1,5 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { StrandData } from './strand';
+import { MemoryPerfLogger } from '../shared/perf';
+import { WorkspaceDirectory } from './workspaces';
 
 const { exec } = vi.hoisted(() => ({ exec: vi.fn() }));
 vi.mock('node:child_process', async () => {
@@ -38,7 +40,7 @@ it('hydrates board cards from the persisted snapshot and retains long dispatch e
     ],
     edges: [],
   });
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   const board = await data.board();
   expect(board.cards[0]?.autoRun?.error).toBe(error);
   expect(exec).toHaveBeenCalledTimes(1);
@@ -51,6 +53,43 @@ it('hydrates board cards from the persisted snapshot and retains long dispatch e
   expect(exec).toHaveBeenCalledTimes(1);
 });
 
+it('passes a directory logger to discovery, strand and storage without sharing it with other instances', async () => {
+  const logger = new MemoryPerfLogger();
+  exec.mockImplementation((file) =>
+    Promise.resolve({
+      stdout:
+        file === 'mill'
+          ? JSON.stringify([
+              {
+                config_dir: '/repo/.millstrand',
+                state: 'running',
+                database_kind: 'sqlite-memory',
+                database_label: 'memory',
+                database_path: null,
+              },
+            ])
+          : 'kanban help',
+    }),
+  );
+  const directory = new WorkspaceDirectory('/repo/.millstrand', { logger });
+  await directory.list();
+  const { strand } = await directory.select(null);
+  // Unsupported storage fails before opening a file, but all measurement layers still report.
+  await expect(strand.board()).rejects.toThrow('not file-backed SQLite');
+  expect(logger.samples.map(({ scope, target }) => ({ scope, target }))).toEqual([
+    { scope: 'mill', target: 'weaver list (discovery)' },
+    { scope: 'strand', target: 'strand help kanban' },
+    { scope: 'mill', target: 'weaver list (storage)' },
+    { scope: 'sqlite', target: 'provenance' },
+  ]);
+  expect(logger.samples.at(-1)?.detail).toContain('outcome=failed');
+
+  const quiet = new WorkspaceDirectory('/repo/.millstrand');
+  await quiet.list();
+  await expect((await quiet.select(null)).strand.board()).rejects.toThrow('not file-backed SQLite');
+  expect(logger.samples).toHaveLength(4);
+});
+
 it('annotates a feature with its epic from persisted parent-of edges', async () => {
   readProvenance.mockResolvedValue({
     strands: [
@@ -59,7 +98,7 @@ it('annotates a feature with its epic from persisted parent-of edges', async () 
     ],
     edges: [{ from_strand_id: 'epic1', to_strand_id: 'card1', edge_type: 'parent-of' }],
   });
-  const board = await new StrandData('/repo/.millstrand', database).board();
+  const board = await new StrandData('/repo/.millstrand', { database }).board();
   expect(board.cards.map(({ id, epicId }) => [id, epicId])).toEqual([
     ['card1', 'epic1'],
     ['epic1', null],
@@ -75,21 +114,21 @@ it('fails visibly when the persisted board exceeds the card cap', async () => {
     })),
     edges: [],
   });
-  await expect(new StrandData('/repo/.millstrand', database).board()).rejects.toThrow('10,000');
+  await expect(new StrandData('/repo/.millstrand', { database }).board()).rejects.toThrow('10,000');
 });
 
 it('reports hydration failures rather than claiming cards have no configuration', async () => {
   readProvenance.mockRejectedValue(
     Object.assign(new Error('Matching-row cap exceeded'), { status: 502 }),
   );
-  await expect(new StrandData('/repo/.millstrand', database).board()).rejects.toMatchObject({
+  await expect(new StrandData('/repo/.millstrand', { database }).board()).rejects.toMatchObject({
     status: 502,
   });
 });
 
 it('reports an unsupported kanban spool from the one-time capability probe', async () => {
   exec.mockRejectedValue(new Error('Operation not found'));
-  await expect(new StrandData('/repo/.millstrand', database).board()).rejects.toThrow(
+  await expect(new StrandData('/repo/.millstrand', { database }).board()).rejects.toThrow(
     'Operation not found',
   );
   expect(readProvenance).not.toHaveBeenCalled();
@@ -101,7 +140,7 @@ it('caches an unsupported review spool instead of probing it every poll', async 
     if (op[0] === 'review') return Promise.reject(new Error('Operation not found'));
     return Promise.resolve({ stdout: 'kanban — help text' });
   });
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   expect(await data.reviews()).toMatchObject({ kind: 'unsupported' });
   expect(await data.reviews()).toMatchObject({ kind: 'unsupported' });
   expect(
@@ -112,7 +151,7 @@ it('caches an unsupported review spool instead of probing it every poll', async 
 it('coalesces concurrent dependency reads and reuses the short-lived successful snapshot', async () => {
   const graph = { rootId: '', nodes: [], edges: [] };
   database.readDependencies.mockResolvedValue(graph);
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   const [first, second] = await Promise.all([data.dependencies(), data.dependencies()]);
   expect(first).toBe(graph);
   expect(second).toBe(graph);
@@ -122,7 +161,7 @@ it('coalesces concurrent dependency reads and reuses the short-lived successful 
 
 it('does not cache dependency failures as empty success', async () => {
   database.readDependencies.mockRejectedValueOnce(new Error('Unsupported storage'));
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   await expect(data.dependencies()).rejects.toThrow('Unsupported storage');
   const graph = { rootId: '', nodes: [], edges: [] };
   database.readDependencies.mockResolvedValue(graph);
@@ -135,7 +174,7 @@ it('shares one parsed persisted snapshot across board, agents and log consumers'
     strands: [{ ...card, attributes: { 'kanban/card': 'true' } }],
     edges: [],
   });
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   const [board, agents, provenance] = await Promise.all([
     data.board(),
     data.agents(),
@@ -149,7 +188,7 @@ it('shares one parsed persisted snapshot across board, agents and log consumers'
 });
 
 it('does not cache a failed shared projection as an empty successful snapshot', async () => {
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   readProvenance.mockRejectedValueOnce(new Error('Storage unavailable'));
   await expect(data.provenance()).rejects.toThrow('Storage unavailable');
   readProvenance.mockResolvedValue({ strands: [], edges: [] });
@@ -189,7 +228,7 @@ it('loads full notes only on demand, preserving attribution and sharing repeated
     if (op[0] === 'notes') return Promise.resolve({ stdout: JSON.stringify([note]) });
     throw new Error(`Unexpected command ${JSON.stringify(op)}`);
   });
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   expect((await data.detail('card1')).tasks[0]?.latestNote?.actor).toMatchObject({
     identity: 'worker',
     status: 'unresolved',

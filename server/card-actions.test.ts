@@ -82,7 +82,7 @@ function mockBoard() {
 
 it('deletes only the selected card in its workspace and refreshes a cached board', async () => {
   const { database } = mockBoard();
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   await data.board();
   await data.changeCard('card1', { kind: 'delete' });
   expect(exec.mock.calls.map((call) => call[1])).toContainEqual([
@@ -95,7 +95,7 @@ it('deletes only the selected card in its workspace and refreshes a cached board
 });
 it('does not mutate a non-card or a card removed since the last poll', async () => {
   const source = mockBoard();
-  const data = new StrandData('/repo/.millstrand', source.database);
+  const data = new StrandData('/repo/.millstrand', { database: source.database });
   await data.board();
   source.remove();
   await expect(data.changeCard('card1', { kind: 'delete' })).rejects.toMatchObject({ status: 404 });
@@ -110,7 +110,7 @@ it('does not mutate a non-card or a card removed since the last poll', async () 
 });
 it('moves only the card and invalidates cached dependency metadata', async () => {
   const { database } = mockBoard();
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   await data.dependencies();
   await data.changeCard('card1', { kind: 'move', lane: 'in_review' });
   await data.dependencies();
@@ -124,7 +124,7 @@ it('moves only the card and invalidates cached dependency metadata', async () =>
 });
 it('invalidates the board even when the command fails after a possible side effect', async () => {
   const { database } = mockBoard();
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   await data.board();
   await data.dependencies();
   // Validation re-reads the persisted snapshot before the mutation times out.

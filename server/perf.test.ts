@@ -2,12 +2,25 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { formatPerfSample, perfLevel, type PerfSample } from '../shared/perf';
-import { PerfLog, recordPerf, setPerfSink } from './perf';
+import { formatPerfSample, perfLevel } from '../shared/perf';
+import { PerfLog } from './perf';
+
+const at = '2026-09-28T00:00:00.000Z';
+const directories: string[] = [];
+
+function logPath(): string {
+  const directory = mkdtempSync(join(tmpdir(), 'millstrand-perf-'));
+  directories.push(directory);
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(at));
+  return join(directory, 'perf.log');
+}
 
 afterEach(() => {
-  setPerfSink(null);
+  vi.useRealTimers();
   vi.restoreAllMocks();
+  for (const directory of directories.splice(0))
+    rmSync(directory, { recursive: true, force: true });
 });
 
 it.each([
@@ -42,40 +55,28 @@ it('formats scope, workspace and detail for the log and console', () => {
   );
 });
 
-it('records through the installed sink only', () => {
-  const samples: PerfSample[] = [];
-  recordPerf({ scope: 'strand', target: 'strand kanban board', ms: 69, workspace: 'agents' });
-  expect(samples).toEqual([]);
-  setPerfSink((sample) => samples.push(sample));
-  recordPerf({ scope: 'strand', target: 'strand kanban board', ms: 69, workspace: 'agents' });
-  expect(samples).toHaveLength(1);
-  expect(samples[0]?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-  expect(samples[0]?.target).toBe('strand kanban board');
-});
-
 it('appends every sample to the file and prints only warnings', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'millstrand-perf-'));
-  const log = new PerfLog(join(directory, 'perf.log'));
+  const path = logPath();
+  const log = new PerfLog(path);
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-  log.record({ at: 'T1', scope: 'server', target: 'GET /api/board', ms: 0.4 });
-  log.record({ at: 'T2', scope: 'strand', target: 'strand notes', ms: 12 });
-  log.record({ at: 'T3', scope: 'sqlite', target: 'provenance', ms: 80 });
-  expect(warn.mock.calls.map(([line]) => String(line).slice(0, 14))).toEqual(['T2 perf WARN 1']);
-  expect(error.mock.calls.map(([line]) => String(line).slice(0, 14))).toEqual(['T3 perf SLOW 8']);
-  const lines = readFileSync(join(directory, 'perf.log'), 'utf8').trim().split('\n');
-  expect(lines).toHaveLength(3);
-  expect(lines[0]).toBe('T1 perf 0.40ms server GET /api/board');
-  rmSync(directory, { recursive: true, force: true });
+  log.record({ scope: 'server', target: 'GET /api/board', ms: 0.4 });
+  log.record({ scope: 'strand', target: 'strand notes', ms: 12 });
+  log.record({ scope: 'sqlite', target: 'provenance', ms: 80 });
+  expect(warn.mock.calls).toEqual([[`${at} perf WARN 12.00ms strand strand notes`]]);
+  expect(error.mock.calls).toEqual([[`${at} perf SLOW 80.00ms sqlite provenance`]]);
+  expect(readFileSync(path, 'utf8').trim().split('\n')).toEqual([
+    `${at} perf 0.40ms server GET /api/board`,
+    `${at} perf WARN 12.00ms strand strand notes`,
+    `${at} perf SLOW 80.00ms sqlite provenance`,
+  ]);
 });
 
 it('rotates an oversized log before appending', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'millstrand-perf-'));
-  const path = join(directory, 'perf.log');
+  const path = logPath();
   writeFileSync(path, 'x'.repeat(64));
   const log = new PerfLog(path, 32);
-  log.record({ at: 'T', scope: 'server', target: 'GET /api/board', ms: 1 });
+  log.record({ scope: 'server', target: 'GET /api/board', ms: 1 });
   expect(readFileSync(`${path}.1`, 'utf8')).toBe('x'.repeat(64));
-  expect(readFileSync(path, 'utf8')).toBe('T perf 1.00ms server GET /api/board\n');
-  rmSync(directory, { recursive: true, force: true });
+  expect(readFileSync(path, 'utf8')).toBe(`${at} perf 1.00ms server GET /api/board\n`);
 });

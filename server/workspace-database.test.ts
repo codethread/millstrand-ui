@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { ProvenanceIndex } from './provenance.ts';
-import { parseDatabasePath, WorkspaceDatabase } from './workspace-database.ts';
+import { MemoryPerfLogger } from '../shared/perf.ts';
+import { WorkspaceDatabase } from './workspace-database.ts';
+import { parseDatabasePath } from './workspace-storage.ts';
 
 const workspace = '/repo/"unsafe"/.millstrand';
 const persistedStrand = {
@@ -65,7 +67,10 @@ it('selects the registered file-backed SQLite database for the exact workspace',
 it('runs one selective graph read without note strands or workspace interpolation', async () => {
   const database = fakeDatabase();
   const open = vi.fn(() => database);
-  const reader = new WorkspaceDatabase(workspace, async () => '/state/workspace.sqlite', open);
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open,
+  });
 
   await expect(reader.readProvenance()).resolves.toEqual({
     strands: [
@@ -108,13 +113,31 @@ it('runs one selective graph read without note strands or workspace interpolatio
   expect(parameters).toContain('harness/ownership');
 });
 
+it('captures successful SQL measurements with only in-memory dependencies', async () => {
+  const logger = new MemoryPerfLogger();
+  const reader = new WorkspaceDatabase(workspace, {
+    logger,
+    discover: async () => '/state/workspace.sqlite',
+    open: () => fakeDatabase(),
+  });
+  await reader.readProvenance();
+  expect(logger.samples).toEqual([
+    {
+      scope: 'sqlite',
+      target: 'provenance',
+      workspace: '"unsafe"',
+      ms: expect.any(Number),
+      detail: expect.stringMatching(/^rows=1 .* outcome=ok$/),
+    },
+  ]);
+});
+
 it('reads note attribution provenance only for requested note IDs', async () => {
   const database = fakeDatabase([]);
-  const reader = new WorkspaceDatabase(
-    workspace,
-    async () => '/state/workspace.sqlite',
-    () => database,
-  );
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open: () => database,
+  });
 
   await expect(reader.readNoteProvenance(['note1', 'note2'])).resolves.toEqual({
     strands: [],
@@ -134,11 +157,10 @@ it('does not reject a valid provenance snapshot based on its strand count', asyn
       record: JSON.stringify({ ...persistedStrand, id: `strand${index}` }),
     })),
   );
-  const reader = new WorkspaceDatabase(
-    workspace,
-    async () => '/state/workspace.sqlite',
-    () => database,
-  );
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open: () => database,
+  });
 
   await expect(reader.readProvenance()).resolves.toMatchObject({
     strands: { length: 10_001 },
@@ -148,11 +170,10 @@ it('does not reject a valid provenance snapshot based on its strand count', asyn
 
 it('fails loudly on an unsupported persisted schema and still closes the database', async () => {
   const database = fakeDatabase([], 2);
-  const reader = new WorkspaceDatabase(
-    workspace,
-    async () => '/state/workspace.sqlite',
-    () => database,
-  );
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open: () => database,
+  });
 
   await expect(reader.readProvenance()).rejects.toMatchObject({ status: 502 });
   expect(database.all).not.toHaveBeenCalled();
@@ -161,11 +182,10 @@ it('fails loudly on an unsupported persisted schema and still closes the databas
 
 it('fails malformed persisted records instead of returning a partial snapshot', async () => {
   const database = fakeDatabase([{ record: 'not-json' }]);
-  const reader = new WorkspaceDatabase(
-    workspace,
-    async () => '/state/workspace.sqlite',
-    () => database,
-  );
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open: () => database,
+  });
 
   await expect(reader.readProvenance()).rejects.toMatchObject({ status: 502 });
   expect(database.close).toHaveBeenCalledOnce();
@@ -181,11 +201,10 @@ it('rejects an edge overflow rather than silently truncating history', async () 
   const database = fakeDatabase(
     Array.from({ length: 50_001 }, () => ({ record: JSON.stringify(edge) })),
   );
-  const reader = new WorkspaceDatabase(
-    workspace,
-    async () => '/state/workspace.sqlite',
-    () => database,
-  );
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open: () => database,
+  });
 
   await expect(reader.readProvenance()).rejects.toThrow('50000 role edges');
 });
@@ -249,7 +268,7 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
     insertEdge.run('card', 'task', 'parent-of');
     insertEdge.run('pre-binding-run', 'task', 'serves');
 
-    const reader = new WorkspaceDatabase(workspace, async () => path);
+    const reader = new WorkspaceDatabase(workspace, { discover: async () => path });
     const before = new ProvenanceIndex(await reader.readProvenance());
     expect(before.agents()).toMatchObject({
       identities: [],
@@ -364,11 +383,10 @@ it('reads dependency endpoints with display-only metadata and directed links', a
       }),
     },
   ]);
-  const reader = new WorkspaceDatabase(
-    workspace,
-    async () => '/state/workspace.sqlite',
-    () => database,
-  );
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open: () => database,
+  });
   const graph = await reader.readDependencies();
   expect(graph.nodes[0]).toMatchObject({
     id: 'strand1',
@@ -409,11 +427,10 @@ it('scopes dependency edges to expanded cards while keeping workspace-wide count
     }),
     close: vi.fn(),
   };
-  const reader = new WorkspaceDatabase(
-    workspace,
-    async () => '/state/workspace.sqlite',
-    () => database,
-  );
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open: () => database,
+  });
   const graph = await reader.readDependencies(['strand1']);
   expect(graph.edges).toEqual([{ kind: 'depends-on', from: 'strand1', to: 'strand2' }]);
   expect(graph.nodes.find((node) => node.id === 'strand1')?.dependencies).toEqual({

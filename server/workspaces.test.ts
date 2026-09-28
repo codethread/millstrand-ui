@@ -43,17 +43,19 @@ describe('weaver discovery', () => {
 
   it('bypasses its recent discovery snapshot when refresh is forced', async () => {
     let discoveries = 0;
-    const directory = new WorkspaceDirectory(defaultPath, async () => {
-      discoveries += 1;
-      return parseWorkspaces(
-        [
-          {
-            config_dir: defaultPath,
-            state: discoveries === 1 ? 'running' : 'stopped',
-          },
-        ],
-        defaultPath,
-      );
+    const directory = new WorkspaceDirectory(defaultPath, {
+      discover: async () => {
+        discoveries += 1;
+        return parseWorkspaces(
+          [
+            {
+              config_dir: defaultPath,
+              state: discoveries === 1 ? 'running' : 'stopped',
+            },
+          ],
+          defaultPath,
+        );
+      },
     });
 
     expect((await directory.list())[0]?.status).toBe('running');
@@ -64,13 +66,12 @@ describe('weaver discovery', () => {
   });
   it('resolves lifecycle operations from known IDs, including offline workspaces', async () => {
     const calls: string[][] = [];
-    const directory = new WorkspaceDirectory(
-      defaultPath,
-      async () => parseWorkspaces([], defaultPath),
-      async (operation, path) => {
+    const directory = new WorkspaceDirectory(defaultPath, {
+      discover: async () => parseWorkspaces([], defaultPath),
+      run: async (operation, path) => {
         calls.push([operation, path]);
       },
-    );
+    });
     await expect(directory.operate('/unregistered/.millstrand', 'start')).rejects.toMatchObject({
       status: 404,
     });
@@ -82,17 +83,16 @@ describe('weaver discovery', () => {
   it('reports command failures without retrying and expires discovery afterwards', async () => {
     let discoveries = 0;
     let commands = 0;
-    const directory = new WorkspaceDirectory(
-      defaultPath,
-      async () => {
+    const directory = new WorkspaceDirectory(defaultPath, {
+      discover: async () => {
         discoveries += 1;
         return parseWorkspaces([], defaultPath);
       },
-      async () => {
+      run: async () => {
         commands += 1;
         throw new Error('mill unavailable');
       },
-    );
+    });
     await expect(directory.operate(workspaceId(defaultPath), 'restart')).rejects.toThrow(
       'Refresh status before trying again: mill unavailable',
     );

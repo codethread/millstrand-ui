@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SessionLogReader } from './session-log-reader.ts';
+import { MemoryPerfLogger } from '../shared/perf.ts';
 
 const roots: string[] = [];
 
@@ -34,6 +35,20 @@ afterEach(async () => {
 });
 
 describe('SessionLogReader snapshots', () => {
+  it('reports failed snapshots to the injected logger without creating a perf log', async () => {
+    const logger = new MemoryPerfLogger();
+    const reader = new SessionLogReader({ logger });
+    await expect(reader.snapshot('pi', '../invalid')).rejects.toThrow('Session must');
+    expect(logger.samples).toEqual([
+      {
+        scope: 'session-log',
+        target: 'snapshot pi',
+        ms: expect.any(Number),
+        detail: 'session=../invalid outcome=failed',
+      },
+    ]);
+  });
+
   it('keeps complete records at stable byte offsets and defers an unterminated line', async () => {
     const first = record('prompt', 'First prompt');
     const second = record('reply', 'Reply');

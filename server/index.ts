@@ -12,7 +12,7 @@ import {
   parseViews,
   requestValue,
 } from './parse.ts';
-import { defaultPerfLogPath, PerfLog, recordPerf, setPerfSink } from './perf.ts';
+import { defaultPerfLogPath, PerfLog } from './perf.ts';
 import { parseCurateReview, parsePublishReview } from './review-comments.ts';
 import { parseWeaverOperation, WorkspaceDirectory } from './workspaces.ts';
 import { parseCardLane } from './card-actions.ts';
@@ -170,11 +170,10 @@ async function staticFile(
 }
 
 const config = await options(process.argv.slice(2));
-const workspaces = new WorkspaceDirectory(config.workspace);
-const sessionLogs = new SessionLogReader();
-const logStreams = new SessionLogStreams(sessionLogs);
 const perfLog = new PerfLog(process.env['MILLSTRAND_UI_PERF_LOG'] ?? defaultPerfLogPath);
-setPerfSink(perfLog.record);
+const workspaces = new WorkspaceDirectory(config.workspace, { logger: perfLog });
+const sessionLogs = new SessionLogReader({ logger: perfLog });
+const logStreams = new SessionLogStreams(sessionLogs);
 
 const lifecycleRoute = /^\/api\/workspaces\/[a-f0-9]{24}\/lifecycle$/;
 
@@ -188,7 +187,7 @@ const server = createServer((request, response) => {
     if (recorded) return;
     recorded = true;
     const bytes = responseBytes.get(response);
-    recordPerf({
+    perfLog.record({
       scope: 'server',
       target: `${method} ${url.pathname}`,
       ms: performance.now() - started,

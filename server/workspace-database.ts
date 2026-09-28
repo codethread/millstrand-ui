@@ -1,31 +1,16 @@
 import { countDependencies } from '../shared/dependencies.ts';
-import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { basename, dirname, isAbsolute } from 'node:path';
-import { promisify } from 'node:util';
+import { basename, dirname } from 'node:path';
 import { z } from 'zod';
 import { HttpError, parseGraph } from './parse.ts';
-import { recordPerf } from './perf.ts';
+import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 import type { CardGraph, DependencyCounts } from '../shared/api.ts';
+import { discoverDatabase } from './workspace-storage.ts';
 
-const exec = promisify(execFile);
 const edgeLimit = 50_000;
 const supportedSchemaVersion = 1;
 // The weaver's file-backed database moves only across restarts or reconfiguration.
 const discoveryLifetime = 30_000;
-const weaverStatusesSchema = z.compile(
-  z.array(
-    z
-      .object({
-        config_dir: z.string(),
-        database_kind: z.string(),
-        database_label: z.string(),
-        database_path: z.string().nullable(),
-      })
-      .loose(),
-  ),
-  { strict: true },
-);
 const databaseRowsSchema = z.compile(z.array(z.object({ record: z.string() })), { strict: true });
 const persistedRecordSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -395,36 +380,6 @@ interface ReadonlyDatabase {
 type DiscoverDatabase = (workspace: string) => Promise<string>;
 type OpenDatabase = (path: string) => ReadonlyDatabase;
 
-export function parseDatabasePath(value: unknown, workspace: string): string {
-  const parsed = weaverStatusesSchema.safeParse(value);
-  if (!parsed.success) throw new Error(`Mill returned invalid weaver storage metadata.`);
-  const status = parsed.data.find((candidate) => candidate.config_dir === workspace);
-  if (status === undefined) throw new Error(`Mill does not know workspace ${workspace}`);
-  if (status.database_kind !== 'sqlite-file' || status.database_path === null)
-    throw new Error(`Workspace storage is not file-backed SQLite: ${status.database_kind}`);
-  if (!isAbsolute(status.database_path) || status.database_label !== status.database_path)
-    throw new Error(`Workspace SQLite storage metadata is inconsistent.`);
-  return status.database_path;
-}
-
-async function discoverDatabase(workspace: string): Promise<string> {
-  const started = performance.now();
-  const { stdout } = await exec('mill', ['weaver', 'list'], {
-    cwd: dirname(workspace),
-    timeout: 10_000,
-    maxBuffer: 16 * 1024 * 1024,
-    encoding: 'utf8',
-  });
-  recordPerf({
-    scope: 'mill',
-    target: 'weaver list (storage)',
-    workspace: basename(dirname(workspace)),
-    ms: performance.now() - started,
-    detail: `bytes=${Buffer.byteLength(stdout)}`,
-  });
-  return parseDatabasePath(JSON.parse(stdout) as unknown, workspace);
-}
-
 function openDatabase(path: string): ReadonlyDatabase {
   const database = new DatabaseSync(path, { readOnly: true });
   return {
@@ -476,17 +431,33 @@ export interface PersistedWorkspaceReads {
   readDependencies(cardIds?: readonly string[]): Promise<CardGraph>;
 }
 
+interface WorkspaceDatabaseOptions {
+  discover?: DiscoverDatabase;
+  open?: OpenDatabase;
+  logger?: PerfLogger;
+}
+
 /** One bounded SQL statement sees a stable committed snapshot and never silently truncates history. */
 export class WorkspaceDatabase implements PersistedWorkspaceReads {
+  private readonly discover: DiscoverDatabase;
+  private readonly open: OpenDatabase;
+  private readonly logger: PerfLogger;
   private discovered: string | null = null;
   private discoveredUntil = 0;
   private discovery: Promise<string> | null = null;
 
   constructor(
     private readonly workspace: string,
-    private readonly discover: DiscoverDatabase = discoverDatabase,
-    private readonly open: OpenDatabase = openDatabase,
-  ) {}
+    {
+      logger = nullPerfLogger,
+      discover = (path) => discoverDatabase(path, logger),
+      open = openDatabase,
+    }: WorkspaceDatabaseOptions = {},
+  ) {
+    this.discover = discover;
+    this.open = open;
+    this.logger = logger;
+  }
 
   async readDependencies(cardIds: readonly string[] = []): Promise<CardGraph> {
     const snapshot = await this.readSnapshot(
@@ -587,7 +558,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
       throw new HttpError(502, `Provenance inspection failed: ${message.slice(0, 1500)}`);
     } finally {
       database?.close();
-      recordPerf({
+      this.logger.record({
         scope: 'sqlite',
         target: label,
         workspace: basename(dirname(this.workspace)),
