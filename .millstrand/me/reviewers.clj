@@ -60,9 +60,10 @@
    "
     Review only service I/O coupling and dependency injection, not general
     correctness, style, mock fidelity, or test coverage. Inspect changed
-    services and their callers/tests. Trace dependencies far enough to locate
-    the actual boundary; do not turn the review into an unrelated repo-wide
-    architecture rewrite.
+    services and the direct callers/types/tests needed to locate the boundary.
+    Once a usable no-I/O substitution is demonstrated, stop tracing that
+    dependency; do not audit unrelated transitive logic or expand into a
+    repo-wide architecture rewrite.
 
     Apply Clean Architecture's dependency direction: domain/application logic
     must not depend on concrete filesystem, database, network, subprocess or
@@ -95,10 +96,13 @@
     decision needed; more mocking is not an acceptable resolution. Report the
     required action, but do not edit code or launch oracle yourself.
 
-    Report only actionable P1/P2 findings with repository-relative paths and
-    line numbers, the coupled service and I/O dependency, why an existing seam
-    is insufficient, and the smallest refactor or oracle escalation needed.
-    Say `No findings` when the reviewed services have adequate boundaries.
-    Do not mutate files, repository state or runtime configuration.
+    Report only actionable P1/P2 findings, one per root cause. Anchor each at
+    one precise repository-relative path and line range of at most five lines.
+    In at most 80 words, name the service and I/O dependency, demonstrate why
+    substitution is blocked, and require the smallest refactor or concrete
+    oracle decision. Do not enumerate every affected caller or prescribe a
+    repo-wide migration. Output findings only, or exactly `No findings` when
+    boundaries are adequate. Do not run the suite or mutate files, repository
+    state or runtime configuration.
     "
    {}))
