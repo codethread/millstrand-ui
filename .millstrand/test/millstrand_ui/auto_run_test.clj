@@ -8,6 +8,8 @@
             [clojure.test :refer [deftest is run-tests testing]]
             [millhouse.auto-run :as auto-run]
             [millhouse.auto-run-worktree :as auto-run-worktree]
+            [millhouse.harnesses :as harnesses]
+            [millhouse.harnesses.reviewers :as reviewers]
             [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -41,6 +43,18 @@
              (select-keys (assoc (:config status) :enabled (:enabled status))
                           [:enabled :max-running :workflow :workflows :start-params])))
       (is (empty? (:dispatched (auto-run/scan! rt))))
+      (testing "the DI lens inherits reviewer with its own xhigh effort"
+        (let [lens (some #(when (= "dependency-injection" (:name %)) %)
+                         (reviewers/reviewers rt))
+              base (harnesses/resolve-harness rt :reviewer)
+              resolved (harnesses/resolve-harness rt :di-reviewer)]
+          (is (= ["di-reviewer"] (:seats lens)))
+          (is (= "di-reviewer" (:selected-seat lens)))
+          (is (= ["PR" "Architecture" "DI"] (:labels lens)))
+          (is (= ["**.{ts,tsx,clj}"] (:glob lens)))
+          (is (= (:harness base) (:harness resolved)))
+          (is (= (assoc (:generated base) :harness/effort "xhigh")
+                 (:generated resolved)))))
       (let [card (weaver/add! rt {:title "Blocked work"})
             evidence (weaver/add! rt {:title "Decision evidence"})]
         (weaver/op! rt 'weave
