@@ -37,6 +37,8 @@ it('builds mutation-safe comment models and keeps only proposals for the frozen 
     alias: 'reviewer',
     identity: 'bright-quick-fox',
     target: 'review1',
+    mode: 'headless',
+    ownership: null,
     status: 'stopped',
     substatus: null,
     result: 'Revised wording',

@@ -32,6 +32,7 @@ const agentReplySchema = z
     alias: z.string().nullable(),
     harness: z.string(),
     mode: z.enum(['headless', 'interactive', 'external']),
+    ownership: z.literal('external').nullable().optional(),
     status: runStatusSchema,
     substatus: runSubstatusSchema,
     'session-id': z.string().nullable(),
@@ -66,6 +67,9 @@ export function parseAgentReply(value: unknown): AgentReply {
   const parsed = compiledAgentReplySchema.safeParse(value);
   if (!parsed.success) throw new Error(`agent run is invalid: ${z.prettifyError(parsed.error)}`);
   const row = parsed.data;
+  const ownership = row.ownership ?? null;
+  if ((row.mode === 'external') !== (ownership === 'external'))
+    throw new Error('agent run has inconsistent external mode and ownership');
   const error = row.error ?? null;
   return {
     id: row.id,
@@ -73,6 +77,8 @@ export function parseAgentReply(value: unknown): AgentReply {
     alias: row.alias,
     identity: row.identity ?? null,
     target: row.target ?? null,
+    mode: row.mode,
+    ownership,
     status: row.status,
     substatus: row.substatus,
     result: row.result ?? null,

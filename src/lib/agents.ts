@@ -1,4 +1,10 @@
-import type { AgentDirectory, AgentIdentity, AgentRun, AgentRunStatus } from '../../shared/api';
+import type {
+  AgentDirectory,
+  AgentIdentity,
+  AgentReply,
+  AgentRun,
+  AgentRunStatus,
+} from '../../shared/api';
 import { sorted } from '../../shared/array';
 
 export type AgentRunLabel =
@@ -88,6 +94,15 @@ export function runLabel(run: AgentRun | null): AgentRunLabel {
   if (run.status === 'running') return run.substatus === 'requested' ? 'Stopping' : 'Running';
   if (run.status === 'failed') return 'Failed';
   return run.substatus === 'completed' ? 'Completed' : 'Stopped';
+}
+
+export function agentReplyStatusText(reply: Pick<AgentReply, 'ownership' | 'status'>): string {
+  if (reply.ownership === 'external')
+    return 'Direct session · Harnesses does not manage a reply result. Inspect the session log for observed activity.';
+  if (reply.status === 'ready') return 'Queued · waiting for the agent to start.';
+  if (reply.status === 'running') return 'Working on your prompt. The reply will appear here.';
+  if (reply.status === 'unknown') return 'Run state is unavailable. Waiting for an update.';
+  return 'This run ended without a reply.';
 }
 
 export function runDisplayName(run: AgentRun): string {

@@ -15,6 +15,7 @@ const reply = {
   alias: 'tui',
   harness: 'pi',
   mode: 'headless',
+  ownership: null,
   status: 'ready',
   substatus: 'pending',
   'session-id': 'session1',
@@ -43,6 +44,7 @@ describe('agent reply boundaries', () => {
         ...reply,
         alias: null,
         mode: 'external',
+        ownership: 'external',
         identity: 'direct-native',
         status: 'running',
         substatus: null,
@@ -51,6 +53,8 @@ describe('agent reply boundaries', () => {
       id: 'run1',
       alias: null,
       identity: 'direct-native',
+      mode: 'external',
+      ownership: 'external',
       status: 'running',
     });
   });

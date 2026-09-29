@@ -187,7 +187,9 @@ untracked sessions remain distinct. The card Agents tab groups current and past
 participation, retains completed task workers and terminal linked runs, and opens an
 existing exact-run inspector when available. That inspector shows published
 participants and continuation provenance; a session-log link appears only when the
-persisted native binding resolves.
+persisted native binding resolves. For an external direct session, the inspector keeps
+the observed run status and session log but explicitly states that Harnesses does not
+manage a reply result instead of promising that one will arrive.
 
 Agent data refreshes independently every five seconds; failed refreshes mark
 retained data as last-known rather than claiming it is live. Agents can be browsed
