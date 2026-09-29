@@ -30,7 +30,7 @@ function rotate(path: string, maxBytes: number): void {
 export class PerfLog implements PerfLogger {
   constructor(
     readonly path: string = defaultPerfLogPath,
-    maxBytes: number = maxLogBytes,
+    readonly maxBytes: number = maxLogBytes,
   ) {
     mkdirSync(dirname(path), { recursive: true });
     rotate(path, maxBytes);
@@ -39,6 +39,7 @@ export class PerfLog implements PerfLogger {
   record(sample: PerfMeasurement): void {
     const line = formatPerfSample({ at: new Date().toISOString(), ...sample });
     try {
+      rotate(this.path, this.maxBytes);
       appendFileSync(this.path, `${line}\n`);
     } catch (error) {
       console.error(`perf log write failed: ${String(error)}`);

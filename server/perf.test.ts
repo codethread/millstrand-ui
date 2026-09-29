@@ -80,3 +80,13 @@ it('rotates an oversized log before appending', () => {
   expect(readFileSync(`${path}.1`, 'utf8')).toBe('x'.repeat(64));
   expect(readFileSync(path, 'utf8')).toBe(`${at} perf 1.00ms server GET /api/board\n`);
 });
+
+it('rotates during recording, not only at construction', () => {
+  const path = logPath();
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const log = new PerfLog(path, 64);
+  for (let i = 0; i < 4; i++) log.record({ scope: 'server', target: `GET /api/board/${i}`, ms: 1 });
+  expect(readFileSync(`${path}.1`, 'utf8')).not.toBe('');
+  expect(readFileSync(path, 'utf8')).not.toContain('GET /api/board/0');
+});
