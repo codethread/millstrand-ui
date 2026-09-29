@@ -145,8 +145,8 @@ agent badges and Agents view for actual worker status.
 Opted-in pending features can be picked up automatically with a planner-selected
 seat, effort, and repository delivery workflow. The default prepares a passing PR
 with a C4-level walkthrough, browser evidence and screenshots where applicable,
-then stops for human review. An explicitly selected full-land workflow hands shared
-landing to a canonical-root grunt after review but before sign-off. The grunt waits
+then stops for human review. An explicitly selected full-land workflow hands the
+repository's landing run to a canonical-root grunt after review but before sign-off. The grunt waits
 for the implementation worker to settle before merging and removing its worktree;
 card completion follows cleanup.
 

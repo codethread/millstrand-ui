@@ -18,8 +18,8 @@ accepted runs remain under normal Harnesses control.
 - **auto-human-review:** implement and browser-test; pass `pnpm quality`; publish
   a non-draft PR and review package; wait for CI; mechanically verify the PR
   head/checks/package; move the card into review; stop at human acceptance.
-- **auto-full-land:** stay claimed through preparation and shared `land` basic review,
-  then hand the existing run to a canonical-root `grunt` before sign-off. Once the
+- **auto-full-land:** stay claimed through preparation and the repository's `land`
+  basic review, then hand the existing run to a canonical-root `grunt` before sign-off. Once the
   original worker settles, the grunt drives FIFO merge, cleanup and card completion.
   Selecting this workflow is explicit authorisation to land, not just to implement.
 - **auto-inspect:** perform the card-defined investigation, audit, exploratory
@@ -134,8 +134,8 @@ or previously poured workflow is rewritten by these source changes.
 
 ## Autonomous landing handoff
 
-This is delivery policy, not a dispatcher teardown feature. Shared `land` stays
-unchanged. Its sign-off starts an executor-owned chain that includes worktree
+This is delivery policy, not a dispatcher teardown feature. The repository-owned
+`land` remains independent of dispatcher lifecycle. Its sign-off starts an executor-owned chain that includes worktree
 removal, so the handoff must happen **before approval**, not just before cleanup.
 A per-command shell `cd` does not move the original agent session's persistent
 cwd.
@@ -186,7 +186,7 @@ Only after the card is closed does it complete the **finisher** step.
 For `auto-full-land`, leave failed delivery open with its resources and merge
 reservation retained. Do not clear a failed gate, spawn a replacement, retry
 landing or withdraw the queue entry without explicit recovery authorization.
-This overrides shared land's repair advice. An uncertain merge needs reconciliation.
+This overrides the local land workflow's ordinary repair advice. An uncertain merge needs reconciliation.
 
 A recovery worker may serve the card or handoff-worker step, never the finisher
 step; a finisher recovery serves only its existing finisher target and never

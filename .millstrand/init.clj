@@ -20,6 +20,12 @@
                   :after [:millhouse/workflow]
                   :required? true})
 
+(runtime/module! runtime :millstrand-ui/land
+                 {:file "me/land.clj"
+                  :after [:millhouse/land
+                          :millhouse/workflow-providers]
+                  :required? true})
+
 (runtime/module! runtime :millstrand-ui/reviewers
                  {:file "me/reviewers.clj"
                   :after [:millhouse/config-reviewers]
@@ -27,7 +33,8 @@
 
 (runtime/module! runtime :millstrand-ui/auto-run-workflows
                  {:file "me/auto_run_workflows.clj"
-                  :after [:millhouse/workflow-providers]
+                  :after [:millhouse/workflow-providers
+                          :millstrand-ui/land]
                   :required? true})
 
 (runtime/module! runtime :millstrand-ui/auto-run
@@ -39,5 +46,6 @@
 (codethread/register-executor!
  runtime [:millstrand-ui/help
           :millhouse/workflow-providers
+          :millstrand-ui/land
           :millstrand-ui/reviewers
           :millstrand-ui/auto-run])
