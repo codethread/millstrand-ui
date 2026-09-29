@@ -53,7 +53,7 @@ export interface ReviewComments {
       url: string;
       headSha: string;
       baseSha: string;
-      startSha: string;
+      startSha: string | null;
       sourceBranch: string | null;
       targetBranch: string | null;
     };

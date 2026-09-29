@@ -106,7 +106,7 @@ const reviewCommentsMrSchema = z
     url: z.string(),
     headSha: z.string(),
     baseSha: z.string(),
-    startSha: z.string(),
+    startSha: nullableStringSchema,
     sourceBranch: nullableStringSchema,
     targetBranch: nullableStringSchema,
   })
@@ -319,7 +319,7 @@ export function parseReviewComments(value: unknown): ReviewComments {
         url: nonblank(mr.url, 'MR URL'),
         headSha: nonblank(mr.headSha, 'Head SHA'),
         baseSha: nonblank(mr.baseSha, 'Base SHA'),
-        startSha: nonblank(mr.startSha, 'Start SHA'),
+        startSha: maybeString(mr.startSha, 'Start SHA'),
         sourceBranch: maybeString(mr.sourceBranch, 'Source branch'),
         targetBranch: maybeString(mr.targetBranch, 'Target branch'),
       },
