@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Board, Card, ViewFilter } from '../../shared/api';
 import { overviewCards } from './overview';
 import {
+  autoRunSignal,
   boardSidebarContent,
   completedHistory,
   completedDays,
@@ -212,38 +213,65 @@ describe('all-weaver overview cards', () => {
   });
 });
 
-describe('optional board lanes', () => {
+describe('compact board lanes', () => {
   const cards: Card[] = [
     card('ready'),
     { ...card('production'), lane: 'in_production' },
+    { ...card('review'), lane: 'in_review' },
+    { ...card('progress'), lane: 'claimed' },
+    { ...card('idea'), lane: 'refinement' },
+    { ...card('done'), state: 'closed', lane: 'closed' },
     { ...card('other'), lane: 'unknown' },
   ];
 
-  it('places populated production after review and keeps completed opt-in', () => {
-    expect(selectBoardLanes(cards, false).map((lane) => lane.id)).toEqual([
-      'refinement',
-      'pending',
-      'claimed',
+  it('prioritizes review and production observation, then active work, with history last', () => {
+    expect(selectBoardLanes(cards).map((lane) => lane.id)).toEqual([
       'in_review',
       'in_production',
+      'claimed',
+      'pending',
+      'refinement',
+      'closed',
       'unknown',
     ]);
-    expect(selectBoardLanes(cards, true).map((lane) => lane.id)).toContain('closed');
+    expect(
+      issueSurfaceContent(cards, emptyFilter()).columns.map(({ lane }) => lane.id),
+    ).not.toContain('closed');
+    expect(
+      issueSurfaceContent(cards, { ...emptyFilter(), includeClosed: true }).columns.map(
+        ({ lane }) => lane.id,
+      ),
+    ).toContain('closed');
   });
 
-  it('hides optional lanes without matching cards, including on older spools', () => {
+  it('keeps only occupied lanes after filtering and does not change the source order', () => {
     const visible = selectCards(cards, { ...emptyFilter(), lanes: ['pending'] });
-    expect(selectBoardLanes(visible, false).map((lane) => lane.id)).toEqual([
-      'refinement',
-      'pending',
-      'claimed',
-      'in_review',
-    ]);
-    expect(selectBoardLanes([], false)).toEqual(selectBoardLanes(visible, false));
-    expect(
-      selectCards(cards, { ...emptyFilter(), lanes: ['in_production'] }).map((item) => item.id),
-    ).toEqual(['production']);
+    expect(selectBoardLanes(visible).map((lane) => lane.id)).toEqual(['pending']);
+    expect(selectBoardLanes([])).toEqual([]);
+    expect(cards[0]?.id).toBe('ready');
   });
+});
+
+it('hides absent and opted-out auto signals but preserves dispatcher failures', () => {
+  const auto = {
+    optedIn: false,
+    seat: null,
+    effort: null,
+    workflow: null,
+    status: null,
+    error: null,
+    runId: null,
+    workflowRunId: null,
+    branch: null,
+    worktree: null,
+  };
+  expect(autoRunSignal(null)).toBeNull();
+  expect(autoRunSignal(auto)).toBeNull();
+  expect(autoRunSignal({ ...auto, status: 'assigned' })).toBeNull();
+  expect(autoRunSignal({ ...auto, status: 'error' })).toBe('Auto error');
+  expect(autoRunSignal({ ...auto, optedIn: true })).toBe('Auto on');
+  expect(autoRunSignal({ ...auto, optedIn: true, status: 'preparing' })).toBe('Auto preparing');
+  expect(autoRunSignal({ ...auto, optedIn: true, status: 'assigned' })).toBe('Auto assigned');
 });
 
 describe('outline context', () => {

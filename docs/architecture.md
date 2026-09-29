@@ -112,8 +112,14 @@ large bodies and unrelated attributes never enter the server result. Reads stay 
 short autocommit transactions so they do not pin the WAL. Failures
 remain visible with normal Query refresh-error retention. No per-card requests, new
 endpoints, query keys, or poll owners are added. Raw detail attributes remain available
-unchanged. `AutoRunSummary` and `AutoRunDetails` render this snapshot separately from
-`IssueAgents`, which remains authoritative for worker activity.
+unchanged. `card-signals.tsx` uses the pure `autoRunSignal` (`board.ts`) and
+`agentActivitySignal` (`agents.ts`) projections for compact badges. Hover/focus
+previews are noninteractive; click/tap popovers reuse `AutoRunDetails`,
+`CardOwnerSummary` and `IssueAgents`. The latter retains its agent navigation and
+log hints. `useRelevantAgentActivity` and the separate `useAgentStatus` are disabled
+readers of the existing workspace owner; mounting a badge or popover adds no polls.
+Absent activity and opted-out configuration are quiet; dispatch failures survive
+opt-out, and activity refresh errors visibly mark retained signals as last-known.
 
 ## Checked read inventory
 

@@ -25,6 +25,31 @@ export type RelevantAgentActivity =
       relation: 'working' | 'queued';
     };
 
+/** A terminal owner must not hide explicitly targeted work; failures stay visible. */
+export function agentActivitySignal(activity: RelevantAgentActivity[]) {
+  const order: RelevantAgentActivity['label'][] = [
+    'Stopping',
+    'Failed',
+    'Working',
+    'Queued',
+    'Session running',
+    'Unknown',
+    'Untracked',
+    'Completed',
+    'Stopped',
+    'Running',
+  ];
+  const first = sorted(activity, (a, b) => order.indexOf(a.label) - order.indexOf(b.label))[0];
+  if (first === undefined) return null;
+  const count = activity.filter((item) => item.label === first.label).length;
+  const label = first.label === 'Completed' ? 'Run done' : first.label;
+  return {
+    label: `${label}${count > 1 ? ` ×${count}` : ''}`,
+    active: ['Working', 'Queued', 'Session running', 'Stopping'].includes(first.label),
+    error: first.label === 'Failed',
+  };
+}
+
 export type SelectedAgentActivity =
   | {
       kind: 'identity';

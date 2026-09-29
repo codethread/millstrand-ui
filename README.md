@@ -105,7 +105,7 @@ Label edits use `strand kanban label add/rm`, so they persist in the workspace
 and appear in the terminal dashboard too. Label slugs use lowercase letters,
 numbers, and hyphens. Title, body, ownership, and graph links are otherwise read-only in this app.
 
-Right-click a Board card or Outline feature row, or use its **…** actions button,
+Right-click a Board card, Outline feature row, or epic heading, or use its **…** actions button,
 to move it to another lane or delete it. The current lane is disabled. The button
 also provides touch and keyboard access. Moves edit only that card's state/lane:
 Completed closes it with outcome `done`; other lanes reactivate it and clear closure
@@ -126,8 +126,12 @@ search, status, issue type, and priority.
 
 ## Auto-run properties
 
-Board cards show auto-run opt-in, configured seat alias, effort, delivery workflow,
-and dispatcher status separately from agent badges. Open the card for the recorded
+Board and Outline show compact auto-run and agent-activity signals separately. Hover
+or focus for a preview; click or tap to pin details, including seat, effort, delivery
+and dispatch status. Escape closes the popover and restores its trigger. Absent
+activity and opted-out auto-run add no badge; dispatcher errors remain visible even
+after opt-out. Failed activity refreshes explicitly show last-known/unavailable status.
+Open the card for the recorded
 Harnesses assignment, workflow run, dispatch error, and dispatch branch/worktree
 snapshot. These are read-only properties, not controls for launching work.
 
@@ -201,7 +205,7 @@ the server never picks an unlinked or conflicting registry match. Card detail la
 **Reporter**, **Current owner**, and the full oldest-first claim/handoff history
 separately. A note’s **Note author** is attribution only, never an ownership update.
 Board search matches the reporter and every recorded owner (including historical
-handoffs); the compact Board and Outline rows show only the current owner.
+handoffs); activity popovers show current ownership, with full claim history in the drawer.
 
 Agent runs are read-only in this dashboard. The Agents page and the issue, review
 and graph inspector links list tracked identities and runs; any run can be opened by
@@ -264,7 +268,12 @@ Use the fullscreen button at the top right of the content to hide the sidebar an
 header. Click it again or press Escape to restore them. Your filters and layout
 stay intact; the search shortcut also restores the header and focuses search.
 
-Use Board for lanes, Outline for epic/feature context, and Graph for relationships.
+Use **Board** for Compact lanes, **Outline** for Dense Outline epic/feature rows,
+and **Graph** for relationships. Both compact layouts keep every label readable;
+click a label to toggle the existing URL filter, or a title to open the real issue
+drawer. Board shows occupied lanes only, in attention order: In review, In production,
+In progress, Ready, Refinement, then Completed and Other when present. Narrow
+layouts stack lanes and row metadata rather than clipping labels or scrolling sideways.
 The optional **In production** column appears after **In review** when matching
 cards use the spool's `in_production` lane. It supports filters and saved views
 and keeps production observation work available in workspace views.

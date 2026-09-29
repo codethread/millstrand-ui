@@ -16,24 +16,6 @@ function DispatchStatus({ autoRun }: { autoRun: AutoRun }) {
   );
 }
 
-export function AutoRunSummary({ autoRun }: { autoRun: AutoRun | null }) {
-  if (autoRun === null) return null;
-  return (
-    <div className="min-w-0 space-y-1 border-t border-border pt-2 text-xs text-muted-foreground">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="font-medium text-foreground">Auto-run</span>
-        <span>{autoRun.optedIn ? 'Opted in' : 'Not opted in'}</span>
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 [overflow-wrap:anywhere]">
-        {autoRun.seat !== null && <span>Seat: {autoRun.seat}</span>}
-        {autoRun.effort !== null && <span>Effort: {autoRun.effort}</span>}
-        {autoRun.workflow !== null && <span>Delivery: {autoRun.workflow}</span>}
-      </div>
-      <DispatchStatus autoRun={autoRun} />
-    </div>
-  );
-}
-
 export function AutoRunDetails({ autoRun }: { autoRun: AutoRun | null }) {
   if (autoRun === null) return null;
   const configuration = [
