@@ -106,16 +106,22 @@ Counts arrive on `Card.dependencies` and `GraphNode.dependencies` through the
 existing board/detail/subtree reads. Merely opening Graph, reading counts or
 focusing an epic does **not** request the workspace dependency graph.
 
-`GET /api/dependencies` returns a `CardGraph` of workspace-wide dependency edges
-and their endpoints. `WorkspaceDatabase.readDependencies` uses one read-only,
-bounded SQL snapshot discovered through `mill weaver list`, with existing
+`GET /api/dependencies?card=...` returns a `CardGraph` of the bounded incident
+dependency edges for the expanded cards plus their endpoints. `WorkspaceDatabase.readDependencies`
+uses one read-only, bounded SQL snapshot discovered through a cached `mill weaver list`
+lookup, with existing
 schema/storage validation and 10,000-node / 50,000-edge overflow failures. Only
 identity, title, lifecycle, timestamps and allowlisted kind/lane metadata are
-selected; no arbitrary attributes or agent payloads. No Strand mutations occur.
-`StrandData` coalesces concurrent reads and caches a successful snapshot for three
+selected; no arbitrary attributes or agent payloads. A second bounded aggregate
+keeps workspace-wide incoming/outgoing counts for the returned endpoints, so
+neighbour badges and expansion actions stay truthful outside the scoped edges.
+No Strand mutations occur.
+`StrandData` coalesces concurrent reads and caches a successful snapshot per
+expanded-card scope for three
 seconds; card mutation settlement invalidates it, including uncertain failures.
 
-`GraphView` owns `['dependencies', workspace]` through `useDependencies` only while
+`GraphView` owns `['dependencies', workspace, ...expandedCards]` through
+`useDependencies` only while
 at least one card is explicitly expanded, polling every 10 seconds. Removing the
 last expansion disables both fetching and polling, including invalidation reads.
 Refresh failures retain the snapshot with last-known feedback; initial expansion
@@ -147,8 +153,9 @@ opt-in. Back/reload restore the selected scope.
 `Card.dependencies` contains required `{ incoming, outgoing }` counts from the
 existing persisted board/detail read. `ProvenanceIndex` indexes unique `depends-on`
 edges in one pass, including closed neighbours and endpoints outside the hydrated
-card/task set. The bounded SQL reads workspace-wide dependency edges so unmarked
-work in an exported subtree also receives complete counts. Parent edges do not count. The existing SQL
+card/task set. The bounded provenance SQL reads workspace-wide dependency edges so unmarked
+work in an exported subtree also receives complete counts; the scoped expansion read
+adds the same workspace-wide counts for its neighbour-only endpoints. Parent edges do not count. The existing SQL
 projection now allowlists `depends-on`; no extra endpoints, cache keys, per-card
 requests, or poll owners are introduced for these badges. Board/overview health
 continues to mark retained data after a failed refresh.

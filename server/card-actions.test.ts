@@ -50,8 +50,7 @@ function mockBoard() {
   let cards = [card];
   exec.mockImplementation((_file, argv) => {
     const op = Array.isArray(argv) ? argv.slice(2) : [];
-    if (op[0] === 'kanban' && op[1] === 'board')
-      return Promise.resolve({ stdout: JSON.stringify({ cards }) });
+    if (op[0] === 'help' && op[1] === 'kanban') return Promise.resolve({ stdout: 'kanban help' });
     if (op[0] === 'burn') {
       cards = [];
       return Promise.resolve({ stdout: '{"burned":["card1"],"count":1}' });
@@ -83,7 +82,7 @@ function mockBoard() {
 
 it('deletes only the selected card in its workspace and refreshes a cached board', async () => {
   const { database } = mockBoard();
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   await data.board();
   await data.changeCard('card1', { kind: 'delete' });
   expect(exec.mock.calls.map((call) => call[1])).toContainEqual([
@@ -96,20 +95,22 @@ it('deletes only the selected card in its workspace and refreshes a cached board
 });
 it('does not mutate a non-card or a card removed since the last poll', async () => {
   const source = mockBoard();
-  const data = new StrandData('/repo/.millstrand', source.database);
+  const data = new StrandData('/repo/.millstrand', { database: source.database });
   await data.board();
   source.remove();
   await expect(data.changeCard('card1', { kind: 'delete' })).rejects.toMatchObject({ status: 404 });
   expect(
     exec.mock.calls.every((call) => {
       const args = call[1];
-      return call[0] === 'strand' && Array.isArray(args) && args.includes('board');
+      return (
+        call[0] === 'strand' && Array.isArray(args) && args[2] === 'help' && args[3] === 'kanban'
+      );
     }),
   ).toBe(true);
 });
 it('moves only the card and invalidates cached dependency metadata', async () => {
   const { database } = mockBoard();
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   await data.dependencies();
   await data.changeCard('card1', { kind: 'move', lane: 'in_review' });
   await data.dependencies();
@@ -123,11 +124,10 @@ it('moves only the card and invalidates cached dependency metadata', async () =>
 });
 it('invalidates the board even when the command fails after a possible side effect', async () => {
   const { database } = mockBoard();
-  const data = new StrandData('/repo/.millstrand', database);
+  const data = new StrandData('/repo/.millstrand', { database });
   await data.board();
   await data.dependencies();
-  // Validation reads the compact board, then hydrates it before the mutation times out.
-  exec.mockResolvedValueOnce({ stdout: JSON.stringify({ cards: [card] }) });
+  // Validation re-reads the persisted snapshot before the mutation times out.
   database.readProvenance.mockResolvedValueOnce({
     strands: [{ ...card, attributes: { 'kanban/card': 'true', 'kanban/lane': card.lane } }],
     edges: [],
@@ -137,8 +137,7 @@ it('invalidates the board even when the command fails after a possible side effe
   await data.dependencies();
   expect(database.readDependencies).toHaveBeenCalledTimes(2);
   expect(database.readProvenance).toHaveBeenCalledTimes(2);
-  await data.provenance();
-  expect(database.readProvenance).toHaveBeenCalledTimes(3);
-  exec.mockResolvedValueOnce({ stdout: '{"cards":[]}' });
+  database.readProvenance.mockResolvedValueOnce({ strands: [], edges: [] });
   expect((await data.board()).cards).toEqual([]);
+  expect(database.readProvenance).toHaveBeenCalledTimes(3);
 });

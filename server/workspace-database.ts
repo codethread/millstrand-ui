@@ -1,29 +1,16 @@
 import { countDependencies } from '../shared/dependencies.ts';
-import { execFile } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
-import { dirname, isAbsolute } from 'node:path';
-import { promisify } from 'node:util';
+import { basename, dirname } from 'node:path';
 import { z } from 'zod';
 import { HttpError, parseGraph } from './parse.ts';
-import type { CardGraph } from '../shared/api.ts';
+import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
+import type { CardGraph, DependencyCounts } from '../shared/api.ts';
+import { discoverDatabase } from './workspace-storage.ts';
 
-const exec = promisify(execFile);
 const edgeLimit = 50_000;
 const supportedSchemaVersion = 1;
-
-const weaverStatusesSchema = z.compile(
-  z.array(
-    z
-      .object({
-        config_dir: z.string(),
-        database_kind: z.string(),
-        database_label: z.string(),
-        database_path: z.string().nullable(),
-      })
-      .loose(),
-  ),
-  { strict: true },
-);
+// The weaver's file-backed database moves only across restarts or reconfiguration.
+const discoveryLifetime = 30_000;
 const databaseRowsSchema = z.compile(z.array(z.object({ record: z.string() })), { strict: true });
 const persistedRecordSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -43,7 +30,6 @@ const persistedRecordSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 const schemaVersionSchema = z.object({ user_version: z.literal(supportedSchemaVersion) });
-
 /** Allowlisted persisted fields. Prompts, results, environments and credentials never enter the API. */
 const provenanceAttributeKeys = [
   'identity/session',
@@ -105,7 +91,6 @@ const provenanceEdgeKinds = [
   'parent-of',
   'depends-on',
 ] as const;
-
 function placeholders(values: readonly string[]): string {
   return values.map(() => '?').join(', ');
 }
@@ -195,12 +180,21 @@ const provenanceSql = `
               AND parent_card.key = 'kanban/card'
               AND parent_card.value = '"true"'
           )
-          AND EXISTS (
-            SELECT 1 FROM attributes AS child_task
-            WHERE child_task.strand_id = strand_edges.to_strand_id
-              AND child_task.archived = 0
-              AND child_task.key = 'kanban/task'
-              AND child_task.value = '"true"'
+          AND (
+            EXISTS (
+              SELECT 1 FROM attributes AS child_task
+              WHERE child_task.strand_id = strand_edges.to_strand_id
+                AND child_task.archived = 0
+                AND child_task.key = 'kanban/task'
+                AND child_task.value = '"true"'
+            )
+            OR EXISTS (
+              SELECT 1 FROM attributes AS child_card
+              WHERE child_card.strand_id = strand_edges.to_strand_id
+                AND child_card.archived = 0
+                AND child_card.key = 'kanban/card'
+                AND child_card.value = '"true"'
+            )
           )
         )
         OR (
@@ -220,9 +214,6 @@ const provenanceSql = `
           )
         )
       )
-    ORDER BY strand_edges.edge_type,
-             strand_edges.from_strand_id,
-             strand_edges.to_strand_id
     LIMIT ${edgeLimit + 1}
   )
   SELECT record FROM projected_strands
@@ -314,10 +305,18 @@ const noteProvenanceSql = `
 `;
 
 // Only dependency endpoints and display metadata; never arbitrary attributes or run payloads.
-const dependencySql = `
+function dependencySql(cardIds: readonly string[]): string {
+  // Absent cards keep the workspace-wide read; the client always scopes to its expansions.
+  const scope =
+    cardIds.length === 0
+      ? ''
+      : ` AND (from_strand_id IN (${placeholders(cardIds)}) OR to_strand_id IN (${placeholders(
+          cardIds,
+        )}))`;
+  return `
   WITH dependencies AS (
     SELECT DISTINCT from_strand_id, to_strand_id
-    FROM strand_edges WHERE edge_type = 'depends-on'
+    FROM strand_edges WHERE edge_type = 'depends-on'${scope}
     ORDER BY from_strand_id, to_strand_id LIMIT ${edgeLimit + 1}
   ), endpoints AS (
     SELECT from_strand_id AS id FROM dependencies
@@ -339,6 +338,37 @@ const dependencySql = `
   SELECT json_object('kind', 'edge', 'from_strand_id', from_strand_id,
     'to_strand_id', to_strand_id, 'edge_type', 'depends-on') FROM dependencies
 `;
+}
+
+/** Workspace-wide directed counts for the returned endpoints, so neighbour badges stay truthful. */
+const dependencyCountsSql = `
+  WITH ids(id) AS (SELECT value FROM json_each(?)),
+  incoming AS (
+    SELECT strand_edges.to_strand_id AS id, count(*) AS total
+    FROM strand_edges JOIN ids ON ids.id = strand_edges.to_strand_id
+    WHERE strand_edges.edge_type = 'depends-on'
+    GROUP BY strand_edges.to_strand_id
+  ),
+  outgoing AS (
+    SELECT strand_edges.from_strand_id AS id, count(*) AS total
+    FROM strand_edges JOIN ids ON ids.id = strand_edges.from_strand_id
+    WHERE strand_edges.edge_type = 'depends-on'
+    GROUP BY strand_edges.from_strand_id
+  )
+  SELECT json_object(
+    'id', ids.id,
+    'incoming', COALESCE(incoming.total, 0),
+    'outgoing', COALESCE(outgoing.total, 0)
+  ) AS record
+  FROM ids
+  LEFT JOIN incoming ON incoming.id = ids.id
+  LEFT JOIN outgoing ON outgoing.id = ids.id
+`;
+
+const dependencyCountSchema = z.compile(
+  z.object({ id: z.string(), incoming: z.number(), outgoing: z.number() }),
+  { strict: true },
+);
 
 interface ReadonlyDatabase {
   configure(): void;
@@ -349,28 +379,6 @@ interface ReadonlyDatabase {
 
 type DiscoverDatabase = (workspace: string) => Promise<string>;
 type OpenDatabase = (path: string) => ReadonlyDatabase;
-
-export function parseDatabasePath(value: unknown, workspace: string): string {
-  const parsed = weaverStatusesSchema.safeParse(value);
-  if (!parsed.success) throw new Error(`Mill returned invalid weaver storage metadata.`);
-  const status = parsed.data.find((candidate) => candidate.config_dir === workspace);
-  if (status === undefined) throw new Error(`Mill does not know workspace ${workspace}`);
-  if (status.database_kind !== 'sqlite-file' || status.database_path === null)
-    throw new Error(`Workspace storage is not file-backed SQLite: ${status.database_kind}`);
-  if (!isAbsolute(status.database_path) || status.database_label !== status.database_path)
-    throw new Error(`Workspace SQLite storage metadata is inconsistent.`);
-  return status.database_path;
-}
-
-async function discoverDatabase(workspace: string): Promise<string> {
-  const { stdout } = await exec('mill', ['weaver', 'list'], {
-    cwd: dirname(workspace),
-    timeout: 10_000,
-    maxBuffer: 16 * 1024 * 1024,
-    encoding: 'utf8',
-  });
-  return parseDatabasePath(JSON.parse(stdout) as unknown, workspace);
-}
 
 function openDatabase(path: string): ReadonlyDatabase {
   const database = new DatabaseSync(path, { readOnly: true });
@@ -407,25 +415,72 @@ function decodeProvenance(value: unknown) {
   };
 }
 
+function decodeDependencyCounts(value: unknown): Map<string, DependencyCounts> {
+  const records = databaseRowsSchema.parse(value);
+  return new Map(
+    records.map(({ record }) => {
+      const count = dependencyCountSchema.parse(JSON.parse(record) as unknown);
+      return [count.id, { incoming: count.incoming, outgoing: count.outgoing }];
+    }),
+  );
+}
+
 export interface PersistedWorkspaceReads {
   readProvenance(): Promise<unknown>;
   readNoteProvenance(noteIds: readonly string[]): Promise<unknown>;
-  readDependencies(): Promise<CardGraph>;
+  readDependencies(cardIds?: readonly string[]): Promise<CardGraph>;
+}
+
+interface WorkspaceDatabaseOptions {
+  discover?: DiscoverDatabase;
+  open?: OpenDatabase;
+  logger?: PerfLogger;
 }
 
 /** One bounded SQL statement sees a stable committed snapshot and never silently truncates history. */
 export class WorkspaceDatabase implements PersistedWorkspaceReads {
+  private readonly discover: DiscoverDatabase;
+  private readonly open: OpenDatabase;
+  private readonly logger: PerfLogger;
+  private discovered: string | null = null;
+  private discoveredUntil = 0;
+  private discovery: Promise<string> | null = null;
+
   constructor(
     private readonly workspace: string,
-    private readonly discover: DiscoverDatabase = discoverDatabase,
-    private readonly open: OpenDatabase = openDatabase,
-  ) {}
+    {
+      logger = nullPerfLogger,
+      discover = (path) => discoverDatabase(path, logger),
+      open = openDatabase,
+    }: WorkspaceDatabaseOptions = {},
+  ) {
+    this.discover = discover;
+    this.open = open;
+    this.logger = logger;
+  }
 
-  async readDependencies(): Promise<CardGraph> {
-    const snapshot = await this.readSnapshot(dependencySql, []);
-    const counts = countDependencies(
-      snapshot.edges.map((edge) => ({ from: edge.from_strand_id, to: edge.to_strand_id })),
+  async readDependencies(cardIds: readonly string[] = []): Promise<CardGraph> {
+    const snapshot = await this.readSnapshot(
+      'dependencies',
+      dependencySql(cardIds),
+      [...cardIds, ...cardIds],
+      decodeProvenance,
     );
+    const endpointIds = [
+      ...new Set(snapshot.edges.flatMap((edge) => [edge.from_strand_id, edge.to_strand_id])),
+    ];
+    // A scoped read still needs workspace-wide counts for its neighbours; the full read has them all.
+    const counts =
+      cardIds.length === 0
+        ? countDependencies(
+            snapshot.edges.map((edge) => ({ from: edge.from_strand_id, to: edge.to_strand_id })),
+          )
+        : await this.readSnapshot(
+            'dependency-counts',
+            dependencyCountsSql,
+            [JSON.stringify(endpointIds)],
+            decodeDependencyCounts,
+          );
     return parseGraph(
       {
         'root-id': '',
@@ -438,25 +493,78 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
   }
 
   readProvenance(): Promise<unknown> {
-    return this.readSnapshot(provenanceSql, [...provenanceAttributeKeys, ...provenanceEdgeKinds]);
+    return this.readSnapshot(
+      'provenance',
+      provenanceSql,
+      [...provenanceAttributeKeys, ...provenanceEdgeKinds],
+      decodeProvenance,
+    );
   }
 
   readNoteProvenance(noteIds: readonly string[]): Promise<unknown> {
-    return this.readSnapshot(noteProvenanceSql, [JSON.stringify(noteIds)]);
+    return this.readSnapshot(
+      'note-provenance',
+      noteProvenanceSql,
+      [JSON.stringify(noteIds)],
+      decodeProvenance,
+    );
   }
 
-  private async readSnapshot(sql: string, parameters: readonly string[]) {
+  /** One `mill weaver list` per workspace window; a failed read rediscovers on the next attempt. */
+  private databasePath(): Promise<string> {
+    if (this.discovered !== null && Date.now() < this.discoveredUntil)
+      return Promise.resolve(this.discovered);
+    if (this.discovery !== null) return this.discovery;
+    this.discovery = this.discover(this.workspace)
+      .then((path) => {
+        this.discovered = path;
+        this.discoveredUntil = Date.now() + discoveryLifetime;
+        return path;
+      })
+      .finally(() => {
+        this.discovery = null;
+      });
+    return this.discovery;
+  }
+
+  private async readSnapshot<T>(
+    label: string,
+    sql: string,
+    parameters: readonly string[],
+    decode: (value: unknown) => T,
+  ): Promise<T> {
+    const started = performance.now();
     let database: ReadonlyDatabase | null = null;
+    let rows = 0;
+    let discovered = started;
+    let queried = started;
+    let decoded = started;
+    let outcome = 'ok';
     try {
-      database = this.open(await this.discover(this.workspace));
+      database = this.open(await this.databasePath());
+      discovered = performance.now();
       database.configure();
       schemaVersionSchema.parse(database.schemaVersion());
-      return decodeProvenance(database.all(sql, parameters));
+      const result = database.all(sql, parameters);
+      rows = result.length;
+      queried = performance.now();
+      const snapshot = decode(result);
+      decoded = performance.now();
+      return snapshot;
     } catch (error) {
+      outcome = 'failed';
+      this.discovered = null;
       const message = error instanceof Error ? error.message : 'Unknown persisted read failure';
       throw new HttpError(502, `Provenance inspection failed: ${message.slice(0, 1500)}`);
     } finally {
       database?.close();
+      this.logger.record({
+        scope: 'sqlite',
+        target: label,
+        workspace: basename(dirname(this.workspace)),
+        ms: performance.now() - started,
+        detail: `rows=${rows} discover=${(discovered - started).toFixed(2)}ms query=${(queried - discovered).toFixed(2)}ms decode=${(decoded - queried).toFixed(2)}ms outcome=${outcome}`,
+      });
     }
   }
 }

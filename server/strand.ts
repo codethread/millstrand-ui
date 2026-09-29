@@ -14,6 +14,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { basename, dirname } from 'node:path';
 import { emptyProvenance, ProvenanceIndex } from './provenance.ts';
+import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
 import { parseAgentReply, parsePromptContext } from './agent-replies.ts';
 import type {
@@ -32,7 +33,6 @@ import {
   HttpError,
   object,
   parseCard,
-  parseBoardCards,
   parseGraph,
   parseNote,
   parseRelation,
@@ -43,6 +43,15 @@ import {
 
 const exec = promisify(execFile);
 const cacheLifetime = 3_000;
+const unsupportedReviewLifetime = 60_000;
+
+/** Stable command name for the profile log; arguments and payloads stay out of it. */
+function commandTarget(args: string[]): string {
+  const [command, subcommand] = args;
+  return subcommand !== undefined && /^[a-z-]+$/.test(subcommand)
+    ? `strand ${command} ${subcommand}`
+    : `strand ${command}`;
+}
 
 /** One shared in-flight request per key; refresh failures remain visible to callers. */
 class ReadCache<T> {
@@ -76,7 +85,14 @@ class ReadCache<T> {
   }
 }
 
+interface StrandDataOptions {
+  database?: PersistedWorkspaceReads;
+  logger?: PerfLogger;
+}
+
 export class StrandData {
+  private readonly database: PersistedWorkspaceReads;
+  private readonly logger: PerfLogger;
   private readonly provenanceReads = new ReadCache<ProvenanceIndex>();
   private readonly notes = new ReadCache<Note[]>();
   private readonly boards = new ReadCache<Board>();
@@ -88,33 +104,52 @@ export class StrandData {
 
   private readonly reviewDirectories = new ReadCache<ReviewDirectory>();
   private readonly reviewDetails = new ReadCache<ReviewDetail>();
+  private kanbanSupport: Promise<void> | null = null;
+  private unsupportedReviews: ReviewDirectory | null = null;
+  private unsupportedReviewsUntil = 0;
 
   constructor(
     readonly workspace: string,
-    private readonly database: PersistedWorkspaceReads = new WorkspaceDatabase(workspace),
-  ) {}
+    {
+      logger = nullPerfLogger,
+      database = new WorkspaceDatabase(workspace, { logger }),
+    }: StrandDataOptions = {},
+  ) {
+    this.database = database;
+    this.logger = logger;
+  }
 
   reviews(): Promise<ReviewDirectory> {
+    const unsupported = this.unsupportedReviews;
+    if (unsupported !== null && Date.now() < this.unsupportedReviewsUntil)
+      return Promise.resolve(unsupported);
     return this.reviewDirectories.get('reviews', async () => {
       try {
-        return {
+        const directory: ReviewDirectory = {
           kind: 'available',
           workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
           fetchedAt: new Date().toISOString(),
           reviews: parseReviewList(await this.run(['review', 'list', '--all'])),
         };
+        this.unsupportedReviews = null;
+        return directory;
       } catch (error) {
         if (
           error instanceof HttpError &&
           /unknown (operation|subcommand|command)|operation .*not found|no such (operation|command)/i.test(
             error.message,
           )
-        )
-          return {
+        ) {
+          // Workspaces without the review spool otherwise pay a failing CLI call every poll.
+          const directory: ReviewDirectory = {
             kind: 'unsupported',
             message:
               'Reviews are not available in this weaver. Load a spool that provides strand review list and strand review show.',
           };
+          this.unsupportedReviews = directory;
+          this.unsupportedReviewsUntil = Date.now() + unsupportedReviewLifetime;
+          return directory;
+        }
         throw error;
       }
     });
@@ -210,7 +245,24 @@ export class StrandData {
     return result;
   }
 
-  private async run(args: string[]): Promise<unknown> {
+  /**
+   * The spool owns kanban semantics; probing support once per workspace keeps every
+   * board read on the already-fetched persisted snapshot instead of a board CLI call.
+   * A failed probe (no kanban spool) retries, so enabling the spool is picked up.
+   */
+  private assertKanban(): Promise<void> {
+    this.kanbanSupport ??= this.execute(['help', 'kanban'])
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        this.kanbanSupport = null;
+        throw error;
+      });
+    return this.kanbanSupport;
+  }
+
+  private async execute(args: string[]): Promise<string> {
+    const started = performance.now();
+    let detail = '';
     try {
       const { stdout } = await exec('strand', ['--workspace', this.workspace, ...args], {
         cwd: dirname(this.workspace),
@@ -219,15 +271,29 @@ export class StrandData {
         encoding: 'utf8',
         env: { ...process.env, MILLSTRAND_ERROR_FORMAT: 'json' },
       });
-      return JSON.parse(stdout) as unknown;
+      detail = `bytes=${Buffer.byteLength(stdout)} outcome=ok`;
+      return stdout;
     } catch (error) {
-      const detail = error instanceof Error ? error.message : 'Unknown strand failure';
+      detail = 'outcome=failed';
+      const failure = error instanceof Error ? error.message : 'Unknown strand failure';
       const stderr =
         error instanceof Error && 'stderr' in error && typeof error.stderr === 'string'
           ? error.stderr
           : '';
-      throw strandCommandError(stderr, `Strand command failed: ${detail.slice(0, 1500)}`);
+      throw strandCommandError(stderr, `Strand command failed: ${failure.slice(0, 1500)}`);
+    } finally {
+      this.logger.record({
+        scope: 'strand',
+        target: commandTarget(args),
+        workspace: basename(dirname(this.workspace)),
+        ms: performance.now() - started,
+        detail,
+      });
     }
+  }
+
+  private async run(args: string[]): Promise<unknown> {
+    return JSON.parse(await this.execute(args)) as unknown;
   }
 
   provenance(): Promise<ProvenanceIndex> {
@@ -245,11 +311,14 @@ export class StrandData {
 
   board(): Promise<Board> {
     return this.boards.get('board', async () => {
-      const raw = object(await this.run(['kanban', 'board', '--all', 'true']), 'board');
-      // Read membership first. New cards wait for the next poll; cards deleted
-      // before hydration are omitted instead of failing the entire board.
+      await this.assertKanban();
       const provenance = await this.provenance();
-      const cards = parseBoardCards(raw['cards'], provenance.cardRows(), provenance);
+      const rows = provenance.cardRows();
+      if (rows.length > 10_000) throw new Error('Board exceeds the 10,000 card limit.');
+      const cards = sorted(
+        rows.map((row) => parseCard(row, provenance)),
+        (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+      );
       const counts = new Map<string, number>();
       for (const card of cards) {
         for (const label of card.labels) counts.set(label, (counts.get(label) ?? 0) + 1);
@@ -347,8 +416,11 @@ export class StrandData {
     });
   }
 
-  dependencies(): Promise<CardGraph> {
-    return this.dependencyGraphs.get('dependencies', () => this.database.readDependencies());
+  dependencies(cardIds: readonly string[] = []): Promise<CardGraph> {
+    const key = sorted(cardIds).join(',');
+    return this.dependencyGraphs.get(`dependencies:${key}`, () =>
+      this.database.readDependencies(cardIds),
+    );
   }
 
   graph(id: string): Promise<CardGraph> {

@@ -31,7 +31,7 @@ for those exceptions.
 
 | Home                                                                                                                                     | Owns / public entry points                                                                                                                                                                    |
 | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/lib/api/transport.ts`                                                                                                               | `request`: same-origin `/api`, workspace query parameter, HTTP errors, the documented endpoint-contract assertion at `response.json()`                                                        |
+| `src/lib/api/transport.ts`                                                                                                               | `request`: production transport; `createRequest(logger)`: isolated transport with no-op default; same-origin `/api`, workspace scoping and HTTP errors                                        |
 | `src/lib/api/query-client.ts`                                                                                                            | `createQueryClient`: one app client, query retry 1 and stale time 3s; mounted in `src/main.tsx`                                                                                               |
 | `src/lib/api/workspaces.ts`                                                                                                              | `workspaceQueryOptions`, `workspaceReaderOptions`, `useWorkspaces`: discovery/readers; `weaverMutationOptions`: confirmed lifecycle settlement                                                |
 | `src/lib/api/cards.ts`                                                                                                                   | `boardQueryOptions`, `cardQueryOptions`, `graphQueryOptions`, `dependencyQueryOptions`, `taskNotesQueryOptions`, `labelsMutationOptions`, `cardActionMutationOptions`                         |
@@ -53,7 +53,8 @@ for those exceptions.
 | `src/components/workspace-discovery.tsx`                                                                                                 | Single app-lifetime discovery poll owner, mounted in `src/main.tsx`                                                                                                                           |
 | `src/components/workspace-switcher.tsx`                                                                                                  | Working pilot: selected option and filtered options use `select`; separate discovery health reader; URL-owned switching                                                                       |
 | `src/lib/workspaces.ts`                                                                                                                  | Pure `selectedWorkspace` and `matchingWorkspaces` projections                                                                                                                                 |
-| `server/workspace-database.ts`, `server/provenance.ts`                                                                                   | Bounded read-only persisted graph selection; durable reporter/claim/note/run role projections and explicit attribution status                                                                 |
+| `server/workspace-storage.ts`, `server/workspace-database.ts`, `server/provenance.ts`                                                    | Bounded read-only persisted graph selection; durable reporter/claim/note/run role projections and explicit attribution status                                                                 |
+| `shared/perf.ts`, `server/perf.ts`, `src/lib/api/perf.ts`                                                                                | Injected `PerfLogger`, `nullPerfLogger`, `MemoryPerfLogger`; shared 5 ms/50 ms formatting; server file/console and browser console adapters                                                   |
 | `src/components/markdown.tsx`                                                                                                            | Shared page-independent Markdown leaf; no issue-detail dependency                                                                                                                             |
 | `src/components/agent-activity.tsx`, `agent-status.tsx`                                                                                  | Shared issue/task badge and run-status leaves; consumers never import the Agents page                                                                                                         |
 | `src/components/agent-directory.tsx`, `agent-detail.tsx`, `agent-run-history.tsx`, `agent-run-reply.tsx`                                 | Agent directory and selected identity/run presentation boundaries; `agents-view.tsx` is only the page entry                                                                                   |
@@ -68,7 +69,7 @@ for those exceptions.
 `shared/session-log.ts` define normalized UI contracts, **not client response
 schemas**. Named compiled Zod schemas remain in `server/parse.ts`, `agents.ts`,
 `agent-replies.ts`, `reviews.ts`, `review-comments.ts`, `card-actions.ts`,
-`workspaces.ts`, and `session-logs.ts`. Server saved views pass through the schemas
+`workspaces.ts`, `workspace-storage.ts`, and `session-logs.ts`. Server saved views pass through the schemas
 in `server/parse.ts` via `server/views.ts`. Preserve normalization, additive-field
 policy, and failures for malformed known fields when extending these boundaries.
 URL parsing belongs to `src/lib/dashboard-search.ts`; persisted review-draft
@@ -96,17 +97,19 @@ limitation and done-only outcome semantics.
 `Card.autoRun` is a nullable, normalized configuration/dispatcher snapshot parsed in
 `server/parse.ts`; it is not an agent lifecycle. Opt-in comes from the spool's
 `kanban.label/auto-run` string flag, and all `auto-run/*` values are read-only.
-The compact board CLI omits custom attributes, so `StrandData.board` reads its
-domain membership first, then hydrates persisted attributes through
-`server/workspace-database.ts`. The reader discovers the workspace's file-backed
-SQLite database from `mill weaver list`, opens it read-only with `query_only`, and
-requires the supported persisted schema version. Its bounded SQL projection selects
-up to 10,001 card rows so overflow fails instead of truncating, while retaining errors
-longer than the CLI's lean-string limit. The query tolerates IDs deleted between the
-membership and hydration reads. It selects only card metadata, label flags and known
-auto-run fields; large bodies and unrelated attributes never enter the server result.
-Deleted cards are omitted, and cards created after membership was read appear next
-poll. Reads stay in short autocommit transactions so they do not pin the WAL. Failures
+The board projection is built directly from the persisted snapshot: strands marked
+`kanban/card = "true"` supply membership, `kanban/lane`, `kanban/type`,
+`kanban/priority`, labels and known auto-run fields, and direct `parent-of` edges
+from epic cards supply `epicId` with the spool's last-edge annotation.
+`StrandData.board` probes `strand help kanban` once per workspace so a weaver without
+the spool still fails with the documented Kanban message, then reads every board
+poll from `server/workspace-database.ts`. The reader discovers the workspace's
+file-backed SQLite database from `mill weaver list`, caches the path for 30 seconds,
+opens it read-only with `query_only`, and requires the supported persisted schema
+version. Its bounded projection fails on more than 10,000 cards instead of
+truncating. It selects only card metadata, label flags and known auto-run fields;
+large bodies and unrelated attributes never enter the server result. Reads stay in
+short autocommit transactions so they do not pin the WAL. Failures
 remain visible with normal Query refresh-error retention. No per-card requests, new
 endpoints, query keys, or poll owners are added. Raw detail attributes remain available
 unchanged. `AutoRunSummary` and `AutoRunDetails` render this snapshot separately from
@@ -118,23 +121,23 @@ All paths below have `/api` prepended. `w` is a discovered workspace ID; `null`
 means the startup workspace and remains a distinct cache identity. IDs and workspace
 parameters are URI-encoded. The only global key is discovery. No key was renamed.
 
-| Key                          | GET endpoint                         | Interval        | Enablement / override                                                                           |
-| ---------------------------- | ------------------------------------ | --------------- | ----------------------------------------------------------------------------------------------- |
-| `['workspaces']`             | `/workspaces?refresh`                | 30s             | One app owner; readers disabled (no independent fetch policy)                                   |
-| `['board', w]`               | `/board`                             | 5s              | Always in workspace dashboard; overview only while discovered running                           |
-| `['agents', w]`              | `/agents`                            | 5s              | Workspace consumers; overview only while discovered running                                     |
-| `['agent-reply', w, id]`     | `/agent-runs/:id`                    | 5s when enabled | Explicit enabled; run details and proposals share these keys; terminal replies continue polling |
-| `['views', w]`               | `/views`                             | 15s             | Always in workspace dashboard                                                                   |
-| `['card', w, id]`            | `/cards/:id`                         | 5s              | While detail/inspector mounted                                                                  |
-| `['graph', w, id]`           | `/cards/:id/graph`                   | 10s             | `id !== null`                                                                                   |
-| `['dependencies', w]`        | `/dependencies`                      | 10s             | GraphView only while explicitly expanded; workspace-wide dependency endpoints                   |
-| `['card-notes', w, id]`      | `/cards/:id/notes`                   | 5s when enabled | IssueDetail Notes tab only; disabled fetching and interval while hidden                         |
-| `['notes', w, taskId]`       | `/cards/:cardId/tasks/:taskId/notes` | 5s when enabled | Expanded task only; existing key intentionally does not include cardId                          |
-| `['reviews', w]`             | `/reviews`                           | 5s              | Workspace consumers (including sidebar)                                                         |
-| `['review', w, id]`          | `/reviews/:id`                       | 5s              | Selected detail mounted                                                                         |
-| `['review-comments', w, id]` | `/reviews/:id/comments`              | 5s              | Selected comments mounted                                                                       |
-| `['log-activity', w]`        | `/log-activity`                      | 5s              | Overview or selected-workspace poll owner; bindings and latest-event summaries                  |
-| `['session-log', p, s]`      | `/session-logs/snapshot`             | none            | Disabled cache entry; the visible compact tail or expanded viewer writes SSE snapshots          |
+| Key                             | GET endpoint                         | Interval        | Enablement / override                                                                                               |
+| ------------------------------- | ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `['workspaces']`                | `/workspaces?refresh`                | 30s             | One app owner; readers disabled (no independent fetch policy)                                                       |
+| `['board', w]`                  | `/board`                             | 5s              | Always in workspace dashboard; overview only while discovered running                                               |
+| `['agents', w]`                 | `/agents`                            | 5s              | Workspace consumers; overview only while discovered running                                                         |
+| `['agent-reply', w, id]`        | `/agent-runs/:id`                    | 5s when enabled | Explicit enabled; run details and proposals share these keys; terminal replies continue polling                     |
+| `['views', w]`                  | `/views`                             | 15s             | Always in workspace dashboard                                                                                       |
+| `['card', w, id]`               | `/cards/:id`                         | 5s              | While detail/inspector mounted                                                                                      |
+| `['graph', w, id]`              | `/cards/:id/graph`                   | 10s             | `id !== null`                                                                                                       |
+| `['dependencies', w, ...cards]` | `/dependencies?card=...`             | 10s             | GraphView only while explicitly expanded; incident edges for the expanded cards with workspace-wide endpoint counts |
+| `['card-notes', w, id]`         | `/cards/:id/notes`                   | 5s when enabled | IssueDetail Notes tab only; disabled fetching and interval while hidden                                             |
+| `['notes', w, taskId]`          | `/cards/:cardId/tasks/:taskId/notes` | 5s when enabled | Expanded task only; existing key intentionally does not include cardId                                              |
+| `['reviews', w]`                | `/reviews`                           | 5s              | Workspace consumers (including sidebar)                                                                             |
+| `['review', w, id]`             | `/reviews/:id`                       | 5s              | Selected detail mounted                                                                                             |
+| `['review-comments', w, id]`    | `/reviews/:id/comments`              | 5s              | Selected comments mounted                                                                                           |
+| `['log-activity', w]`           | `/log-activity`                      | 5s              | Overview or selected-workspace poll owner; bindings and latest-event summaries                                      |
+| `['session-log', p, s]`         | `/session-logs/snapshot`             | none            | Disabled cache entry; the visible compact tail or expanded viewer writes SSE snapshots                              |
 
 Unless listed, queries inherit retry 1, stale time 3s, structural sharing and Query's
 mount/focus/reconnect defaults. Poll intervals do not imply background-tab polling.
@@ -359,13 +362,16 @@ controllers remain in `use-cards.ts`, with cache settlement in `api/cards.ts`.
 
 ### Explicit dependency exploration
 
-`GraphView` deliberately owns the expansion-lifetime `['dependencies', workspace]`
-poll via `src/hooks/use-graph.ts`, in addition to the existing focused subtree poll.
-`dependencyLayout` in `src/lib/graph.ts` selects only requested one-hop incident
+`GraphView` deliberately owns the expansion-lifetime
+`['dependencies', workspace, ...expandedCards]` poll via `src/hooks/use-graph.ts`, in
+addition to the existing focused subtree poll. `dependencyLayout` in
+`src/lib/graph.ts` selects only requested one-hop incident
 edges, retaining closed neighbours, and decorates nodes with hierarchy/added/focus
-roles. Counts arrive in existing board and subtree responses; no dependency request
-or timer runs until an expansion is selected. The server coalesces concurrent
-dependency reads in its short-lived read cache, cleared on card mutation settlement.
+roles. The server scopes the persisted read to those same cards and returns
+workspace-wide incoming/outgoing counts for the endpoints, so neighbour badges stay
+truthful; no dependency request or timer runs until an expansion is selected. The
+server coalesces concurrent dependency reads per scope in its short-lived read
+cache, cleared on card mutation settlement.
 Graph menu actions are URL navigation, not data mutations or local copies. See
 `docs/graph.md` for the expansion contract and browser evidence.
 
@@ -411,6 +417,10 @@ pre-invalidation loads from
 repopulating cleared caches.
 
 The shared provenance SQL has no arbitrary strand-count cutoff and excludes notes.
+Its database path is discovered once per 30-second window and cached, so a polling
+reader does not spawn `mill weaver list` on every read; a failed read rediscovers
+immediately. The projection is unordered and bounded: consumers sort what they
+render.
 Note and latest-note readers request attribution metadata only for the note IDs they
 actually received; note text/time/kind still comes from the domain command and never
 enters persisted provenance. The role-edge read remains bounded and fails rather

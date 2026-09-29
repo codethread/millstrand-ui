@@ -1,11 +1,108 @@
 # Dashboard read audit
 
+## 2026-09-27 request budget audit
+
+Measured against live `agents`, `millhouse`, `millstrand-ui`, `notes` and
+`skein-src` workspaces on a busy local machine. Values are local samples with
+visible variance, not latency guarantees.
+
+### Request budget instrumentation
+
+Every request is timed against a 5 ms warning and 50 ms slow budget in
+`shared/perf.ts`. `server/perf.ts` appends one line per sample to
+`~/.local/state/millstrand-ui/perf.log` (override with `MILLSTRAND_UI_PERF_LOG`,
+rotated at 5 MiB) and repeats warning tiers on the console; browser fetches use
+the same format through `src/lib/api/perf.ts`. Samples cover HTTP routes (status
+and response bytes), `strand` CLI calls, `mill weaver list` discovery, persisted
+SQLite reads (row count plus discover/query/decode split) and session-log
+snapshots. Deliberately long weaver lifecycle calls are marked expected; an SSE
+stream is measured through setup only.
+
+Logging is an instance dependency: the shared `PerfLogger` contract has just
+`record(measurement)`. Server library constructors accept `{ logger }` and default
+to `nullPerfLogger` (no files or console output). `server/index.ts` creates the
+file adapter and passes it through discovery, workspace clients, database reads
+and session logs; there is no mutable global sink. Only output adapters add
+wall-clock timestamps.
+
+Tests that need logging assertions pass `new MemoryPerfLogger()` and inspect its
+`samples`; ordinary tests omit the logger. Browser transport tests use
+`createRequest()` (silent) or `createRequest(logger)` (capture), while the exported
+production `request` uses the console adapter. Only the file-adapter tests write
+perf logs to temporary directories; consumers need no logger mocks or cleanup.
+
+The 2026-09-28 DI follow-up passes `pnpm quality` (369 tests). A production-server
+browser smoke exercised board search, card selection/Notes, Graph and a 390×844
+layout against the real UI workspace; all five server scopes and browser fetch
+samples still reached their configured adapters, with no uncaught browser errors.
+
+### Findings and changes
+
+- The board poll ran `strand kanban board --all true` and then hydrated the same
+  persisted attributes (69 ms on agents, 163 ms on millstrand-ui, 493 ms on
+  millhouse, 796 ms on skein-src). `StrandData.board` now builds membership,
+  attributes and epic annotation from the persisted snapshot; its one
+  `strand help kanban` capability probe per workspace keeps the non-Kanban error
+  visible. Direct comparison matched the spool board exactly on all five live
+  workspaces (15 / 159 / 83 / 5 / 944 card ids and every epic annotation).
+- Every persisted read re-ran `mill weaver list` (8–25 ms). `WorkspaceDatabase`
+  now caches the discovered database path for 30 s per workspace and coalesces
+  concurrent discovery; a failed read rediscovers immediately.
+- The provenance edge projection built a temporary B-tree for an order no
+  consumer needs; it is gone.
+- `/api/dependencies` serialized the whole workspace graph (up to 5,045 KB and
+  199 ms on skein-src) while `dependencyLayout` only used one-hop edges of the
+  expanded cards. The endpoint now takes bounded `card` parameters, selects only
+  incident `depends-on` edges, and keeps workspace-wide incoming/outgoing counts
+  for the returned endpoints in the same read.
+- Workspaces without the review spool paid a failing `strand review list` every
+  poll (62–154 ms). The unsupported answer is now retained for 60 s.
+
+### Measurements
+
+| Read                                     | Before                   | After (warm samples)          |
+| ---------------------------------------- | ------------------------ | ----------------------------- |
+| agents board poll                        | 69 ms CLI + 20 ms SQL    | ~5–30 ms SQL, one 28 ms probe |
+| millhouse board poll                     | 493 ms CLI + 53 ms SQL   | ~30–55 ms SQL                 |
+| skein-src board poll                     | 796 ms CLI + 128 ms SQL  | ~110–160 ms SQL               |
+| `mill weaver list` per persisted read    | 8–25 ms                  | ~0.1 ms cached (30 s)         |
+| `/api/dependencies` skein-src (one card) | 5,046,755 bytes / 199 ms | 648 bytes / 3 ms              |
+| unsupported `/api/reviews` poll          | 62–154 ms CLI            | cached answer (<1 ms)         |
+
+### Remaining costs
+
+The board remains above the 50 ms budget on millhouse and skein-src because the
+shared provenance snapshot covers every card, task, identity, claim and run in
+one read. `depends-on` edges stay in that snapshot: a per-endpoint count record
+cost as much as the edges it replaced (26,118 to 27,136 rows on skein-src), so
+the edges remain the cheaper projection.
+
+The remaining >50 ms calls are domain commands fetched only for a selected card:
+`kanban card` (~20–87 ms), `notes` (~15–66 ms) and `kanban-export` (~18–79 ms),
+plus the one-time `help kanban` probe (15–70 ms per workspace and process).
+Replacing them with SQL would duplicate spool task, readiness and relation rules,
+so they stay command-owned.
+
+### Verification
+
+`pnpm quality`: formatting, zero-warning type-aware Oxlint, strict TypeScript,
+366 tests and the production build pass. The board rewrite was compared directly
+against `strand kanban board --all true` on all five live workspaces; membership
+and every epic annotation matched (15 / 159 / 83 / 5 / 944 cards). Browser checks
+on live skein-src at 1440×1000 and 390×844: the board renders lanes, labels,
+owners, auto-run and dependency counts; card detail and Notes render; Graph
+expands `jxjwf` with one 729-byte scoped dependency read; the narrow layout stacks
+without losing controls. The browser console showed only the expected client perf
+tiers and no uncaught errors.
+
+## 2026-09-21 audit (historical)
+
 Measured on 2026-09-21 against live Codethread and Millstrand UI workspaces.
 All measurements used read-only SQLite connections or GET endpoints; no workspace
 fixtures, mutations, or weaver restarts were needed. Values are local samples, not
 latency guarantees. Direct SQL samples used one warm-up and three measured reads.
 
-## Findings and changes
+### Findings and changes
 
 - Board, agents, and log activity independently hydrated the same persisted graph.
   Log activity even created a new database client each request. They now share one
@@ -25,7 +122,7 @@ latency guarantees. Direct SQL samples used one warm-up and three measured reads
   board/agent/review/view/log poll owners remain unchanged: their consumers include
   sidebar counts, badges and activity hints across page modes.
 
-## Measurements
+### Measurements
 
 These figures are the original 2026-09-21 audit results. They predate the later
 removal of note strands from shared provenance and are retained as historical
@@ -49,7 +146,7 @@ samples were contaminated by normal browser polling and are not presented as col
 speedups. The UI database changed by two strands/edges between samples; Codethread
 row counts were unchanged. Dependency SQL and its bounds were unchanged.
 
-## Verification
+### Verification
 
 `pnpm quality`: 386 tests, formatting, strict TypeScript, zero-warning Oxlint and
 production build pass (existing large-bundle advisory remains). Tests protect

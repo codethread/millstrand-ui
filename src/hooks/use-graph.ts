@@ -24,6 +24,6 @@ export function useGraphSource(root: string | null, cards: Card[], allCards: Car
 }
 
 /** The graph owns dependency polling only while explicit expansions are present. */
-export function useDependencies(enabled: boolean) {
-  return useQuery(dependencyQueryOptions(useWorkspace(), enabled));
+export function useDependencies(expanded: string[]) {
+  return useQuery(dependencyQueryOptions(useWorkspace(), expanded));
 }

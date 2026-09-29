@@ -97,7 +97,6 @@ const cardSchema = z
     attributes: jsonObjectSchema.optional(),
     lane: z.string().nullable().optional(),
     labels: z.array(z.string()).optional(),
-    epic: z.string().optional(),
     type: cardTypeSchema.optional(),
     priority: prioritySchema.optional(),
     branch: z.string().optional(),
@@ -165,6 +164,7 @@ const compiledLabelSchema = z.compile(labelSchema, { strict: true });
 export interface AttributionProjection {
   dependencies(id: string): DependencyCounts;
   ownership(target: string): CardOwnership;
+  epicId(cardId: string): string | null;
   reporter(cardId: string): IdentityAttribution | null;
   noteActor(noteId: string): IdentityAttribution | null;
   taskOwnership(taskId: string): TaskOwnership | null;
@@ -274,27 +274,7 @@ function parseAutoRun(attrs: ObjectValue, labels: string[]): AutoRun | null {
   return Object.values(autoRun).some((value) => value !== null && value !== false) ? autoRun : null;
 }
 
-/** The compact board supplies membership; raw cards supply attributes it omits. */
-export function parseBoardCards(
-  compact: unknown,
-  raw: unknown,
-  provenance: AttributionProjection,
-): Card[] {
-  const rows = array(raw, 'board card attributes');
-  if (rows.length > 10_000) throw new Error('Board exceeds the 10,000 card attribute limit.');
-  const cards = new Map(
-    rows.map((row) => {
-      const card = parseCard(row, provenance);
-      return [card.id, card];
-    }),
-  );
-  return array(compact, 'board.cards').flatMap((row) => {
-    const membership = parseCard(row, provenance);
-    const card = cards.get(membership.id);
-    return card ? [{ ...card, epicId: membership.epicId }] : [];
-  });
-}
-
+/** Attribute-hydrated projection from the persisted snapshot; the board reads cards directly. */
 export function parseCard(value: unknown, provenance: AttributionProjection): Card {
   const row = parseSchema(compiledCardSchema, value, 'card');
   const attrs = row.attributes === undefined ? {} : jsonObject(row.attributes, 'card.attributes');
@@ -327,7 +307,7 @@ export function parseCard(value: unknown, provenance: AttributionProjection): Ca
       priorities,
       'card.priority',
     ),
-    epicId: row.epic ?? null,
+    epicId: provenance.epicId(row.id),
     dependencies: provenance.dependencies(row.id),
     owner: ownership.current?.owner.identity ?? null,
     reporter: provenance.reporter(row.id),
@@ -445,6 +425,16 @@ export function parseLabelChange(value: unknown): LabelChange {
   if (labels.length === 0 || labels.length > 100)
     throw new Error('Supply between 1 and 100 labels.');
   return { action: row.action, labels };
+}
+
+/** Bounded expanded-card scope for the dependency graph read. */
+export function parseDependencyCards(values: readonly string[]): string[] {
+  const cards = [...new Set(values)];
+  if (cards.length > 150) throw new HttpError(400, 'A dependency read accepts at most 150 cards.');
+  for (const card of cards)
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(card))
+      throw new HttpError(400, 'Dependency card IDs must be short strand IDs.');
+  return cards;
 }
 
 function parseFilter(value: unknown): ViewFilter {

@@ -24,7 +24,7 @@ export default function GraphView({ cards, allCards }: { cards: Card[]; allCards
   const filter = useIssueFilter();
   const showTasks = useGraphShowTasks();
   const expanded = useGraphDependencies();
-  const dependencies = useDependencies(expanded.length > 0);
+  const dependencies = useDependencies(expanded);
   const dependencyGraph = expanded.length > 0 ? (dependencies.data ?? null) : null;
   const {
     setGraphRoot,

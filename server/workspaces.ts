@@ -6,6 +6,7 @@ import type { WeaverOperation, WorkspaceOption } from '../shared/api.ts';
 import { sorted } from '../shared/array.ts';
 import { z } from 'zod';
 import { HttpError } from './parse.ts';
+import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 import { StrandData } from './strand.ts';
 import { ViewStore } from './views.ts';
 
@@ -59,12 +60,22 @@ interface WorkspaceClients {
 
 type DiscoverWorkspaces = () => Promise<WorkspaceOption[]>;
 
-async function discoverWorkspaces(defaultPath: string): Promise<WorkspaceOption[]> {
+async function discoverWorkspaces(
+  defaultPath: string,
+  logger: PerfLogger,
+): Promise<WorkspaceOption[]> {
   try {
+    const started = performance.now();
     const { stdout } = await exec('mill', ['weaver', 'list'], {
       encoding: 'utf8',
       timeout: 10_000,
       maxBuffer: 4 * 1024 * 1024,
+    });
+    logger.record({
+      scope: 'mill',
+      target: 'weaver list (discovery)',
+      ms: performance.now() - started,
+      detail: `bytes=${Buffer.byteLength(stdout)}`,
     });
     return parseWorkspaces(JSON.parse(stdout) as unknown, defaultPath);
   } catch (error) {
@@ -88,7 +99,16 @@ async function runWeaver(operation: WeaverOperation, path: string): Promise<void
   });
 }
 
+interface WorkspaceDirectoryOptions {
+  discover?: DiscoverWorkspaces;
+  run?: typeof runWeaver;
+  logger?: PerfLogger;
+}
+
 export class WorkspaceDirectory {
+  private readonly discover: DiscoverWorkspaces;
+  private readonly run: typeof runWeaver;
+  private readonly logger: PerfLogger;
   private readonly clients = new Map<string, WorkspaceClients>();
   private snapshot: WorkspaceOption[] | null = null;
   private validUntil = 0;
@@ -96,9 +116,16 @@ export class WorkspaceDirectory {
 
   constructor(
     private readonly defaultPath: string,
-    private readonly discover: DiscoverWorkspaces = () => discoverWorkspaces(defaultPath),
-    private readonly run: typeof runWeaver = runWeaver,
-  ) {}
+    {
+      logger = nullPerfLogger,
+      discover = () => discoverWorkspaces(defaultPath, logger),
+      run = runWeaver,
+    }: WorkspaceDirectoryOptions = {},
+  ) {
+    this.discover = discover;
+    this.run = run;
+    this.logger = logger;
+  }
 
   async list(force = false): Promise<WorkspaceOption[]> {
     if (!force && this.snapshot !== null && Date.now() < this.validUntil) return this.snapshot;
@@ -142,7 +169,11 @@ export class WorkspaceDirectory {
     }
     let selected = this.clients.get(path);
     if (selected === undefined) {
-      selected = { path, strand: new StrandData(path), views: new ViewStore(path) };
+      selected = {
+        path,
+        strand: new StrandData(path, { logger: this.logger }),
+        views: new ViewStore(path),
+      };
       this.clients.set(path, selected);
     }
     return selected;

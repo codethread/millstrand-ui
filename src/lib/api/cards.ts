@@ -7,6 +7,7 @@ import type {
   LabelChange,
   Note,
 } from '../../../shared/api';
+import { sorted } from '../../../shared/array';
 import { request } from './transport';
 
 export function boardQueryOptions(workspace: string | null) {
@@ -45,12 +46,14 @@ export function graphQueryOptions(workspace: string | null, id: string | null) {
 }
 
 /** GraphView owns expansion polling, only while at least one card is expanded. */
-export function dependencyQueryOptions(workspace: string | null, enabled: boolean) {
+export function dependencyQueryOptions(workspace: string | null, expandedIds: readonly string[]) {
+  const cards = sorted(expandedIds);
+  const scope = cards.map((id) => `card=${encodeURIComponent(id)}`).join('&');
   return queryOptions({
-    queryKey: ['dependencies', workspace],
-    queryFn: () => request<CardGraph>('/dependencies', workspace),
-    enabled,
-    refetchInterval: enabled ? 10000 : false,
+    queryKey: ['dependencies', workspace, ...cards],
+    queryFn: () => request<CardGraph>(`/dependencies?${scope}`, workspace),
+    enabled: cards.length > 0,
+    refetchInterval: cards.length > 0 ? 10000 : false,
   });
 }
 
