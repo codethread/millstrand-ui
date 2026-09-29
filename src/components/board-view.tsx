@@ -57,10 +57,8 @@ function CardMetadata({ card, outline }: { card: Card; outline: boolean }) {
     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
       {outline && <StatusBadge status={card.lane} />}
       <CardSignals card={card} />
-      <span
-        className={`priority priority-${card.priority}`}
-        aria-label={`Priority ${card.priority}`}
-      >
+      <span className={`priority priority-${card.priority}`}>
+        <span className="sr-only">Priority </span>
         {card.priority.toUpperCase()}
       </span>
       <div className="ml-auto flex items-center">
@@ -149,11 +147,9 @@ function EpicHeading({ card, count, context }: { card: Card; count: number; cont
             <h2 className="min-w-0 flex-1">
               <CardTitle card={card} />
             </h2>
-            <span
-              className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground"
-              aria-label={`${count} matching features`}
-            >
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
               {count}
+              <span className="sr-only"> matching features</span>
             </span>
           </div>
           {context && (

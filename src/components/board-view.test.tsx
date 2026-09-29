@@ -76,6 +76,8 @@ it.each([false, true])(
     expect(html).toContain('Auto on details');
     expect(html).toContain('Dependencies: depends on 0, required by 0');
     expect(html).not.toMatch(/No activity|Auto off|Activity loading/);
+    expect(html).toContain('Priority ');
+    expect(html).not.toMatch(/<span[^>]*aria-label=/);
   },
 );
 

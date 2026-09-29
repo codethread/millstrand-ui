@@ -28,8 +28,8 @@ export type RelevantAgentActivity =
 /** A terminal owner must not hide explicitly targeted work; failures stay visible. */
 export function agentActivitySignal(activity: RelevantAgentActivity[]) {
   const order: RelevantAgentActivity['label'][] = [
-    'Stopping',
     'Failed',
+    'Stopping',
     'Working',
     'Queued',
     'Session running',

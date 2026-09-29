@@ -210,6 +210,10 @@ it('summarizes explicit working activity ahead of a completed owner, without hid
   expect(
     agentActivitySignal(relevantAgentActivity([failed], [worker], failed.id, 'card1')),
   ).toMatchObject({ label: 'Failed', error: true });
+  const stopping = { ...worker, substatus: 'requested' };
+  expect(
+    agentActivitySignal(relevantAgentActivity([failed], [stopping], failed.id, 'card1')),
+  ).toEqual({ label: 'Failed', error: true, active: false });
   expect(agentActivitySignal([])).toBeNull();
   expect(
     agentActivitySignal(relevantAgentActivity([identity([run()])], [], owner.id, 'card1')),
