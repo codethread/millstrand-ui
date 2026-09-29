@@ -1,164 +1,192 @@
-import { CardDependencyCounts } from './dependency-counts';
-import { ArrowUpRight, Inbox, Layers } from 'lucide-react';
+import { Inbox, Layers } from 'lucide-react';
+import type { Card } from '../../shared/api';
 import type { BoardCard, BoardColumn, OutlineGroup } from '../lib/board';
-import { useDashboardActions } from '../lib/navigation';
-import { IssueAgents } from './agent-activity';
-import { AutoRunSummary } from './auto-run';
-import { LabelPill, StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
+import { labelColor } from '../lib/board';
+import { useDashboardActions, useIssueFilter } from '../lib/navigation';
+import { cn } from '../lib/utils';
+import { CardDependencyCounts } from './dependency-counts';
+import { CardSignals } from './card-signals';
+import { StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { CardContextMenu, CardMenuButton } from './card-actions';
-import { CardOwnerSummary } from './card-provenance';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
-function IssueCard({ card, parent: epic }: BoardCard) {
-  const { openCard } = useDashboardActions();
+function BoardLabels({ labels }: { labels: string[] }) {
+  const { toggleLabel } = useDashboardActions();
+  const filter = useIssueFilter();
   return (
-    <CardContextMenu card={card}>
-      <article className="issue-card group">
+    <div className="flex min-w-0 flex-wrap gap-1">
+      {labels.map((label) => (
         <button
-          className="flex w-full flex-col gap-[13px] text-left"
-          onClick={() => openCard(card.id)}
-          aria-label={`Open ${card.title}`}
+          key={label}
+          type="button"
+          aria-label={`Filter by label ${label}`}
+          aria-pressed={filter.terms[label] === 'include'}
+          onClick={() => toggleLabel(label)}
+          className={cn(
+            'max-w-full rounded border border-transparent px-1.5 py-0.5 text-left text-[11px] leading-4 [overflow-wrap:anywhere] hover:border-current aria-pressed:border-current max-sm:min-h-8',
+            `label-${labelColor(label)}`,
+          )}
         >
-          <div className="flex items-center justify-between gap-2">
-            <span className="flex items-center gap-2">
-              <TypeIcon type={card.type} />
-              <span className="issue-id">{card.id}</span>
-            </span>
-            <span
-              className={`priority priority-${card.priority}`}
-              title={`Priority ${card.priority.toUpperCase()}`}
-            >
-              <span>▰</span> {card.priority.toUpperCase()}
-            </span>
-          </div>
-          <h3>{card.title}</h3>
-          {epic && (
-            <div className="card-epic">
-              <Layers className="size-3" />
-              <span>{epic.title}</span>
-            </div>
-          )}
-          {card.labels.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {card.labels.map((label) => (
-                <LabelPill key={label} label={label} />
-              ))}
-            </div>
-          )}
-          <AutoRunSummary autoRun={card.autoRun} />
-          <CardOwnerSummary card={card} />
-          <ArrowUpRight className="card-open-icon" />
+          {label}
         </button>
-        <div className="card-footer flex-col! items-stretch!">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <IssueAgents owner={card.owner} target={card.id} />
-            <CardDependencyCounts counts={card.dependencies} />
-            <CardMenuButton card={card} />
-          </div>
-        </div>
-      </article>
-    </CardContextMenu>
+      ))}
+    </div>
   );
 }
 
-export function BoardView({ columns }: { columns: BoardColumn[] }) {
+function CardTitle({ card }: { card: Card }) {
+  const { openCard } = useDashboardActions();
   return (
-    <div className="board-canvas">
-      <div className="board-columns">
-        {columns.map(({ lane, items }) => {
-          return (
-            <section
-              className={`board-column lane-${lane.id}`}
-              key={lane.id}
-              aria-label={lane.title}
-            >
-              <div className="column-heading">
-                <StatusIcon status={lane.id} />
-                <h2>{lane.title}</h2>
-                <span className="column-count">{items.length}</span>
-              </div>
-              <p className="column-description">{lane.description}</p>
-              <div className="column-cards">
-                {items.map(({ card, parent }) => (
-                  <IssueCard key={card.id} card={card} parent={parent} />
-                ))}
-                {items.length === 0 && (
-                  <div className="empty-lane">
-                    <span className="empty-lane-mark" />
-                    <span>No issues here</span>
-                  </div>
-                )}
-              </div>
-            </section>
-          );
-        })}
+    <button
+      className="flex min-h-7 w-full items-baseline gap-2 text-left text-[13px] leading-snug font-medium hover:text-primary"
+      onClick={() => openCard(card.id)}
+      aria-label={`Open ${card.title}`}
+    >
+      <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[10px] font-normal text-muted-foreground">
+        <TypeIcon type={card.type} />
+        {card.id}
+      </span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{card.title}</span>
+    </button>
+  );
+}
+
+function CardMetadata({ card, outline }: { card: Card; outline: boolean }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+      {outline && <StatusBadge status={card.lane} />}
+      <CardSignals card={card} />
+      <span className={`priority priority-${card.priority}`}>
+        <span className="sr-only">Priority </span>
+        {card.priority.toUpperCase()}
+      </span>
+      <div className="ml-auto flex items-center">
+        <CardDependencyCounts counts={card.dependencies} />
+        <CardMenuButton card={card} />
       </div>
     </div>
   );
 }
 
-export function OutlineView({ groups }: { groups: OutlineGroup[] }) {
-  const { openCard, exploreGraph } = useDashboardActions();
+function IssueCard({ card, parent, outline = false }: BoardCard & { outline?: boolean }) {
+  const { openCard } = useDashboardActions();
   return (
-    <div className="outline-canvas">
-      {groups.map((group) => (
-        <section key={group.parent?.id ?? 'standalone'} className="outline-group">
-          <div className="outline-group-heading">
-            <Layers className="size-4 text-violet-500" />
-            {group.parent ? (
-              <button onClick={() => openCard(group.parent!.id)}>{group.parent.title}</button>
-            ) : (
-              <h2>Standalone work</h2>
-            )}
-            <span className="column-count">{group.cards.length}</span>
-            {group.context && <span className="text-xs text-muted-foreground">Parent context</span>}
-            {group.parent && <CardDependencyCounts counts={group.parent.dependencies} />}
-            {group.parent && <CardMenuButton card={group.parent} />}
-            {group.parent && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto"
-                onClick={() => exploreGraph(group.parent!.id)}
+    <CardContextMenu card={card}>
+      <article
+        data-card={card.id}
+        className={cn(
+          'min-w-0 bg-card hover:bg-accent/20',
+          outline
+            ? 'grid items-center gap-x-4 gap-y-1 border-b border-border px-3 py-2 last:border-b-0 @3xl:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]'
+            : 'rounded-lg border border-border p-3',
+        )}
+      >
+        <div className="min-w-0 space-y-1">
+          <h3>
+            <CardTitle card={card} />
+          </h3>
+          {card.labels.length > 0 && <BoardLabels labels={card.labels} />}
+        </div>
+        <div className={cn(!outline && 'mt-2')}>
+          <CardMetadata card={card} outline={outline} />
+        </div>
+        {parent && !outline && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="mt-1 min-h-6 text-left text-[11px] text-muted-foreground hover:text-primary"
+                aria-label={`Open epic ${parent.title}`}
+                onClick={() => openCard(parent.id)}
               >
-                Explore graph <ArrowUpRight />
-              </Button>
-            )}
+                ↳ Epic {parent.id}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>{parent.title}</TooltipContent>
+          </Tooltip>
+        )}
+      </article>
+    </CardContextMenu>
+  );
+}
+
+const canvasClass =
+  '@container flex-1 min-h-0 overflow-auto border-t border-border bg-muted/30 px-3 pb-6 pt-12 sm:px-5';
+
+export function BoardView({ columns }: { columns: BoardColumn[] }) {
+  return (
+    <div className={canvasClass}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,230px),1fr))] items-start gap-3">
+        {columns.map(({ lane, items }) => (
+          <section className="min-w-0" key={lane.id} aria-label={lane.title}>
+            <div className="mb-3 flex items-center gap-2 px-1">
+              <StatusIcon status={lane.id} />
+              <h2 className="text-xs font-semibold">{lane.title}</h2>
+              <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                {items.length}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {items.map(({ card, parent }) => (
+                <IssueCard key={card.id} card={card} parent={parent} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EpicHeading({ card, count, context }: { card: Card; count: number; context: boolean }) {
+  return (
+    <CardContextMenu card={card}>
+      <div className="grid items-center gap-x-4 gap-y-1 border-b border-border bg-accent/40 px-3 py-2 @3xl:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]">
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-start gap-2">
+            <h2 className="min-w-0 flex-1">
+              <CardTitle card={card} />
+            </h2>
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              {count}
+              <span className="sr-only"> matching features</span>
+            </span>
           </div>
+          {context && (
+            <p className="text-xs text-muted-foreground">
+              Parent context · outside current filters
+            </p>
+          )}
+          {card.labels.length > 0 && <BoardLabels labels={card.labels} />}
+        </div>
+        <CardMetadata card={card} outline />
+      </div>
+    </CardContextMenu>
+  );
+}
+
+export function OutlineView({ groups }: { groups: OutlineGroup[] }) {
+  return (
+    <div className={cn(canvasClass, 'space-y-4')}>
+      {groups.map((group) => (
+        <section
+          key={group.parent?.id ?? 'standalone'}
+          className="overflow-hidden rounded-lg border border-border bg-card"
+        >
+          {group.parent ? (
+            <EpicHeading card={group.parent} count={group.cards.length} context={group.context} />
+          ) : (
+            <h2 className="flex items-center gap-2 border-b border-border bg-accent/40 px-3 py-3 text-xs font-semibold">
+              <Layers className="size-4 text-primary" />
+              Standalone work
+              <span className="font-normal text-muted-foreground">{group.cards.length}</span>
+            </h2>
+          )}
           {group.cards.map((card) => (
-            <CardContextMenu key={card.id} card={card}>
-              <div
-                className="flex flex-wrap items-center border-b border-border pr-3 last:border-b-0"
-                key={card.id}
-              >
-                <button
-                  className="outline-row flex-1 border-b-0!"
-                  onClick={() => openCard(card.id)}
-                >
-                  <StatusIcon status={card.lane} />
-                  <span className="issue-id">{card.id}</span>
-                  <span className="outline-title">{card.title}</span>
-                  <div className="outline-labels">
-                    {card.labels.map((label) => (
-                      <LabelPill label={label} key={label} />
-                    ))}
-                  </div>
-                  <StatusBadge status={card.lane} />
-                  <CardOwnerSummary card={card} />
-                  <span className={`priority priority-${card.priority}`}>
-                    {card.priority.toUpperCase()}
-                  </span>
-                </button>
-                <CardDependencyCounts counts={card.dependencies} />
-                <CardMenuButton card={card} />
-                <div className="min-w-0 max-w-full px-3 pb-2">
-                  <IssueAgents owner={card.owner} target={card.id} />
-                </div>
-              </div>
-            </CardContextMenu>
+            <IssueCard key={card.id} card={card} parent={null} outline />
           ))}
           {group.cards.length === 0 && (
-            <p className="px-5 py-6 text-sm text-muted-foreground">
+            <p className="px-3 py-5 text-sm text-muted-foreground">
               No matching features in this epic.
             </p>
           )}

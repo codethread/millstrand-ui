@@ -1,4 +1,4 @@
-import type { Board, Card, Lane, SavedView, ViewFilter } from '../../shared/api';
+import type { AutoRun, Board, Card, Lane, SavedView, ViewFilter } from '../../shared/api';
 import { sorted } from '../../shared/array';
 
 export const lanes: { id: Lane; title: string; description: string }[] = [
@@ -15,12 +15,33 @@ export const lanes: { id: Lane; title: string; description: string }[] = [
   { id: 'unknown', title: 'Other', description: 'Outside the usual lanes' },
 ];
 
-export function selectBoardLanes(cards: Card[], includeClosed: boolean) {
-  return lanes.filter((lane) => {
-    if (lane.id === 'in_production' || lane.id === 'unknown')
-      return cards.some((card) => card.lane === lane.id);
-    return lane.id !== 'closed' || includeClosed;
-  });
+/** Attention-first active work; completed and unusual states remain at the end.
+ * Empty lanes consume no space. Menus/filters retain the full delivery order above. */
+export function selectBoardLanes(cards: Card[]) {
+  const order: Lane[] = [
+    'in_review',
+    'in_production',
+    'claimed',
+    'pending',
+    'refinement',
+    'closed',
+    'unknown',
+  ];
+  return sorted(
+    lanes.filter((lane) => cards.some((card) => card.lane === lane.id)),
+    (a, b) => order.indexOf(a.id) - order.indexOf(b.id),
+  );
+}
+
+export function autoRunSignal(auto: AutoRun | null): string | null {
+  if (auto === null) return null;
+  if (auto.status === 'error') return 'Auto error';
+  if (!auto.optedIn) return null;
+  return auto.status === 'assigned'
+    ? 'Auto assigned'
+    : auto.status === 'preparing'
+      ? 'Auto preparing'
+      : 'Auto on';
 }
 
 export function emptyFilter(): ViewFilter {
@@ -147,7 +168,7 @@ export interface BoardColumn {
 export function issueSurfaceContent(allCards: Card[], filter: ViewFilter): IssueBoardContent {
   const cards = selectCards(allCards, filter);
   const parents = new Map(allCards.map((card) => [card.id, card]));
-  const columns = selectBoardLanes(cards, filter.includeClosed).map((lane) => ({
+  const columns = selectBoardLanes(cards).map((lane) => ({
     lane,
     items: cards
       .filter((card) => card.lane === lane.id)

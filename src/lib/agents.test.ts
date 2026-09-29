@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentIdentity, AgentRun } from '../../shared/api';
 import {
+  agentActivitySignal,
   agentIsActive,
   agentRunIdentities,
   currentRun,
@@ -193,4 +194,28 @@ describe('identity discovery', () => {
     expect(selectAgents(agents, 'oracle', true)).toEqual([]);
     expect(selectAgents(agents, 'Work', false)).toEqual([]);
   });
+});
+
+it('summarizes explicit working activity ahead of a completed owner, without hiding failures', () => {
+  const owner = identity([run({ status: 'stopped', substatus: 'completed' })]);
+  const worker = run({ id: 'worker', target: 'card1' });
+  const activity = relevantAgentActivity([owner], [worker], owner.id, 'card1');
+  expect(agentActivitySignal(activity)).toEqual({ label: 'Working', active: true, error: false });
+  expect(agentActivitySignal([...activity, ...activity])).toMatchObject({ label: 'Working ×2' });
+  expect(agentActivitySignal(relevantAgentActivity([owner], [], owner.id, 'card1'))).toMatchObject({
+    label: 'Run done',
+    active: false,
+  });
+  const failed = identity([run({ status: 'failed' })]);
+  expect(
+    agentActivitySignal(relevantAgentActivity([failed], [worker], failed.id, 'card1')),
+  ).toMatchObject({ label: 'Failed', error: true });
+  const stopping = { ...worker, substatus: 'requested' };
+  expect(
+    agentActivitySignal(relevantAgentActivity([failed], [stopping], failed.id, 'card1')),
+  ).toEqual({ label: 'Failed', error: true, active: false });
+  expect(agentActivitySignal([])).toBeNull();
+  expect(
+    agentActivitySignal(relevantAgentActivity([identity([run()])], [], owner.id, 'card1')),
+  ).toMatchObject({ label: 'Session running' });
 });
