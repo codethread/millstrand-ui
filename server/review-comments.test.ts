@@ -15,11 +15,20 @@ it('accepts real fixture nullable branches and omitted severity/publication opti
     ...commentsFixture,
     review: {
       ...commentsFixture.review,
-      mr: { ...commentsFixture.review.mr, sourceBranch: null, targetBranch: null },
+      mr: {
+        ...commentsFixture.review.mr,
+        startSha: null,
+        sourceBranch: null,
+        targetBranch: null,
+      },
     },
     comments: [{ ...withoutSeverity, publication: { state: 'unpublished', retryable: true } }],
   });
-  expect(result.review.mr).toMatchObject({ sourceBranch: null, targetBranch: null });
+  expect(result.review.mr).toMatchObject({
+    startSha: null,
+    sourceBranch: null,
+    targetBranch: null,
+  });
   expect(result.comments[0]).toMatchObject({
     severity: null,
     publication: { discussionId: null, error: null },
