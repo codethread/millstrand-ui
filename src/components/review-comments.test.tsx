@@ -29,6 +29,8 @@ vi.mock('../hooks/use-review-comments', () => ({
         alias: 'reviewer',
         identity: 'bright-quick-fox',
         target: 'review1',
+        mode: 'headless',
+        ownership: null,
         status: 'stopped',
         substatus: null,
         result: 'Proposed alternative wording',

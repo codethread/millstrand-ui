@@ -1,5 +1,6 @@
 import { useAgentReply } from '../hooks/use-agents';
 import { useBoard } from '../hooks/use-cards';
+import { agentReplyStatusText } from '../lib/agents';
 import { useDashboardActions, useWorkspaceId } from '../lib/navigation';
 import { reviewDraftKey, useReviewCommentStore } from '../review-comment-store';
 import { Loading } from './issue-parts';
@@ -94,13 +95,7 @@ export function AgentRunReply({ id }: { id: string }) {
             </div>
           ) : (
             <output className="block text-xs text-muted-foreground">
-              {reply.status === 'ready'
-                ? 'Queued · waiting for the agent to start.'
-                : reply.status === 'running'
-                  ? 'Working on your prompt. The reply will appear here.'
-                  : reply.status === 'unknown'
-                    ? 'Run state is unavailable. Waiting for an update.'
-                    : 'This run ended without a reply.'}
+              {agentReplyStatusText(reply)}
             </output>
           )}
         </>

@@ -156,6 +156,8 @@ export interface AgentReply {
   alias: string | null;
   identity: string | null;
   target: string | null;
+  mode: 'headless' | 'interactive' | 'external';
+  ownership: 'external' | null;
   status: AgentRunStatus;
   substatus: string | null;
   result: string | null;

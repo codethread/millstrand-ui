@@ -3,6 +3,7 @@ import type { AgentIdentity, AgentRun } from '../../shared/api';
 import {
   agentActivitySignal,
   agentIsActive,
+  agentReplyStatusText,
   agentRunIdentities,
   currentRun,
   issueAgentActivity,
@@ -73,6 +74,15 @@ describe('agent activity and issue attribution', () => {
     expect(runLabel(null)).toBe('Untracked');
     expect(runLabel(run({ status: 'stopped', substatus: 'completed' }))).toBe('Completed');
     expect(runLabel(run({ substatus: 'requested' }))).toBe('Stopping');
+  });
+
+  it('does not promise a managed reply for an external native session', () => {
+    expect(agentReplyStatusText({ ownership: 'external', status: 'running' })).toBe(
+      'Direct session · Harnesses does not manage a reply result. Inspect the session log for observed activity.',
+    );
+    expect(agentReplyStatusText({ ownership: null, status: 'running' })).toBe(
+      'Working on your prompt. The reply will appear here.',
+    );
   });
 
   it('does not claim an owner is working on a card without explicit targeting evidence', () => {
