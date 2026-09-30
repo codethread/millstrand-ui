@@ -189,22 +189,37 @@
    (fn [{:keys [branch]}] (str "Merge land: " branch))
    (stage "merge")
    (workflow/gate :take-turn "Join the queue and await the merge turn" :merge-turn
-                  (format-alpha/prose
-                   "
-                     Queue admission and acquisition are automatic. Await this run
-                     with `strand workflow await <run-id>`; inspect its place with
-                     `strand merge-queue status`. Failures and timeouts retain the turn.
+                  (fn [{:keys [worktree]}]
+                    (format-alpha/prose
+                     "
+                       Queue admission and acquisition are automatic. Await this run:
 
-                     A predecessor's failed gate is not a failure of this run.
-                     Notify its recovery owner and keep awaiting this same run;
-                     do not end landing custody or mark your card as needing review
-                     solely because the predecessor is blocked. Re-read the current
-                     frontier after each wait and continue through housekeeping.
+                       ```text
+                       strand --workspace \"{workspace}\" workflow await <run-id>
+                       ```
 
-                     Any trusted agent may withdraw with `strand merge-queue withdraw
-                     <entry-id> --reason <reason>`. Withdrawal stops shell work first;
-                     a possibly submitted merge requires reconciliation instead.
-                   " {}))
+                       Inspect its place:
+
+                       ```text
+                       strand --workspace \"{workspace}\" merge-queue status
+                       ```
+
+                       Failures and timeouts retain the turn. A predecessor's failed
+                       gate is not a failure of this run. Notify its recovery owner and
+                       keep awaiting this same run; do not end landing custody or mark
+                       your card as needing review solely because the predecessor is
+                       blocked. Re-read the current frontier after each wait and
+                       continue through housekeeping.
+
+                       Any trusted agent may withdraw with:
+
+                       ```text
+                       strand --workspace \"{workspace}\" merge-queue withdraw <entry-id> --reason <reason>
+                       ```
+
+                       Withdrawal stops shell work first; a possibly submitted merge
+                       requires reconciliation instead.
+                     " {:workspace (str worktree "/.millstrand")})))
    (support/shell-gate :prepare-merge "Update the branch and validate its final HEAD"
                        [:take-turn]
                        (fn [{:keys [branch]}]
@@ -276,19 +291,27 @@
                                    :next :land-abort :input land-abort-reason-input}]
                         :attributes
                         {"workflow/instruction"
-                         (format-alpha/prose
-                          "
-                            Read `strand workflow choices <run-id>` for choice inputs.
-                            Before approval, remove owned scratch files and stop
-                            owned processes by exact PID or session name. Record
-                            retained resources and their owners on the work card.
-                            Resources required through merge must be handled by
-                            the tracked executable `.millstrand/land-cleanup.sh`.
-                            Its failure stops cleanup and card completion.
-                            Act on the user's existing authorization to land; no
-                            repeat approval is needed. Approval covers the FIFO turn,
-                            rebase, repairs, focused review, final validation, automatic
-                            merge, and cleanup. Request a user decision when the
-                            required repair changes the authorized scope or ownership;
-                            abort before merge if that decision changes the plan.
-                          " {})})))
+                         (fn [{:keys [worktree]}]
+                           (format-alpha/prose
+                            "
+                              Read the choice inputs with:
+
+                              ```text
+                              strand --workspace \"{workspace}\" workflow choices <run-id>
+                              ```
+
+                              Before approval, remove owned scratch files and stop owned
+                              processes by exact PID or session name. Record retained
+                              resources and their owners on the work card. Resources
+                              required through merge must be handled by the tracked
+                              executable `.millstrand/land-cleanup.sh`. Its failure
+                              stops cleanup and card completion.
+
+                              Act on the user's existing authorization to land; no
+                              repeat approval is needed. Approval covers the FIFO turn,
+                              rebase, repairs, focused review, final validation,
+                              automatic merge, and cleanup. Request a user decision
+                              when the required repair changes the authorized scope or
+                              ownership; abort before merge if that decision changes the
+                              plan.
+                            " {:workspace (str worktree "/.millstrand")}))})))

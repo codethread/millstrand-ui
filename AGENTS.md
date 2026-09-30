@@ -138,6 +138,9 @@ session alive polling for human approval.
 
 - Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
 - Never edit `main` or push directly to `main`; feature-branch pushes are expected.
-- Inspect `strand workflow show land` and `strand prime merge-queue`, then drive
-  Millstrand UI's repository-owned `land` for quality, one basic review, FIFO
-  squash merge, card completion, and branch/worktree cleanup.
+- Set `WORKTREE` to the feature worktree's absolute root. Inspect
+  `strand --workspace "$WORKTREE/.millstrand" workflow show land` and
+  `strand --workspace "$WORKTREE/.millstrand" prime merge-queue`, then use that
+  explicit workspace for every workflow and merge-queue command while driving
+  Millstrand UI's repository-owned `land` through quality, one basic review,
+  FIFO squash merge, card completion, and branch/worktree cleanup.
