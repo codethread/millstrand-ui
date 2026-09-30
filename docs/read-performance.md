@@ -166,4 +166,4 @@ Browser checks on real `hqqrk`:
 - Notes URL/reload and the Agents tab remained functional; no real edits or agent
   launches were used for these checks. Browser request overrides were removed.
 
-Shipping follows the shared landing workflow after the user’s explicit approval.
+Shipping follows the repository-owned landing workflow after the user’s explicit approval.

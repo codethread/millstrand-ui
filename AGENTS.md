@@ -127,8 +127,8 @@ For an auto-run assignment, drive the exact delivery workflow run supplied in
 its guidance; see [automatic delivery](docs/auto-run.md). `auto-human-review`
 explicitly overrides generic instructions to land: prepare the passing PR and
 review package, stop at its human checkpoint, and leave the feature/worktree
-open. Never choose that checkpoint yourself. `auto-full-land` authorises shared
-`land`, but the assigned worker stops **before sign-off** and launches the bounded
+open. Never choose that checkpoint yourself. `auto-full-land` authorises the
+repository's `land`, but the assigned worker stops **before sign-off** and launches the bounded
 canonical-root `grunt` described in the delivery step. That finisher waits for the
 worker to settle, then owns merge, cleanup and final card completion. Do not remove
 your own session's worktree, close the card early, spawn a coordinator, or keep a
@@ -138,6 +138,9 @@ session alive polling for human approval.
 
 - Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
 - Never edit `main` or push directly to `main`; feature-branch pushes are expected.
-- Inspect `strand workflow show land` and `strand prime merge-queue`, then drive
-  shared `land` for quality, one basic review, FIFO merge, card completion, and
-  branch/worktree cleanup.
+- Set `WORKTREE` to the feature worktree's absolute root. Inspect
+  `strand --workspace "$WORKTREE/.millstrand" workflow show land` and
+  `strand --workspace "$WORKTREE/.millstrand" prime merge-queue`, then use that
+  explicit workspace for every workflow and merge-queue command while driving
+  Millstrand UI's repository-owned `land` through quality, one basic review,
+  FIFO squash merge, card completion, and branch/worktree cleanup.

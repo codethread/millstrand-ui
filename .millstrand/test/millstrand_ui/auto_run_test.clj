@@ -26,7 +26,7 @@
     [ctx {:storage :sqlite-memory
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
-          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj"
+          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                       "me/auto_run_workflows.clj" "me/auto_run.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)
@@ -41,6 +41,43 @@
              (select-keys (assoc (:config status) :enabled (:enabled status))
                           [:enabled :max-running :workflow :workflows :start-params])))
       (is (empty? (:dispatched (auto-run/scan! rt))))
+      (testing "the repository owns its squash landing policy"
+        (let [{:keys [prepare-policy merge-tail abort-definition
+                      queue-instruction signoff-instruction]}
+              (t/repl!
+               ctx
+               '(let [merge-definition
+                      @(requiring-resolve 'millstrand-ui.land/land-merge)
+                      land-definition @(requiring-resolve 'millstrand-ui.land/land)
+                      merge-steps (into {} (map (juxt :id identity))
+                                        (:steps merge-definition))
+                      land-steps (into {} (map (juxt :id identity))
+                                       (:steps land-definition))
+                      prepare-argv
+                      ((get-in merge-steps [:prepare-merge :attributes "shell/argv"])
+                       {:branch "feature/fixture"})
+                      merge-argv
+                      ((get-in merge-steps [:merge-pr :attributes "shell/argv"])
+                       {:pr-number 42 :subject "Subject" :body "Body"
+                        :branch "feature/fixture"})
+                      params {:worktree "/tmp/feature-worktree"}]
+                  {:prepare-policy (nth prepare-argv (- (count prepare-argv) 2))
+                   :merge-tail (subvec merge-argv (- (count merge-argv) 2))
+                   :abort-definition
+                   (get-in merge-definition [:attributes "land/abort-definition"])
+                   :queue-instruction
+                   ((get-in merge-steps [:take-turn :attributes "workflow/instruction"])
+                    params)
+                   :signoff-instruction
+                   ((get-in land-steps [:signoff :attributes "workflow/instruction"])
+                    params)}))]
+          (is (= "rebase" prepare-policy))
+          (is (= ["feature/fixture" "squash"] merge-tail))
+          (is (= "millstrand-ui.land/land-abort" abort-definition))
+          (doseq [instruction [queue-instruction signoff-instruction]]
+            (is (str/includes?
+                 instruction
+                 "strand --workspace \"/tmp/feature-worktree/.millstrand\"")))))
       (let [card (weaver/add! rt {:title "Blocked work"})
             evidence (weaver/add! rt {:title "Decision evidence"})]
         (weaver/op! rt 'weave
@@ -103,7 +140,7 @@
                   (is (= ["reviewed"] (:choices checkpoint)))
                   (is (nil? (role-step strands "handoff-worker")))
                   (is (nil? (role-step strands "finisher")))))
-              (testing "full landing delegates to separate shared roles"
+              (testing "full landing delegates to separate custody roles"
                 (let [worker-step (role-step strands "handoff-worker")
                       finisher-step (role-step strands "finisher")]
                   (is (some? worker-step))
@@ -159,7 +196,7 @@
     [ctx {:storage :sqlite-memory
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
-          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj"
+          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                       "me/auto_run_workflows.clj" "me/auto_run.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)]
