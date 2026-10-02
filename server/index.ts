@@ -33,13 +33,13 @@ interface Options {
 
 async function options(args: string[]): Promise<Options> {
   let workspace = process.env['MILLSTRAND_WORKSPACE'];
-  let host = process.env['MILLSTRAND_UI_HOST'] ?? '0.0.0.0';
+  let host = process.env['MILLSTRAND_UI_HOST'] ?? '127.0.0.1';
   let port = process.env['MILLSTRAND_UI_PORT'] ?? '4173';
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
     if (flag === '--help' || flag === '-h') {
       console.log('Usage: millstrand-ui [--workspace directory] [--host address] [--port number]');
-      console.log('Defaults: canonical Git workspace, 0.0.0.0, port 4173.');
+      console.log('Defaults: canonical Git workspace, 127.0.0.1, port 4173.');
       process.exit(0);
     }
     if (flag !== '--workspace' && flag !== '--host' && flag !== '--port')
