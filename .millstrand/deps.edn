@@ -11,6 +11,10 @@
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/sha "fc0f1fe877f658ad146416eed6ae24ce76ccf5b3"
    :deps/root "spools/config"}
+  millhouse/cron
+  {:git/url "https://github.com/codethread/millhouse.spool.git"
+   :git/sha "fc0f1fe877f658ad146416eed6ae24ce76ccf5b3"
+   :deps/root "spools/cron"}
   millhouse/devflow
   {:git/url "https://github.com/codethread/millhouse.spool.git"
    :git/sha "fc0f1fe877f658ad146416eed6ae24ce76ccf5b3"

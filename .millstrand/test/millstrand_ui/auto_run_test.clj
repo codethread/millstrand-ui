@@ -1,5 +1,5 @@
 (ns millstrand-ui.auto-run-test
-  "Exercise real workspace activation in disposable, unlabelled Weaver worlds."
+  "Exercise real workspace activation in disposable Weaver worlds, without paid workers."
   (:require [clojure.data.json :as json]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -8,6 +8,8 @@
             [clojure.test :refer [deftest is run-tests testing]]
             [millhouse.auto-run :as auto-run]
             [millhouse.auto-run-worktree :as auto-run-worktree]
+            [millhouse.cron :as cron]
+            [millhouse.kanban :as kanban]
             [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
@@ -16,7 +18,8 @@
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as t])
   (:import [java.nio.file Files]
-           [java.nio.file.attribute FileAttribute]))
+           [java.nio.file.attribute FileAttribute]
+           [java.time Duration Instant]))
 
 (defn- role-step [strands role]
   (first (filter #(= role (attr-get % :auto-run/role)) strands)))
@@ -27,7 +30,8 @@
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
-                                      "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+                                      "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                      "me/hourly_slow_query.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)
           status (auto-run/status rt)]
@@ -197,7 +201,8 @@
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
-                                      "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+                                      "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                      "me/hourly_slow_query.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)]
       (current/with-runtime rt
@@ -401,7 +406,8 @@
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
-                                      "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+                                      "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                      "me/hourly_slow_query.clj"]]
                             [path (slurp path)]))}]
     ;; The real Code executor supplies settlement. The continuation is deliberately
     ;; inert: this fixture must never run GitHub, queue, or cleanup side effects.
@@ -454,6 +460,61 @@
                 (is (not= root-id (:id next-root)))
                 (is (thrown? clojure.lang.ExceptionInfo (invoke step input)))
                 (is (= next-root (workflow/current-root run-id)))))))))))
+
+(deftest hourly-inspection-admission
+  (t/with-weaver-world
+    [ctx {:storage :sqlite-memory
+          :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
+          :init-clj (slurp "init.clj")
+          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
+                                      "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                      "me/hourly_slow_query.clj"]]
+                            [path (slurp path)]))}]
+    (let [rt (:runtime ctx)
+          create! (requiring-resolve 'millstrand-ui.hourly-slow-query/create-ticket!)]
+      ;; Admission is inspected, never dispatched. The manual clock is before
+      ;; activation's scheduled wake, so advancing it cannot run the cron job.
+      (auto-run/stop! rt)
+      (t/set-clock! rt (t/manual-clock (Instant/parse "2020-01-01T12:34:00Z")))
+      (is (= [{:id :hourly-slow-query :interval-ms 3600000 :jitter-ms 0
+               :handler 'millstrand-ui.hourly-slow-query/create-ticket!}]
+             (cron/jobs rt)))
+      (let [result (create! rt)
+            card (weaver/show rt (:card result))]
+        (is (= :created (:outcome result)))
+        (is (= "2020-01-01T12:00:00Z" (:hour result)))
+        (is (auto-run/eligible? rt card))
+        (is (= ["sol" "high" "auto-inspect" "full-land"]
+               (mapv #(attr-get card %) [:auto-run/seat :auto-run/effort
+                                        :auto-run/workflow :auto-run/on-change])))
+        (is (= {:on-change "full-land"}
+               ((requiring-resolve 'millstrand-ui.auto-run/start-params!)
+                rt {:card card :settings {:workflow "auto-inspect"}})))
+        (is (nil? (kanban/current-ownership rt (:id card))))
+        (doseq [attribute [:identity/by-identity :kanban/reporter :auto-run/status
+                           :auto-run/request-id :auto-run/run-id :auto-run/workflow-run-id]]
+          (is (nil? (attr-get card attribute))))
+        (is (= (assoc result :outcome :reused) (create! rt)))
+        (testing "replays preserve operator edits and closed receipts"
+          (let [closed (weaver/update! rt (:id card)
+                                      {:state "closed"
+                                       :attributes {:kanban/lane "refinement"
+                                                    :kanban.label/auto-run nil
+                                                    :auto-run/status "error"}})]
+            (is (= (assoc result :outcome :reused) (create! rt)))
+            (is (= closed (weaver/show rt (:id card)))))))
+      (testing "the next UTC hour permits a new card; a lost reply never duplicates it"
+        (t/advance! rt (Duration/ofHours 1))
+        (let [add! weaver/add!]
+          (with-redefs [weaver/add! (fn [runtime request & [options]]
+                                     (add! runtime request options)
+                                     (throw (ex-info "Lost response" {})))]
+            (is (thrown-with-msg? Exception #"Lost response" (create! rt)))))
+        (let [result (create! rt)]
+          (is (= :reused (:outcome result)))
+          (is (= "2020-01-01T13:00:00Z" (:hour result)))
+          (is (auto-run/eligible? rt (weaver/show rt (:card result))))
+          (is (= 2 (count (weaver/list rt [:= [:attr "kanban/card"] "true"] {})))))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."

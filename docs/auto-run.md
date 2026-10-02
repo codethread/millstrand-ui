@@ -34,6 +34,34 @@ mechanical transitions. A human checkpoint tells the worker to return, not to
 wait in a running session or choose approval itself. This is a trusted-agent
 workflow contract, not a security boundary against arbitrary CLI mutations.
 
+## Hourly SLOW-query inspection
+
+`.millstrand/me/hourly_slow_query.clj` is a tracked Cron module, activated by
+`init.clj` with the pinned `millhouse/cron` dependency in `deps.edn`. Each hourly
+wake offers a Sol/high `auto-inspect` feature with `auto-run/on-change=full-land`.
+The job only creates cards: Auto-run owns capacity, preparation, workflow creation
+and assignment; the worker claims with its own identity. Scheduled cards have no
+fabricated creator, reporter or owner.
+
+The complete policy, opt-in label and UTC-hour source receipt are published in
+one mutation. Duplicate deliveries reuse that hour's card even if it was edited,
+failed or closed; they never rearm it. Cron is a fixed interval from activation,
+not a wall-clock top-of-hour schedule, and does not backfill missed hours.
+Different hours create independent inspections subject to normal dispatcher
+capacity, not completion of the previous inspection.
+
+A clean result needs no PR but retains resources under the cleanup contract below.
+A fix follows the existing full-land continuation and finisher handoff. Inspect
+existing hourly findings before selecting work to avoid duplicating a fix.
+To disable new hourly cards, remove the job module declaration and refresh;
+removing it does not cancel cards or assignments already created.
+
+When upgrading the former machine-local job, remove its duplicate Cron/job
+registrations from `init.local.clj` and its redundant `millhouse/cron` entry from
+`deps.local.edn`, then remove `me/hourly_slow_query.local.clj`. Preserve unrelated
+local settings. Inspect refresh's result; if the dependency basis changed, use the
+supported restart with approval. Existing cards and workflow runs are not rewritten.
+
 ## Opt in a card
 
 Add the `auto-run` label and promote a planned feature to pending. Optional
@@ -225,7 +253,8 @@ there is no automatic approval-by-label or lane-triggered rerun in v1.
   `clojure -M:test` boots the actual init/modules in disposable
   in-memory Weaver worlds. It verifies activation, defaults, ordinary worker
   entry steps, executor gates, and the human versus autonomous exit boundaries.
-  It creates no opted-in cards and launches no paid agents. Inspection tests drive
+  The hourly admission test disables dispatch before creating opted-in fixture
+  cards; the suite launches no paid agents. Inspection tests drive
   actual ready boundaries, reject missing evidence/retention input, execute the
   rendered clean gate against disposable Git trees, and verify that workflow
   completion retains files and leaves cards open. They check reservation/lane

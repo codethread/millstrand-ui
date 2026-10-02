@@ -43,6 +43,15 @@
                           :millhouse/harnesses]
                   :required? true})
 
+(runtime/module! runtime :millhouse/cron
+                 {:ns 'millhouse.cron
+                  :required? true})
+
+(runtime/module! runtime :millstrand-ui/hourly-slow-query
+                 {:file "me/hourly_slow_query.clj"
+                  :after [:millhouse/cron :millstrand-ui/auto-run]
+                  :required? true})
+
 (codethread/register-executor!
  runtime [:millstrand-ui/help
           :millhouse/workflow-providers
