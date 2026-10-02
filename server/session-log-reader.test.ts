@@ -95,6 +95,29 @@ describe('SessionLogReader snapshots', () => {
     expect(logger.samples).toHaveLength(2);
   });
 
+  it('evicts old summaries instead of retaining every historical session', async () => {
+    const logger = new MemoryPerfLogger();
+    const root = await mkdtemp(join(tmpdir(), 'session-log-'));
+    roots.push(root);
+    const directory = join(root, 'pi-dialogue');
+    await mkdir(directory, { recursive: true });
+    await Promise.all(
+      Array.from({ length: 61 }, (_, index) =>
+        writeFile(join(directory, `session-${index}.jsonl`), `${record('reply', `${index}`)}\n`),
+      ),
+    );
+    const reader = new SessionLogReader({ stateRoot: root, logger });
+
+    for (let index = 0; index < 61; index += 1) {
+      await reader.summary('pi', `session-${index}`);
+    }
+    await reader.summary('pi', 'session-1');
+    expect(logger.samples).toHaveLength(61);
+
+    await reader.summary('pi', 'session-0');
+    expect(logger.samples).toHaveLength(62);
+  });
+
   it('picks up appended complete lines once without changing earlier IDs', async () => {
     const first = record('prompt', 'Unicode 🦦');
     const second = record('reply', 'New activity');

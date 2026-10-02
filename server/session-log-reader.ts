@@ -12,6 +12,7 @@ import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 
 const maxBytes = 1024 * 1024;
 const maxRecords = 400;
+const maxSummaryEntries = 60;
 const sessionStem = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export interface SessionLogReaderOptions {
@@ -166,13 +167,23 @@ export class SessionLogReader {
     const fingerprint = await this.sourceModifiedAt(provider, stem);
     const key = `${provider}/${stem}`;
     const cached = this.summaries.get(key);
-    if (cached?.fingerprint === fingerprint) return cached.value;
+    if (cached?.fingerprint === fingerprint) {
+      this.summaries.delete(key);
+      this.summaries.set(key, cached);
+      return cached.value;
+    }
     const snapshot = await this.snapshot(provider, stem);
     const value = {
       latest: snapshot.events.at(-1) ?? null,
       modifiedAt: snapshot.modifiedAt,
     };
+    this.summaries.delete(key);
     this.summaries.set(key, { fingerprint, value });
+    if (this.summaries.size > maxSummaryEntries) {
+      const oldest = this.summaries.keys().next();
+      if (oldest.done) throw new Error('Summary cache exceeded its bound without an entry.');
+      this.summaries.delete(oldest.value);
+    }
     return value;
   }
 
