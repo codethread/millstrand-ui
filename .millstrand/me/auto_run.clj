@@ -485,26 +485,13 @@
                               :reconciliation :request-id :by-identity :workflow-run-id])
             card-view (weaver/show rt card)
             recorded (attr-get card-view :auto-inspect/clean-finish-request)
-            recorded-root-keys (when recorded
-                                 (select-keys recorded
-                                              [:disposition-root-id
-                                               :retention-root-id]))
-            legacy-rootless? (and recorded (empty? recorded-root-keys))
-            requested-for-comparison (if legacy-rootless?
-                                       (dissoc request-receipt
-                                               :disposition-root-id
-                                               :retention-root-id)
-                                       request-receipt)
             complete? (cleanup-complete? canonical-root branch worktree)
             present? (cleanup-resources-present? canonical-root branch worktree)]
         ;; The initiating actor stays in the original receipt, while a positively
-        ;; settled failed finisher may transfer execution to its accepted resume.
-        ;; Pre-root-binding receipts remain immutable and are checked against every
-        ;; field they originally froze; a receipt with only one root is malformed.
+        ;; settled failed finisher may transfer execution to its accepted continuation.
         (when (and recorded
-                   (or (= 1 (count recorded-root-keys))
-                       (not= (dissoc recorded :by-identity)
-                             (dissoc requested-for-comparison :by-identity))))
+                   (not= (dissoc recorded :by-identity)
+                         (dissoc request-receipt :by-identity)))
           (fail! "Clean inspection finish request conflicts with its durable receipt"
                  {:card card :request-id request-id
                   :recorded recorded :requested request-receipt}))

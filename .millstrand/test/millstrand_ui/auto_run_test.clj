@@ -566,25 +566,11 @@
                           (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                                 #"External run observations"
                                                 (finish! request))))
-                        (let [historical-request-receipt
-                              (assoc
-                               (select-keys
-                                reconciled
-                                [:card :disposition-step :retention-step
-                                 :worker-run-id :finisher-run-id :branch :worktree
-                                 :expected-head :canonical-root :handoff-note
-                                 :reconciliation :request-id :by-identity])
-                               :workflow-run-id run-id)]
-                          (weaver/update!
-                           rt (:id card)
-                           {:attributes
-                            {:auto-inspect/clean-finish-request
-                             historical-request-receipt}}))
                         (.mkdirs (io/file worktree "node_modules" "fixture"))
                         (spit (io/file worktree "node_modules" "fixture" "artifact.js")
                               "ignored")
                         (spit (io/file worktree ".env") "SECRET=unknown")
-                        (testing "rootless historical requests replay without rewriting evidence"
+                        (testing "cleanup failure preserves the operation's complete request receipt"
                           (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                                 #"cleanup failed"
                                                 (finish! reconciled)))
@@ -593,8 +579,10 @@
                             (is (= (:request-id request) (:request-id recorded)))
                             (is (= (:id finisher) (:finisher-run-id recorded)))
                             (is (= "fixture-finisher" (:by-identity recorded)))
-                            (is (not (contains? recorded :disposition-root-id)))
-                            (is (not (contains? recorded :retention-root-id))))
+                            (is (= (workflow-root-id rt disposition-step)
+                                   (:disposition-root-id recorded)))
+                            (is (= (workflow-root-id rt retention-step)
+                                   (:retention-root-id recorded))))
                           (is (thrown? clojure.lang.ExceptionInfo
                                        (weaver/update! rt (:id card)
                                                        {:attributes

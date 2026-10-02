@@ -189,10 +189,8 @@ cleanup receipt separately names the continuation that performed completion. Exa
 replay remains harmless after interrupted cleanup, while its owner is still active,
 and after it stops. A completed replay proves resource absence and returns the
 original cleanup receipt; it does not rewrite or claim successful finisher exit.
-Ordinary labels remain editable after completion. Frozen requests from before
-checkpoint root IDs were recorded replay
-against their original fields and are not rewritten. A
-first request with both branch and worktree already absent is refused rather than
+Ordinary labels remain editable after completion. A first request with both branch
+and worktree already absent is refused rather than
 treated as successful cleanup. A legacy retained receipt missing the
 branch/worktree/HEAD fields, or stale external cwd observations after a clean local
 audit, requires explicit `--reconciliation`
