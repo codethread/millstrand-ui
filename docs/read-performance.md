@@ -129,8 +129,10 @@ had produced 250 SLOW samples at capture, averaging 82.8 ms.
 The route now uses a read-only persisted projection containing only identities, published
 runs and their `performed` edges. Session source precedence and ordering are projected
 directly from those records, and unchanged latest-event summaries are reused after a
-metadata check. The 60-live-summary bound, full on-demand session tails, response shape,
-active detection, cache lifetime and spool semantics are unchanged. Direct comparison
+metadata check. Each workspace owns its 60-entry live-summary cache, so concurrent
+overview polling cannot evict another workspace's working set. Full on-demand session
+tails, response shape, active detection, cache lifetime and spool semantics are unchanged.
+Direct comparison
 against the generic projection matched every binding and active identity across all live
 workspaces (238/18, 136/14, 1,334/34, 577/104, 692/227 and 0/0 bindings/active).
 
