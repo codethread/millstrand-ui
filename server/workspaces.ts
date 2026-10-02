@@ -112,6 +112,7 @@ export class WorkspaceDirectory {
   private readonly clients = new Map<string, WorkspaceClients>();
   private readonly lifecycleOperations = new Set<string>();
   private snapshot: WorkspaceOption[] | null = null;
+  private discoveryGeneration = 0;
   private pending: Promise<WorkspaceOption[]> | null = null;
 
   constructor(
@@ -133,9 +134,10 @@ export class WorkspaceDirectory {
     // five-second resource poll into another `mill weaver list` call.
     if (!force && this.snapshot !== null) return this.snapshot;
     if (this.pending !== null) return this.pending;
+    const generation = this.discoveryGeneration;
     this.pending = this.discover()
       .then((workspaces) => {
-        this.snapshot = workspaces;
+        if (generation === this.discoveryGeneration) this.snapshot = workspaces;
         return workspaces;
       })
       .finally(() => {
@@ -144,13 +146,18 @@ export class WorkspaceDirectory {
     return this.pending;
   }
 
+  private invalidateSnapshot(): void {
+    this.discoveryGeneration += 1;
+    this.snapshot = null;
+  }
+
   async operate(id: string, operation: WeaverOperation): Promise<void> {
     const workspace = (await this.list(true)).find((item) => item.id === id);
     if (!workspace) throw new HttpError(404, 'That workspace is not known to the local mill.');
     if (this.lifecycleOperations.has(id))
       throw new HttpError(409, `A lifecycle operation is already running for ${workspace.name}.`);
     this.lifecycleOperations.add(id);
-    this.snapshot = null;
+    this.invalidateSnapshot();
     try {
       await this.run(operation, workspace.path);
     } catch (error) {
@@ -163,11 +170,12 @@ export class WorkspaceDirectory {
       // The lifecycle result is unknown after either success or failure. Make the
       // next discovery or selected-resource request refresh before trusting status.
       this.lifecycleOperations.delete(id);
-      this.snapshot = null;
+      this.invalidateSnapshot();
     }
   }
 
   async select(id: string | null): Promise<WorkspaceClients> {
+    const generation = this.discoveryGeneration;
     let path = this.defaultPath;
     if (id !== null) {
       const found = (await this.list()).find((workspace) => workspace.id === id);
@@ -176,6 +184,8 @@ export class WorkspaceDirectory {
         throw new HttpError(503, `The ${found.name} weaver is offline.`);
       path = found.path;
     }
+    if (generation !== this.discoveryGeneration)
+      throw new HttpError(503, 'This weaver changed during workspace selection.');
     if (this.lifecycleOperations.has(workspaceId(path)))
       throw new HttpError(503, 'This weaver has a lifecycle operation in progress.');
     let selected = this.clients.get(path);

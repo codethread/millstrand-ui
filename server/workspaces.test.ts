@@ -109,7 +109,7 @@ describe('weaver discovery', () => {
     expect(calls).toEqual([['start', defaultPath]]);
   });
 
-  it('rejects selected-workspace access while its lifecycle operation is running', async () => {
+  it('rejects stale discovery that overlaps a lifecycle operation', async () => {
     let releaseOperation: () => void = uninitializedSignal;
     const operationSettled = new Promise<void>((resolve) => {
       releaseOperation = resolve;
@@ -118,9 +118,27 @@ describe('weaver discovery', () => {
     const operationRunning = new Promise<void>((resolve) => {
       operationStarted = resolve;
     });
+    let releaseStaleDiscovery: (workspaces: ReturnType<typeof parseWorkspaces>) => void =
+      uninitializedSignal;
+    const staleDiscovery = new Promise<ReturnType<typeof parseWorkspaces>>((resolve) => {
+      releaseStaleDiscovery = resolve;
+    });
+    let staleDiscoveryStarted: () => void = uninitializedSignal;
+    const staleDiscoveryRunning = new Promise<void>((resolve) => {
+      staleDiscoveryStarted = resolve;
+    });
+    const workspaces = parseWorkspaces(
+      [{ config_dir: defaultPath, state: 'running' }],
+      defaultPath,
+    );
+    let discoveries = 0;
     const directory = new WorkspaceDirectory(defaultPath, {
-      discover: async () =>
-        parseWorkspaces([{ config_dir: defaultPath, state: 'running' }], defaultPath),
+      discover: async () => {
+        discoveries += 1;
+        if (discoveries !== 2) return workspaces;
+        staleDiscoveryStarted();
+        return staleDiscovery;
+      },
       run: async () => {
         operationStarted();
         await operationSettled;
@@ -130,12 +148,15 @@ describe('weaver discovery', () => {
 
     const operation = directory.operate(id, 'restart');
     await operationRunning;
-    await expect(directory.select(id)).rejects.toMatchObject({ status: 503 });
-    await expect(directory.operate(id, 'stop')).rejects.toMatchObject({ status: 409 });
-
+    const selection = directory.select(id);
+    await staleDiscoveryRunning;
     releaseOperation();
     await operation;
+    releaseStaleDiscovery(workspaces);
+
+    await expect(selection).rejects.toMatchObject({ status: 503 });
     await expect(directory.select(id)).resolves.toMatchObject({ path: defaultPath });
+    expect(discoveries).toBe(3);
   });
 
   it('reports command failures without retrying and expires discovery afterwards', async () => {
