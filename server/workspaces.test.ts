@@ -93,6 +93,27 @@ describe('weaver discovery', () => {
     }
   });
 
+  it('owns latest-session summary caches per workspace', async () => {
+    const otherPath = '/work/other/.millstrand';
+    const workspaces = parseWorkspaces(
+      [
+        { config_dir: defaultPath, state: 'running' },
+        { config_dir: otherPath, state: 'running' },
+      ],
+      defaultPath,
+    );
+    const directory = new WorkspaceDirectory(defaultPath, {
+      discover: async () => workspaces,
+    });
+
+    const selectedDefault = await directory.select(workspaceId(defaultPath));
+    const selectedDefaultAgain = await directory.select(workspaceId(defaultPath));
+    const selectedOther = await directory.select(workspaceId(otherPath));
+
+    expect(selectedDefault.logs).toBe(selectedDefaultAgain.logs);
+    expect(selectedDefault.logs).not.toBe(selectedOther.logs);
+  });
+
   it('resolves lifecycle operations from known IDs, including offline workspaces', async () => {
     const calls: string[][] = [];
     const directory = new WorkspaceDirectory(defaultPath, {

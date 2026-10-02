@@ -7,6 +7,7 @@ import { sorted } from '../shared/array.ts';
 import { z } from 'zod';
 import { HttpError } from './parse.ts';
 import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
+import { SessionLogReader } from './session-log-reader.ts';
 import { StrandData } from './strand.ts';
 import { ViewStore } from './views.ts';
 
@@ -55,6 +56,7 @@ export function parseWorkspaces(value: unknown, defaultPath: string): WorkspaceO
 interface WorkspaceClients {
   path: string;
   strand: StrandData;
+  logs: SessionLogReader;
   views: ViewStore;
 }
 
@@ -194,6 +196,7 @@ export class WorkspaceDirectory {
       selected = {
         path,
         strand: new StrandData(path, { logger: this.logger }),
+        logs: new SessionLogReader({ logger: this.logger }),
         views: new ViewStore(path),
       };
       this.clients.set(path, selected);

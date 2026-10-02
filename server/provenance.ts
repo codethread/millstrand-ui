@@ -111,6 +111,10 @@ export const dependencyCountAttributes = {
 } as const;
 
 type AgentProjection = { identities: AgentIdentity[]; runs: AgentRun[] };
+type LogActivityProjection = {
+  bindings: LogBinding[];
+  activeIdentityStrandIds: ReadonlySet<string>;
+};
 type Strand = z.infer<typeof strandSchema>;
 type EdgeKind = (typeof edgeKinds)[number];
 type Edge = z.infer<typeof edgeSchema>;
@@ -142,6 +146,7 @@ export class ProvenanceIndex {
   private readonly identities: IdentityRecord[];
   private readonly identitiesByFriendly = new Map<string, IdentityRecord[]>();
   private readonly runs: RunRecord[];
+  private readonly runsById: Map<string, RunRecord>;
   private readonly cardOwnership = new Map<string, CardOwnership>();
   private readonly dependencyCounts: Map<string, DependencyCounts>;
 
@@ -199,6 +204,7 @@ export class ProvenanceIndex {
         strand,
         attributes: parseSchema(runAttributesSchema, strand.attributes, `run ${strand.id}`),
       }));
+    this.runsById = new Map(this.runs.map((run) => [run.strand.id, run]));
   }
 
   private outgoing(id: string, kind: EdgeKind): string[] {
@@ -462,29 +468,51 @@ export class ProvenanceIndex {
     return this.agentProjection;
   }
 
-  logBindings(): LogBinding[] {
-    const { identities } = this.agents();
-    return identities.map((identity) => {
-      const record = this.identities.find(
-        (candidate) => candidate.strand.id === identity.strandId,
-      )!;
-      const candidates = identity.runs.flatMap((run) =>
-        run.session === null ? [] : [{ run, source: run.session }],
+  logActivityBindings(): LogActivityProjection {
+    const activeIdentityStrandIds = new Set<string>();
+    const bindings = this.identities.map((identity): LogBinding => {
+      const runs = sorted(
+        this.outgoing(identity.strand.id, 'performed').flatMap((id) => {
+          const run = this.runsById.get(id);
+          return run === undefined ? [] : [run];
+        }),
+        (a, b) =>
+          b.strand.created_at.localeCompare(a.strand.created_at) ||
+          b.strand.id.localeCompare(a.strand.id),
       );
-      const running = candidates.find(({ run }) => run.status === 'running')?.source;
-      const provider = providerSchema.safeParse(record.attributes['identity/harness']);
-      const nativeSession = record.attributes['identity/native-session-id'];
+      if (runs.some((run) => run.attributes['harness/status'] === 'running'))
+        activeIdentityStrandIds.add(identity.strand.id);
+      const candidates = runs.flatMap((run) => {
+        const provider = providerSchema.safeParse(run.attributes['harness/harness']);
+        const session = run.attributes['harness/session-id'];
+        return provider.success && session !== undefined
+          ? [
+              {
+                status: run.attributes['harness/status'],
+                source: { provider: provider.data, session },
+              },
+            ]
+          : [];
+      });
+      const running = candidates.find(({ status }) => status === 'running')?.source;
+      const provider = providerSchema.safeParse(identity.attributes['identity/harness']);
+      const nativeSession = identity.attributes['identity/native-session-id'];
       const native =
         provider.success && nativeSession
           ? { provider: provider.data, session: nativeSession }
           : null;
       return {
-        identity: identity.id,
-        identityStrandId: identity.strandId,
+        identity: identity.attributes['identity/id'],
+        identityStrandId: identity.strand.id,
         source: running ?? native ?? candidates[0]?.source ?? null,
-        activity: { kind: 'idle' as const },
+        activity: { kind: 'idle' },
       };
     });
+    return { bindings, activeIdentityStrandIds };
+  }
+
+  logBindings(): LogBinding[] {
+    return this.logActivityBindings().bindings;
   }
 }
 

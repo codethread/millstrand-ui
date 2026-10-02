@@ -94,6 +94,7 @@ export class StrandData {
   private readonly database: PersistedWorkspaceReads;
   private readonly logger: PerfLogger;
   private readonly provenanceReads = new ReadCache<ProvenanceIndex>();
+  private readonly logProvenanceReads = new ReadCache<ProvenanceIndex>();
   private readonly notes = new ReadCache<Note[]>();
   private readonly boards = new ReadCache<Board>();
   private readonly agentDirectories = new ReadCache<AgentDirectory>();
@@ -300,6 +301,13 @@ export class StrandData {
     return this.provenanceReads.get(
       'provenance',
       async () => new ProvenanceIndex(await this.database.readProvenance()),
+    );
+  }
+
+  logProvenance(): Promise<ProvenanceIndex> {
+    return this.logProvenanceReads.get(
+      'log-provenance',
+      async () => new ProvenanceIndex(await this.database.readLogProvenance()),
     );
   }
 

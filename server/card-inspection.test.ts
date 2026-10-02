@@ -11,7 +11,12 @@ vi.mock('node:child_process', async () => {
 
 const readProvenance = vi.fn();
 const readNoteProvenance = vi.fn();
-const database = { readProvenance, readNoteProvenance, readDependencies: vi.fn() };
+const database = {
+  readProvenance,
+  readLogProvenance: vi.fn(),
+  readNoteProvenance,
+  readDependencies: vi.fn(),
+};
 
 beforeEach(() => {
   exec.mockReset();
