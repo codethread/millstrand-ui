@@ -39,6 +39,37 @@ build on port 4174:
 and production build. Focused checks protect the initially unmounted query surface,
 cache/error retention across closure, and fetching late terminal replies on reopening.
 
+## 2026-10-02 selected-workspace discovery cadence
+
+The hourly audit inspected `~/.local/state/millstrand-ui/perf.log`, its active
+rotation, and the `millstrand-ui` and `skein-src` Weaver logs reported by
+`mill weaver list`. The Weaver logs contained no query timings; the UI perf log
+showed selected-workspace resource polls running registry discovery about every
+five seconds. One representative sample was
+`2026-10-02T05:39:37.997Z perf SLOW 235.44ms mill weaver list (discovery)
+bytes=8030` while `skein-src` board, agent, review, and log-activity requests were
+settling. This was not the app's 30-second `/api/workspaces?refresh` poll, whose
+samples fell at `:20` and `:50` in that interval.
+
+`WorkspaceDirectory.select` called the expiring `list()` cache for every selected
+resource. Its five-second lifetime matched those resource poll intervals, so the
+first route in each poll group launched another `mill weaver list`. Selection now
+reuses the last successful registry snapshot. The app-lifetime
+`WorkspaceDiscovery` query remains the explicit 30-second refresh owner, forced
+refresh still replaces the snapshot. A lifecycle attempt clears it before the
+command starts, rejects selected-workspace access until settlement, and clears it
+again because success and failure both require fresh status.
+
+An isolated production server on port 4175 used `/tmp/auto-647i2-perf.log` while
+a browser loaded the real `skein-src` board. The page showed 45 active issues and
+32 active agents. Across 11 board requests, 11 agent requests, and 11 log-activity
+requests, discovery ran only at `05:48:03.372Z` and `05:48:33.397Z`, alongside the
+two expected 30-second `/api/workspaces` polls; no selected-resource poll added a
+discovery call. `pnpm vitest run server/workspaces.test.ts` passes all eight tests,
+protecting the ownership boundary with a virtual clock and lifecycle concurrency
+with a controlled promise. No Weaver dependency or runtime changed, so no Weaver
+restart was needed.
+
 ## 2026-09-27 request budget audit
 
 Measured against live `agents`, `millhouse`, `millstrand-ui`, `notes` and

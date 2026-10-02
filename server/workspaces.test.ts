@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseWorkspaces, WorkspaceDirectory, workspaceId } from './workspaces.ts';
+
+function uninitializedSignal(): never {
+  throw new Error('Promise signal was not initialized.');
+}
 
 describe('weaver discovery', () => {
   const defaultPath = '/work/main/.millstrand';
@@ -41,7 +45,7 @@ describe('weaver discovery', () => {
     ).toThrow('absolute path');
   });
 
-  it('bypasses its recent discovery snapshot when refresh is forced', async () => {
+  it('bypasses its discovery snapshot when refresh is forced', async () => {
     let discoveries = 0;
     const directory = new WorkspaceDirectory(defaultPath, {
       discover: async () => {
@@ -64,6 +68,31 @@ describe('weaver discovery', () => {
     expect((await directory.list(true))[0]?.status).toBe('offline');
     expect(discoveries).toBe(2);
   });
+
+  it('does not rediscover weavers while routing selected-workspace resources', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-02T05:37:00Z'));
+      let discoveries = 0;
+      const directory = new WorkspaceDirectory(defaultPath, {
+        discover: async () => {
+          discoveries += 1;
+          return parseWorkspaces([{ config_dir: defaultPath, state: 'running' }], defaultPath);
+        },
+      });
+
+      await directory.list();
+      vi.advanceTimersByTime(60_000);
+      await directory.select(workspaceId(defaultPath));
+      expect(discoveries).toBe(1);
+
+      await directory.list(true);
+      expect(discoveries).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resolves lifecycle operations from known IDs, including offline workspaces', async () => {
     const calls: string[][] = [];
     const directory = new WorkspaceDirectory(defaultPath, {
@@ -78,6 +107,59 @@ describe('weaver discovery', () => {
     expect(calls).toEqual([]);
     await directory.operate(workspaceId(defaultPath), 'start');
     expect(calls).toEqual([['start', defaultPath]]);
+  });
+
+  it('rejects stale discovery that overlaps a lifecycle operation', async () => {
+    let releaseOperation: () => void = uninitializedSignal;
+    const operationSettled = new Promise<void>((resolve) => {
+      releaseOperation = resolve;
+    });
+    let operationStarted: () => void = uninitializedSignal;
+    const operationRunning = new Promise<void>((resolve) => {
+      operationStarted = resolve;
+    });
+    let releaseStaleDiscovery: (workspaces: ReturnType<typeof parseWorkspaces>) => void =
+      uninitializedSignal;
+    const staleDiscovery = new Promise<ReturnType<typeof parseWorkspaces>>((resolve) => {
+      releaseStaleDiscovery = resolve;
+    });
+    let staleDiscoveryStarted: () => void = uninitializedSignal;
+    const staleDiscoveryRunning = new Promise<void>((resolve) => {
+      staleDiscoveryStarted = resolve;
+    });
+    const workspaces = parseWorkspaces(
+      [{ config_dir: defaultPath, state: 'running' }],
+      defaultPath,
+    );
+    let discoveries = 0;
+    const directory = new WorkspaceDirectory(defaultPath, {
+      discover: async () => {
+        discoveries += 1;
+        if (discoveries !== 2) return workspaces;
+        staleDiscoveryStarted();
+        return staleDiscovery;
+      },
+      run: async () => {
+        operationStarted();
+        await operationSettled;
+      },
+    });
+    const id = workspaceId(defaultPath);
+
+    const operation = directory.operate(id, 'restart');
+    await operationRunning;
+    const selection = directory.select(id);
+    await staleDiscoveryRunning;
+    releaseOperation();
+    await operation;
+    const freshSelection = directory.select(id);
+    const freshDiscoveryStarted = discoveries === 3;
+    releaseStaleDiscovery(workspaces);
+
+    expect(freshDiscoveryStarted).toBe(true);
+    await expect(selection).rejects.toMatchObject({ status: 503 });
+    await expect(freshSelection).resolves.toMatchObject({ path: defaultPath });
+    expect(discoveries).toBe(3);
   });
 
   it('reports command failures without retrying and expires discovery afterwards', async () => {
