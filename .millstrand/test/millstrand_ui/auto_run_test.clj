@@ -50,38 +50,41 @@
                       queue-instruction signoff-instruction]}
               (t/repl!
                ctx
-               '(let [merge-definition
-                      @(requiring-resolve 'millstrand-ui.land/land-merge)
-                      land-definition @(requiring-resolve 'millstrand-ui.land/land)
-                      merge-steps (into {} (map (juxt :id identity))
-                                        (:steps merge-definition))
-                      land-steps (into {} (map (juxt :id identity))
-                                       (:steps land-definition))
-                      prepare-argv
-                      ((get-in merge-steps [:prepare-merge :attributes "shell/argv"])
-                       {:branch "feature/fixture"})
-                      merge-argv
-                      ((get-in merge-steps [:merge-pr :attributes "shell/argv"])
-                       {:pr-number 42 :subject "Subject" :body "Body"
-                        :branch "feature/fixture"})
-                      params {:worktree "/tmp/feature-worktree"}]
-                  {:prepare-policy (nth prepare-argv (- (count prepare-argv) 2))
-                   :merge-tail (subvec merge-argv (- (count merge-argv) 2))
-                   :abort-definition
-                   (get-in merge-definition [:attributes "land/abort-definition"])
-                   :queue-instruction
-                   ((get-in merge-steps [:take-turn :attributes "workflow/instruction"])
-                    params)
-                   :signoff-instruction
-                   ((get-in land-steps [:signoff :attributes "workflow/instruction"])
-                    params)}))]
+               '(with-redefs [millhouse.land.support/canonical-worktree
+                             (constantly "/tmp/canonical-checkout")]
+                  (let [merge-definition
+                        @(requiring-resolve 'millstrand-ui.land/land-merge)
+                        land-definition @(requiring-resolve 'millstrand-ui.land/land)
+                        merge-steps (into {} (map (juxt :id identity))
+                                          (:steps merge-definition))
+                        land-steps (into {} (map (juxt :id identity))
+                                         (:steps land-definition))
+                        prepare-argv
+                        ((get-in merge-steps [:prepare-merge :attributes "shell/argv"])
+                         {:branch "feature/fixture"})
+                        merge-argv
+                        ((get-in merge-steps [:merge-pr :attributes "shell/argv"])
+                         {:pr-number 42 :subject "Subject" :body "Body"
+                          :branch "feature/fixture"})
+                        params {:worktree "/tmp/feature-worktree"}]
+                    {:prepare-policy (nth prepare-argv (- (count prepare-argv) 2))
+                     :merge-tail (subvec merge-argv (- (count merge-argv) 2))
+                     :abort-definition
+                     (get-in merge-definition [:attributes "land/abort-definition"])
+                     :queue-instruction
+                     ((get-in merge-steps [:take-turn :attributes "workflow/instruction"])
+                      params)
+                     :signoff-instruction
+                     ((get-in land-steps [:signoff :attributes "workflow/instruction"])
+                      params)})))]
           (is (= "rebase" prepare-policy))
           (is (= ["feature/fixture" "squash"] merge-tail))
           (is (= "millstrand-ui.land/land-abort" abort-definition))
           (doseq [instruction [queue-instruction signoff-instruction]]
             (is (str/includes?
                  instruction
-                 "strand --workspace \"/tmp/feature-worktree/.millstrand\"")))))
+                 (str "strand --workspace \""
+                      (.getCanonicalPath (io/file "/tmp/canonical-checkout/.millstrand")) "\""))))))
       (let [card (weaver/add! rt {:title "Blocked work"})
             evidence (weaver/add! rt {:title "Decision evidence"})]
         (weaver/op! rt 'weave
@@ -182,7 +185,7 @@
     result))
 
 (defn- temporary-git-worktree! []
-  (let [dir (.toFile (Files/createTempDirectory "auto-inspect-"
+  (let [dir (.toFile (Files/createTempDirectory (.toPath (io/file "/tmp")) "ui-"
                                                 (make-array FileAttribute 0)))]
     (git! dir "git" "init" "--quiet")
     (git! dir "git" "config" "user.email" "fixture@example.test")
@@ -194,6 +197,50 @@
     (git! dir "git" "update-ref" "refs/remotes/origin/main" "HEAD")
     (git! dir "git" "checkout" "--quiet" "-b" "auto/fixture")
     dir))
+
+(deftest land-uses-canonical-workspace
+  (let [repo (temporary-git-worktree!)
+        feature (io/file repo "feature")
+        canonical (io/file repo ".millstrand")
+        files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
+                                  "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                  "me/hourly_slow_query.clj"]]
+                        [path (slurp path)]))
+        options {:storage :sqlite-memory
+                 :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
+                 :init-clj (slurp "init.clj") :files files}
+        params {:feature "Canonical landing" :branch "feature/landing"
+                :worktree (.getCanonicalPath feature)}]
+    (try
+      (git! repo "git" "worktree" "add" "--quiet" "-b" "feature/landing" (.getPath feature))
+      (t/with-weaver-world [ctx (assoc options :root (.getPath canonical))]
+        (current/with-runtime (:runtime ctx)
+          (let [card (weaver/add! (:runtime ctx)
+                                  {:title "Canonical card"
+                                   :attributes {:kanban/card "true" :kanban/type "feature"
+                                                :kanban/lane "pending"}})
+                result (workflow/start! "canonical-land" :land (assoc params :card (:id card)))
+                strands (:strands (graph/subgraph (:runtime ctx)
+                                                  [(:id (workflow/current-root "canonical-land"))]))
+                progress (first (filter #(= "millhouse.land.card-actions/rework-card!"
+                                           (attr-get % :code/fn)) strands))]
+            (is (= ["Resolve and verify the pull request"] (mapv :title (:ready result))))
+            ;; Run the actual card action at the same runtime as Land. Do not
+            ;; advance into quality/review or any real external side effects.
+            ((requiring-resolve (symbol (attr-get progress :code/fn)))
+             (workflow/json->params (attr-get progress :code/params)))
+            (is (= "claimed" (attr-get (weaver/show (:runtime ctx) (:id card)) :kanban/lane)))
+            (let [definition @(requiring-resolve 'millstrand-ui.land/land)
+                  signoff (first (filter #(= :signoff (:id %)) (:steps definition)))
+                  instruction ((get-in signoff [:attributes "workflow/instruction"]) params)]
+              (is (str/includes? instruction (str "strand --workspace \""
+                                                  (.getCanonicalPath canonical) "\"")))))))
+      (t/with-weaver-world [ctx (assoc options :root (.getPath (io/file feature ".millstrand")))]
+        (current/with-runtime (:runtime ctx)
+          (is (thrown-with-msg? clojure.lang.ExceptionInfo #"canonical workspace"
+                               (workflow/start! "wrong-workspace" :land params)))
+          (is (empty? (weaver/list (:runtime ctx) [:= [:attr "workflow/run-id"] "wrong-workspace"] {})))))
+      (finally (shell/sh "rm" "-rf" (.getPath repo))))))
 
 (deftest auto-inspect-contract-routes-evidence-and-changed-work
   (t/with-weaver-world

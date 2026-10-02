@@ -1,6 +1,7 @@
 (ns millstrand-ui.land
   "Millstrand UI's one-seat review and squash landing policy."
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.java.io :as io]
+            [clojure.spec.alpha :as s]
             [millhouse.land.support :as support]
             [millhouse.workflow :as workflow]
             [millhouse.workflow.execution :as execution]
@@ -9,6 +10,17 @@
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]))
+
+(defn- landing-workspace [worktree]
+  (.getCanonicalPath (io/file (support/canonical-worktree worktree) ".millstrand")))
+
+(defn- require-landing-workspace! [worktree]
+  (let [expected (landing-workspace worktree)
+        actual (.getCanonicalPath
+                (io/file (get-in (current/runtime) [:metadata :config-dir])))]
+    (when-not (= expected actual)
+      (fail! "Start Land in the canonical workspace, not the feature worktree's Weaver"
+             {:workspace actual :expected-workspace expected :worktree worktree}))))
 
 (defn- non-blank-string?
   "Return true when v is a non-blank string."
@@ -224,7 +236,7 @@
 
                        Withdrawal stops shell work first; a possibly submitted merge
                        requires reconciliation instead.
-                     " {:workspace (str worktree "/.millstrand")})))
+                     " {:workspace (landing-workspace worktree)})))
    (support/shell-gate :prepare-merge "Update the branch and validate its final HEAD"
                        [:take-turn]
                        (fn [{:keys [branch]}]
@@ -271,14 +283,15 @@
    :param-docs {:feature "Work identity being landed."
                 :branch "Branch containing the change."
                 :worktree "Absolute path to the branch's worktree."
-                :card "Optional kanban card to finish after landing."
+                :card "Optional kanban card in the canonical workspace to finish after landing."
                 :pr-number "Existing draft or ready PR; omit to resolve from the branch."
                 :reviewer "Single configured review agent seat; defaults to reviewer."}}
   (workflow/workflow
    (fn [{:keys [branch]}] (str "Land: " branch))
    (stage "ready")
    (workflow/step :resolve-pr "Resolve and verify the pull request" :self
-                  (fn [{:keys [pr-number branch]}]
+                  (fn [{:keys [pr-number branch worktree]}]
+                    (require-landing-workspace! worktree)
                     (format-alpha/prose
                      "
                        {pr}Push the clean `{branch}` branch. Reuse its open PR,
@@ -326,7 +339,7 @@
                               when the required repair changes the authorized scope or
                               ownership; abort before merge if that decision changes the
                               plan.
-                            " {:workspace (str worktree "/.millstrand")}))})))
+                            " {:workspace (landing-workspace worktree)}))})))
 
 (defn signoff!
   "Retire a ready landing root before its explicit approved/abort route.
