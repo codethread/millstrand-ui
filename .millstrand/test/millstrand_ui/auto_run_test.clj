@@ -11,6 +11,7 @@
             [millhouse.cron :as cron]
             [millhouse.kanban :as kanban]
             [millhouse.workflow :as workflow]
+            [millstrand-ui.land-recovery-test]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.runtime.alpha :as runtime]
@@ -817,6 +818,8 @@
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."
   [& _]
-  (let [{:keys [fail error]} (run-tests 'millstrand-ui.auto-run-test)]
+  (let [{:keys [fail error]}
+        (run-tests 'millstrand-ui.auto-run-test
+                   'millstrand-ui.land-recovery-test)]
     (shutdown-agents)
     (System/exit (if (zero? (+ fail error)) 0 1))))
