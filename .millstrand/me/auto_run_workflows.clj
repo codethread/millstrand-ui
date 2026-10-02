@@ -163,9 +163,10 @@
 (s/def ::canonical-root ::text)
 (s/def ::resource-inventory ::text)
 (s/def ::handoff-note ::text)
+(s/def ::worktree-head ::text)
 (s/def ::retention-receipt
   (s/keys :req-un [::worker-run-id ::canonical-root ::resource-inventory
-                   ::handoff-note]))
+                   ::handoff-note ::branch ::worktree ::worktree-head]))
 
 (defn- retain-inspection-worktree [dependencies]
   (workflow/checkpoint
@@ -188,9 +189,10 @@
          - Next action: {next-action}
 
          Retain branch {branch} and worktree {worktree}. Include the exact current
-         Harnesses worker run ID, canonical root, workflow run ID and all owned
-         resources in the note. Supply its note ID and custody details as the
-         retained choice input. This records retention, not cleanup or completion.
+         Harnesses worker run ID, canonical root, workflow run ID, full worktree
+         HEAD and all owned resources in the note. Supply those exact values, its
+         note ID and custody details as the retained choice input. This records
+         retention, not cleanup or completion.
 
          Do not remove resources, reserve clean completion, finish the card or
          launch a cleanup worker here. Return after the remaining ready steps.
@@ -266,11 +268,15 @@
    (workflow/step :inspect "Inspect the card-defined scope" :self inspect-introduction)
    (inspect-disposition)))
 
+(defn- clean-role [role]
+  {"auto-run/role" role
+   "auto-run/card" (fn [{:keys [card]}] card)})
+
 (workflow/defworkflow! auto-inspect-clean
-  "Verify evidence-only work and retain custody for separately owned cleanup."
+  "Hand a verified clean inspection to an independent canonical-root finisher."
   {:entrypoints #{:continue} :param-spec ::inspect-continuation-params}
   (workflow/workflow
-   "Retain clean inspection"
+   "Finish clean inspection"
    (shell-gate :verify-clean "Verify no dirty files or commits ahead" []
                clean-worktree-argv 120
                (format/prose
@@ -279,7 +285,123 @@
                   are ahead. Leave the card open and record the actual finding;
                   do not manufacture a PR.
                 " {}))
-   (retain-inspection-worktree [:verify-clean])))
+   (retain-inspection-worktree [:verify-clean])
+   (workflow/step
+    :prepare-clean-handoff "Freeze the clean finisher request" :self
+    :depends-on [:retain-worktree]
+    :attributes (clean-role "clean-worker-prepare")
+    (fn [{:keys [card branch worktree]}]
+      (format/prose
+       "
+         Read the retained choice input and card {card}'s handoff note. Resolve
+         the canonical root from {worktree}. Locate this delivery root's unique
+         auto-run/role=clean-finisher target for card {card}; it is not a phase
+         step. Require card auto-run/run-id names YOUR current Harnesses run and
+         your target is not the clean finisher.
+
+         Stop owned processes and record exact resources. Freeze on the finisher
+         target: auto-run/worker-run-id, auto-run/canonical-root, and the complete
+         auto-run/finisher-request. That request uses `agent assign` with grunt,
+         canonical-root cwd, the clean-finisher task, `stop-on-complete` policy and
+         request ID auto-clean-finisher/CLEAN_FINISHER_TARGET_ID. Assignment binds
+         the target's stored workflow instruction and policy into durable context.
+         Read every value back. Never vary a frozen request or migrate an
+         already-poured run.
+       " {:card card :branch branch :worktree worktree})))
+   (workflow/step
+    :accept-clean-finisher "Accept the independent clean finisher" :self
+    :depends-on [:prepare-clean-handoff]
+    :attributes (clean-role "clean-worker-accept")
+    (fn [{:keys [card]}]
+      (format/prose
+       "
+         Launch exactly the frozen request with `strand agent assign grunt` using
+         --cwd CANONICAL_ROOT, --task CLEAN_FINISHER_TARGET_ID, --policy
+         stop-on-complete, --request-id
+         auto-clean-finisher/CLEAN_FINISHER_TARGET_ID and your own --by-identity.
+         The blocked target is intentional. On an uncertain reply, use `strand
+         agent show --request` with the same key and verify target, cwd and frozen
+         assignment context.
+
+         Store the accepted run as auto-run/finisher-run-id on the finisher target
+         and card {card}'s handoff note. Read back worker receipt, finisher receipt
+         and immutable request before completing. Never launch a replacement.
+       " {:card card})))
+   (workflow/step
+    :handoff-clean-worker "Release clean inspection custody and return" :self
+    :depends-on [:accept-clean-finisher]
+    :attributes (clean-role "clean-handoff-worker")
+    (fn [{:keys [card]}]
+      (format/prose
+       "
+         Verify card {card}'s current worker receipt still names YOUR run and the
+         accepted finisher is a different run at the canonical root serving the
+         clean-finisher target. Complete only this release step, then return.
+         Do not await the finisher, remove resources, reserve clean completion or
+         finish the card. A shell cd does not release your persistent cwd.
+       " {:card card})))
+   (workflow/step
+    :clean-finisher "Hold independent clean cleanup custody" :self
+    :depends-on [:handoff-clean-worker]
+    :attributes (clean-role "clean-finisher")
+    (fn [{:keys [card worktree]}]
+      (format/prose
+       "
+         You are the independent canonical-root clean finisher for card {card}.
+         Keep your session at the canonical root and use explicit Git cwd for
+         {worktree}. This target is a custody anchor, not the next phase. Require
+         its immutable finisher receipt names your lineage's original run and its
+         worker receipt names a different run. A positively settled failed owner
+         may hand custody only to its accepted native resume or accepted fresh
+         `agent assign --after` continuation. The original assignment's frozen
+         context makes `--after` available when its native session is unusable.
+         Never rewrite the original receipt or launch an unrelated replacement.
+         Drive the ready
+         clean-finisher phases with explicit step IDs. Keep this anchor open until
+         cleanup and card completion are verified.
+       " {:card card :worktree worktree})))
+   (workflow/step
+    :await-clean-worker "Await exact clean worker settlement" :self
+    :depends-on [:handoff-clean-worker]
+    :attributes (clean-role "clean-finisher-wait")
+    (fn [{:keys [card]}]
+      (format/prose
+       "
+         Read auto-run/worker-run-id from card {card}'s clean-finisher target.
+         Await that exact worker with query agent-run-settled and min-count 1.
+         Require settled=true, substatus=completed and exit-code=0. Other managed
+         runs whose cwd is inside the retained worktree need positive terminal
+         settlement, not successful execution. External/native observations are
+         not managed settlement: do not edit them. Record reconciliation and use
+         the finish operation's live local process and Weaver audit to prove there
+         is no holder. Timeouts are bounded waits, not success.
+       " {:card card})))
+   (workflow/step
+    :finish-clean "Clean resources and finish the clean card" :self
+    :depends-on [:await-clean-worker]
+    :attributes (clean-role "clean-finisher-complete")
+    (fn [{:keys [card branch worktree]}]
+      (format/prose
+       "
+         Re-read card {card}'s clean disposition, retained receipt and immutable
+         finisher request. Invoke `strand clean-inspection-finish --help`, then run
+         that operation in the canonical Weaver with the exact disposition step,
+         retention step, worker and finisher run IDs, branch {branch}, worktree
+         {worktree}, retained full expected HEAD, canonical root, handoff note,
+         your identity and request ID
+         auto-clean-finish/{card}. Always supply the immutable original finisher
+         run ID; the operation resolves an accepted continuation itself. It binds
+         both checkpoint roots to this card's delivery context, rejects initially
+         absent resources, verifies exact worker and local process/Weaver custody,
+         removes compact allowlisted ignored artifacts, uses inspected `wktree`
+         lifecycle for the branch/worktree, calls mark-clean-finishing!, then the
+         shared finish-card! action.
+
+         A refusal or cleanup failure is visible operational failure: retain the
+         card and evidence and do not assert this step succeeded. Only after the
+         card is closed done may you complete this phase and the clean-finisher
+         custody anchor.
+       " {:card card :branch branch :worktree worktree})))))
 
 (workflow/defworkflow! auto-inspect-fixed
   "Select the admitted changed-work delivery policy after recording fixed evidence."

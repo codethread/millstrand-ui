@@ -7,8 +7,10 @@
             [millhouse.workflow.execution :as execution]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.format.alpha :as format-alpha]
+            [millstrand.api.graph.alpha :as graph]
             [millstrand.api.millstrand.alpha :as millstrand]
             [millstrand.api.runtime.alpha :as runtime]
+            [millstrand.api.weaver.alpha :as weaver]
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]))
 
 (defn- landing-workspace [worktree]
@@ -179,7 +181,7 @@
 
 (workflow/defworkflow! land-abort
   "Record an aborted landing and leave the work available for follow-up."
-  {:entrypoints #{:continue} :param-spec ::land-abort-params :defaults {}}
+  {:entrypoints #{:start :continue} :param-spec ::land-abort-params :defaults {}}
   (workflow/workflow
    (fn [{:keys [branch]}] (str "Abort land: " branch))
    (update (stage "abort") :attributes assoc
@@ -391,3 +393,71 @@
   [{:op/keys [args]}]
   (assoc (signoff! (update args :input workflow/json->params))
          :operation "land-signoff"))
+
+
+(defn abort-misplaced!
+  "Abandon a misplaced pre-signoff root whose reviewer has positively failed.
+
+  This recovery-only route never approves a review or merge. Exact reviewer row
+  comparison fences a concurrent retry; Workflow owns managed gate retirement."
+  [{:keys [run-id root step expected-run by-identity reason]}]
+  (require-valid! ::non-blank-string by-identity "Recovery requires an actor")
+  (require-valid! ::non-blank-string reason "Recovery requires an authorized reason")
+  (let [rt (current/runtime)
+        current-root (workflow/current-root run-id)
+        {:keys [card branch worktree]} (workflow/json->params
+                                       (attr-get current-root :workflow/context))
+        actual (.getCanonicalPath (io/file (get-in rt [:metadata :config-dir])))
+        frontier (workflow/ready run-id)
+        gates (filter #(attr-get % :workflow/gate)
+                      (:strands (graph/subgraph rt [(:id current-root)])))
+        run (weaver/show rt expected-run)
+        servers (graph/incoming-edges rt [step] "serves")]
+    (when-not (and (= root (:id current-root))
+                   (= "land" (attr-get current-root :workflow/family))
+                   (= "ready" (attr-get current-root :land/stage))
+                   (every? support/non-blank-string? [card branch worktree])
+                   (= actual (.getCanonicalPath (io/file worktree ".millstrand")))
+                   (not= actual (landing-workspace worktree))
+                   (nil? (weaver/show rt card))
+                   (= [step] (mapv :id frontier))
+                   (= "agent" (:gate (first frontier)))
+                   (= [expected-run] (mapv :from_strand_id servers))
+                   (= "true" (attr-get run :harness/run))
+                   (= "failed" (attr-get run :harness/status))
+                   (= "true" (attr-get run :harness/settled))
+                   (every? (fn [gate]
+                             (and (contains? #{"code" "shell" "agent"}
+                                             (attr-get gate :workflow/gate))
+                                  (or (= step (:id gate)) (= "closed" (:state gate)))
+                                  (not-any? #(some? (attr-get gate %))
+                                            [:shell/running :shell/attempt-id
+                                             :shell/custody-handle]))) gates))
+      (fail! "Expected exact misplaced pre-signoff Land with a settled failed reviewer; nothing retired"
+             {:run-id run-id :root root :step step :expected-run expected-run}))
+    (let [freeze (execution/quiesce-run! rt run-id reason)
+          receipt (execution/retire! rt freeze)]
+      (if (= :settled (:status receipt))
+        (assoc (execution/abandon-run!
+                rt {:run-id run-id :root-id root :reason reason :by-identity by-identity
+                    :retirement receipt :workflow :land-abort
+                    ;; The canonical card is deliberately NOT passed to the foreign
+                    ;; Weaver. Recovery owns its lane; this root only records abort.
+                    :params {:branch branch :reason reason}
+                    :domain-patches [{:before run
+                                      :update {:attributes {:land/abandoned-with-root root}}}]})
+               :status "abort-routed" :retirement receipt)
+        {:status "waiting-for-settlement" :retirement receipt}))))
+
+(millstrand/defop! land-abort-misplaced
+  "Retire a misplaced Land after settled reviewer failure; never approve or merge."
+  {:arg-spec {:op "land-abort-misplaced" :hook-class :mutating :deadline-class :standard
+              :positionals [{:name :run-id :type :string :required? true}]
+              :flags {:root {:type :string :required? true :doc "Exact pre-signoff Land root."}
+                      :step {:type :string :required? true :doc "Exact failed reviewer gate."}
+                      :expected-run {:type :string :required? true :doc "Positively settled failed reviewer run."}
+                      :by-identity {:type :string :required? true :doc "Authorized recovery actor."}
+                      :reason {:type :string :required? true :doc "Recovery authorization and evidence."}}}
+   :returns {:type :map :extra :json}}
+  [{:op/keys [args]}]
+  (assoc (abort-misplaced! args) :operation "land-abort-misplaced"))

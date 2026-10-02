@@ -37,9 +37,15 @@
                           :millstrand-ui/land]
                   :required? true})
 
+(runtime/module! runtime :millstrand-ui/admission-authority
+                 {:file "me/admission_authority.clj"
+                  :after [:millhouse/land]
+                  :required? true})
+
 (runtime/module! runtime :millstrand-ui/auto-run
                  {:file "me/auto_run.clj"
                   :after [:millstrand-ui/auto-run-workflows
+                          :millstrand-ui/admission-authority
                           :millhouse/harnesses]
                   :required? true})
 
