@@ -392,30 +392,42 @@
                   (let [root (workflow/current-root run-id)
                         strands (:strands (graph/subgraph rt [(:id root)]))
                         workflow-finisher-target (role-step strands "clean-finisher")
+                        cleanup-blocker
+                        (:task (weaver/op! rt 'kanban
+                                           ["task" "add" (:id card)
+                                            "Retain historical cleanup custody"]))
                         finisher-target
                         (:task (weaver/op! rt 'kanban
                                            ["task" "add" (:id card)
-                                            "Historical clean inspection finisher"]))
-                        finisher (weaver/add!
-                                  rt {:title "Canonical clean finisher"
-                                      :attributes {:harness/run "true"
-                                                   :harness/status "running"
-                                                   :harness/settled "false"
-                                                   :harness/session-usable "false"
-                                                   :harness/cwd canonical-root
-                                                   :harness/target (:id finisher-target)
-                                                   :harness/logical-id "clean-finisher-lineage"
-                                                   :identity/id "fixture-finisher"
-                                                   :harness/published "true"}})]
+                                            "Historical clean inspection finisher"
+                                            "--body"
+                                            "Use supported clean-inspection-finish with immutable receipts."
+                                            "--depends-on" (:id cleanup-blocker)]))
+                        _tagged
+                        (weaver/update! rt (:id finisher-target)
+                                        {:attributes
+                                         {:auto-run/role "clean-finisher"
+                                          :auto-run/card (:id card)
+                                          :auto-run/worker-run-id (:id worker)}})
+                        finisher-summary
+                        (weaver/op! rt 'agent
+                                    ["assign" "grunt"
+                                     "--cwd" canonical-root
+                                     "--task" (:id finisher-target)
+                                     "--policy" "stop-on-complete"
+                                     "--request-id" "fixture-clean-finisher"
+                                     "--by-identity" "fixture-finisher"])
+                        finisher (weaver/show rt (:id finisher-summary))]
                     ;; Historical clean roots have no finisher target. A real
-                    ;; separately created task can truthfully own this custody.
+                    ;; separately created and accepted task can own this custody.
                     (is (not= (:id workflow-finisher-target)
                               (:id finisher-target)))
+                    (is (contains? #{"blocked" "ready"}
+                                   (attr-get finisher :harness/status)))
+                    (is (map? (attr-get finisher :harness/context)))
                     (weaver/update! rt (:id finisher-target)
-                                    {:attributes {:auto-run/role "clean-finisher"
-                                                  :auto-run/card (:id card)
-                                                  :auto-run/worker-run-id (:id worker)
-                                                  :auto-run/finisher-run-id (:id finisher)}})
+                                    {:attributes
+                                     {:auto-run/finisher-run-id (:id finisher)}})
                     (let [gate (first (workflow/ready run-id))]
                       (is (zero? (command-exit worktree
                                                (attr-get (weaver/show rt (:id gate))
@@ -585,54 +597,67 @@
                                                         {:kanban/lane "in_review"}})))
                           (is (= "active" (:state (weaver/show rt (:id card))))
                           (is (.exists worktree)))
-                        (weaver/update! rt (:id finisher)
-                                        {:attributes {:harness/status "failed"
-                                                      :harness/substatus "execution"
+                      (let [queued-finisher (weaver/show rt (:id finisher))]
+                        (is (contains? #{"blocked" "ready"}
+                                       (attr-get queued-finisher :harness/status)))
+                        (is (nil? (attr-get queued-finisher
+                                           :harness/invocation))))
+                      (weaver/update! rt (:id finisher)
+                                      {:attributes {:harness/status "failed"
+                                                    :harness/substatus "execution"
+                                                    :harness/settled "true"
+                                                    :harness/session-usable "false"
+                                                    :harness/exit-code 1}})
+                      (let [continuation-summary
+                            (weaver/op! rt 'agent
+                                        ["assign" "grunt"
+                                         "--cwd" canonical-root
+                                         "--task" (:id finisher-target)
+                                         "--after" (:id finisher)
+                                         "--request-id"
+                                         "fixture-clean-finisher-after"
+                                         "--by-identity"
+                                         "fixture-continuation"])
+                            continuation (weaver/show rt (:id continuation-summary))
+                            continued (assoc reconciled
+                                             :by-identity "fixture-continuation")]
+                        (is (= (:id finisher)
+                               (attr-get continuation :harness/after)))
+                        (is (contains? #{"blocked" "ready"}
+                                       (attr-get continuation :harness/status)))
+                        (is (nil? (attr-get continuation :harness/invocation)))
+                        (is (= [(:id finisher)]
+                               (mapv :to_strand_id
+                                     (graph/outgoing-edges
+                                      rt [(:id continuation)] "continues"))))
+                        (io/delete-file (io/file worktree ".env"))
+                        (testing "an unusable failed owner hands off through accepted --after"
+                          (let [result (finish! continued)
+                                finished (weaver/show rt (:id card))
+                                cleanup (attr-get finished :auto-inspect/cleanup-receipt)
+                                recorded (attr-get finished
+                                                   :auto-inspect/clean-finish-request)]
+                            (is (= :finished (:outcome result)))
+                            (is (= (:id continuation)
+                                   (:effective-finisher-run-id result)))
+                            (is (= (:id finisher) (:finisher-run-id recorded)))
+                            (is (= "fixture-finisher" (:by-identity recorded)))
+                            (is (= (:id continuation)
+                                   (:effective-finisher-run-id cleanup)))
+                            (is (= [(:id external)]
+                                   (get-in cleanup [:custody-audit
+                                                    :external-observations])))))
+                        (is (not (.exists worktree)))
+                        (is (not (zero? (:exit (shell/sh
+                                               "git" "-C" canonical-root
+                                               "show-ref" "--verify" "--quiet"
+                                               "refs/heads/auto/clean")))))
+                        (weaver/update! rt (:id continuation)
+                                        {:attributes {:harness/status "stopped"
+                                                      :harness/substatus "completed"
                                                       :harness/settled "true"
-                                                      :harness/exit-code 1}})
-                        (let [continuation
-                              (weaver/add!
-                               rt {:title "Accepted clean finisher continuation"
-                                   :attributes {:harness/run "true"
-                                                :harness/status "running"
-                                                :harness/settled "false"
-                                                :harness/cwd canonical-root
-                                                :harness/target (:id finisher-target)
-                                                :harness/after (:id finisher)
-                                                :harness/logical-id "clean-finisher-lineage"
-                                                :identity/id "fixture-continuation"
-                                                :harness/published "true"}
-                                   :edges [{:type "continues" :to (:id finisher)}]})
-                              continued (assoc reconciled
-                                               :by-identity "fixture-continuation")]
-                          (io/delete-file (io/file worktree ".env"))
-                          (testing "an unusable failed owner hands off through accepted --after"
-                            (let [result (finish! continued)
-                                  finished (weaver/show rt (:id card))
-                                  cleanup (attr-get finished :auto-inspect/cleanup-receipt)
-                                  recorded (attr-get finished
-                                                     :auto-inspect/clean-finish-request)]
-                              (is (= :finished (:outcome result)))
-                              (is (= (:id continuation)
-                                     (:effective-finisher-run-id result)))
-                              (is (= (:id finisher) (:finisher-run-id recorded)))
-                              (is (= "fixture-finisher" (:by-identity recorded)))
-                              (is (= (:id continuation)
-                                     (:effective-finisher-run-id cleanup)))
-                              (is (= [(:id external)]
-                                     (get-in cleanup [:custody-audit
-                                                      :external-observations])))))
-                          (is (not (.exists worktree)))
-                          (is (not (zero? (:exit (shell/sh
-                                                 "git" "-C" canonical-root
-                                                 "show-ref" "--verify" "--quiet"
-                                                 "refs/heads/auto/clean")))))
-                          (weaver/update! rt (:id continuation)
-                                          {:attributes {:harness/status "stopped"
-                                                        :harness/substatus "completed"
-                                                        :harness/settled "true"
-                                                        :harness/exit-code 0}})
-                          (is (= :finished (:outcome (finish! continued)))))))))))))))
+                                                      :harness/exit-code 0}})
+                        (is (= :finished (:outcome (finish! continued)))))))))))))))
       (finally (shell/sh "rm" "-rf" (.getPath canonical))))))
 
 (deftest land-uses-canonical-workspace

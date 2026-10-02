@@ -149,10 +149,12 @@ evidence and workflow run ID. These are durable handoff assertions, not proof of
 worker settlement or cleanup. Read the recorded choice input and note when resuming;
 later `complete --context` does not re-render existing instructions.
 
-New clean runs then use a persistent `clean-finisher` target. The worker freezes the
-exact grunt alias, canonical cwd, target, request ID, complete prompt and worker run
-receipt before launch; it records the accepted finisher run before releasing. The
-finisher waits for successful settlement of the exact worker. Other managed runs
+New clean runs then use a persistent `clean-finisher` target. The worker freezes an
+exact `agent assign grunt` request: canonical cwd, task target,
+`stop-on-complete` policy, request ID and worker run receipt. Assignment freezes the
+target instruction and policy in `harness/context`; the worker records the accepted
+finisher run before releasing. The finisher waits for successful settlement of the
+exact worker. Other managed runs
 whose cwd is within the retained worktree need positive terminal settlement, but do
 not need successful execution. External/native observations are not managed process
 settlement: never rewrite them to look settled. They require explicit reconciliation
@@ -169,22 +171,24 @@ roots and requires their workflow run and card/branch/worktree contexts to match
 card's actual auto-run delivery. It verifies all durable evidence and accepted
 canonical custody, freezes the original request, executes
 `.millstrand/clean-inspection-cleanup.sh`, then records the cleanup receipt. An older
-clean inspection does not need a fabricated step added to its closed workflow. Its
-separately assigned owner may use a real task parented to the card and tagged as the
-`clean-finisher` target with the exact card, worker, and original finisher receipts.
+clean inspection does not need a fabricated step added to its closed workflow. Create
+a real task parented to the card whose body names the supported finish operation and
+exact evidence. Tag it as the `clean-finisher` target with the card and worker
+receipts, then accept its owner with `agent assign`. Record that accepted run as the
+original finisher receipt; do not synthesize a workflow step or rewrite old evidence.
 
-A positively settled failed finisher may transfer custody through either supported
-accepted continuation: native `resume`, or a fresh `agent assign --after` when its
+A positively settled failed assigned finisher may transfer custody through either
+supported accepted continuation: native `resume`, or a fresh `agent assign --after` when its
 native session is unusable. Both preserve the target, logical lineage and canonical
 cwd. The original finisher, initiating actor, and request remain immutable; the
 cleanup receipt separately names the continuation that performed completion. Exact
 replay remains harmless after interrupted cleanup and after a successfully completed
-continuation. Frozen requests from before checkpoint
-root IDs were recorded replay against their original fields and are not rewritten. A
+continuation. Frozen requests from before checkpoint root IDs were recorded replay
+against their original fields and are not rewritten. A
 first request with both branch and worktree already absent is refused rather than
 treated as successful cleanup. A legacy retained receipt missing the
-branch/worktree/HEAD fields, or stale external
-cwd observations after a clean local audit, requires explicit `--reconciliation`
+branch/worktree/HEAD fields, or stale external cwd observations after a clean local
+audit, requires explicit `--reconciliation`
 evidence. These are bounded existing-run paths, not inferred backfill. Do not use the
 operation for needs-review or blocked outcomes, and do not mutate the database or
 call implementation functions from a REPL to imitate completion.

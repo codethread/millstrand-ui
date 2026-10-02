@@ -230,7 +230,7 @@
         (do
           (when-not
            (or (and (= "active" (:state card-view))
-                    (contains? #{"ready" "running"}
+                    (contains? #{"blocked" "ready" "running"}
                                (attr-get predecessor :harness/status)))
                (and (= "closed" (:state card-view))
                     (= "done" (attr-get card-view :kanban/outcome))

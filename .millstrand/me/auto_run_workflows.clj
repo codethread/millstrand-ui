@@ -301,11 +301,12 @@
 
          Stop owned processes and record exact resources. Freeze on the finisher
          target: auto-run/worker-run-id, auto-run/canonical-root, and the complete
-         auto-run/finisher-request. That request uses grunt, canonical-root cwd,
-         the clean-finisher target, request ID
-         auto-clean-finisher/CLEAN_FINISHER_TARGET_ID, and the target's complete
-         stored workflow/instruction as one prompt. Read every value back. Never
-         vary a frozen request or migrate an already-poured run.
+         auto-run/finisher-request. That request uses `agent assign` with grunt,
+         canonical-root cwd, the clean-finisher task, `stop-on-complete` policy and
+         request ID auto-clean-finisher/CLEAN_FINISHER_TARGET_ID. Assignment binds
+         the target's stored workflow instruction and policy into durable context.
+         Read every value back. Never vary a frozen request or migrate an
+         already-poured run.
        " {:card card :branch branch :worktree worktree})))
    (workflow/step
     :accept-clean-finisher "Accept the independent clean finisher" :self
@@ -314,11 +315,13 @@
     (fn [{:keys [card]}]
       (format/prose
        "
-         Launch exactly the frozen request with `strand agent run grunt` using
-         --cwd CANONICAL_ROOT, --target CLEAN_FINISHER_TARGET_ID, --request-id
+         Launch exactly the frozen request with `strand agent assign grunt` using
+         --cwd CANONICAL_ROOT, --task CLEAN_FINISHER_TARGET_ID, --policy
+         stop-on-complete, --request-id
          auto-clean-finisher/CLEAN_FINISHER_TARGET_ID and your own --by-identity.
          The blocked target is intentional. On an uncertain reply, use `strand
-         agent show --request` with the same key and verify target, cwd and prompt.
+         agent show --request` with the same key and verify target, cwd and frozen
+         assignment context.
 
          Store the accepted run as auto-run/finisher-run-id on the finisher target
          and card {card}'s handoff note. Read back worker receipt, finisher receipt
@@ -350,8 +353,10 @@
          its immutable finisher receipt names your lineage's original run and its
          worker receipt names a different run. A positively settled failed owner
          may hand custody only to its accepted native resume or accepted fresh
-         `agent assign --after` continuation; never rewrite the original receipt or
-         launch an unrelated replacement. Drive the ready
+         `agent assign --after` continuation. The original assignment's frozen
+         context makes `--after` available when its native session is unusable.
+         Never rewrite the original receipt or launch an unrelated replacement.
+         Drive the ready
          clean-finisher phases with explicit step IDs. Keep this anchor open until
          cleanup and card completion are verified.
        " {:card card :worktree worktree})))
