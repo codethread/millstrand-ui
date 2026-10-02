@@ -127,23 +127,23 @@ All paths below have `/api` prepended. `w` is a discovered workspace ID; `null`
 means the startup workspace and remains a distinct cache identity. IDs and workspace
 parameters are URI-encoded. The only global key is discovery. No key was renamed.
 
-| Key                             | GET endpoint                         | Interval        | Enablement / override                                                                                               |
-| ------------------------------- | ------------------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `['workspaces']`                | `/workspaces?refresh`                | 30s             | One app owner; readers disabled (no independent fetch policy)                                                       |
-| `['board', w]`                  | `/board`                             | 5s              | Always in workspace dashboard; overview only while discovered running                                               |
-| `['agents', w]`                 | `/agents`                            | 5s              | Workspace consumers; overview only while discovered running                                                         |
-| `['agent-reply', w, id]`        | `/agent-runs/:id`                    | 5s when enabled | Expanded prompt/reply disclosure or review proposals; shared keys; visible terminal replies keep polling            |
-| `['views', w]`                  | `/views`                             | 15s             | Always in workspace dashboard                                                                                       |
-| `['card', w, id]`               | `/cards/:id`                         | 5s              | While detail/inspector mounted                                                                                      |
-| `['graph', w, id]`              | `/cards/:id/graph`                   | 10s             | `id !== null`                                                                                                       |
-| `['dependencies', w, ...cards]` | `/dependencies?card=...`             | 10s             | GraphView only while explicitly expanded; incident edges for the expanded cards with workspace-wide endpoint counts |
-| `['card-notes', w, id]`         | `/cards/:id/notes`                   | 5s when enabled | IssueDetail Notes tab only; disabled fetching and interval while hidden                                             |
-| `['notes', w, taskId]`          | `/cards/:cardId/tasks/:taskId/notes` | 5s when enabled | Expanded task only; existing key intentionally does not include cardId                                              |
-| `['reviews', w]`                | `/reviews`                           | 5s              | Workspace consumers (including sidebar)                                                                             |
-| `['review', w, id]`             | `/reviews/:id`                       | 5s              | Selected detail mounted                                                                                             |
-| `['review-comments', w, id]`    | `/reviews/:id/comments`              | 5s              | Selected comments mounted                                                                                           |
-| `['log-activity', w]`           | `/log-activity`                      | 5s              | Overview or selected-workspace poll owner; bindings and latest-event summaries                                      |
-| `['session-log', p, s]`         | `/session-logs/snapshot`             | none            | Disabled cache entry; the visible compact tail or expanded viewer writes SSE snapshots                              |
+| Key                             | GET endpoint                         | Interval          | Enablement / override                                                                                               |
+| ------------------------------- | ------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `['workspaces']`                | `/workspaces?refresh`                | 30s               | One app owner; readers disabled (no independent fetch policy)                                                       |
+| `['board', w]`                  | `/board`                             | 5s                | Always in workspace dashboard; overview only while discovered running                                               |
+| `['agents', w]`                 | `/agents`                            | 5s                | Workspace consumers; overview only while discovered running                                                         |
+| `['agent-reply', w, id]`        | `/agent-runs/:id`                    | 5s when enabled   | Expanded prompt/reply disclosure or review proposals; shared keys; visible terminal replies keep polling            |
+| `['views', w]`                  | `/views`                             | 15s               | Always in workspace dashboard                                                                                       |
+| `['card', w, id]`               | `/cards/:id`                         | 5s                | While detail/inspector mounted                                                                                      |
+| `['graph', w, id]`              | `/cards/:id/graph`                   | 10s               | `id !== null`                                                                                                       |
+| `['dependencies', w, ...cards]` | `/dependencies?card=...`             | 10s               | GraphView only while explicitly expanded; incident edges for the expanded cards with workspace-wide endpoint counts |
+| `['card-notes', w, id]`         | `/cards/:id/notes`                   | 5s when enabled   | IssueDetail Notes tab only; disabled fetching and interval while hidden                                             |
+| `['notes', w, taskId]`          | `/cards/:cardId/tasks/:taskId/notes` | 5s when enabled   | Expanded task only; existing key intentionally does not include cardId                                              |
+| `['reviews', w]`                | `/reviews`                           | 5s when supported | Workspace consumers (including sidebar); an explicit unsupported directory disables the interval                    |
+| `['review', w, id]`             | `/reviews/:id`                       | 5s                | Selected detail mounted                                                                                             |
+| `['review-comments', w, id]`    | `/reviews/:id/comments`              | 5s                | Selected comments mounted                                                                                           |
+| `['log-activity', w]`           | `/log-activity`                      | 5s                | Overview or selected-workspace poll owner; bindings and latest-event summaries                                      |
+| `['session-log', p, s]`         | `/session-logs/snapshot`             | none              | Disabled cache entry; the visible compact tail or expanded viewer writes SSE snapshots                              |
 
 Unless listed, queries inherit retry 1, stale time 3s, structural sharing and Query's
 mount/focus/reconnect defaults. Poll intervals do not imply background-tab polling.
@@ -225,7 +225,9 @@ Infinity`, `subscribed: false`, or a new key as a substitute.
 - `WorkspaceResourcePolls` is the selected-workspace owner for board, agents,
   reviews, saved views, and log activity. It remains mounted across issue, agent, and
   review modes,
-  so sidebar counts and agent freshness stay current in the background.
+  so sidebar counts and agent freshness stay current in the background. A review
+  directory that explicitly reports `unsupported` stops only its periodic interval;
+  focus/reconnect behavior and workspace lifecycle invalidation remain intact.
   `useSavedViews` reads the saved-view array directly (that response has no refresh
   timestamp). Shell code uses the concrete projection readers
   (`useBoardSnapshot`, `useBoardSidebar`, `useIssueBoard`, `useAgentIdentities`,
