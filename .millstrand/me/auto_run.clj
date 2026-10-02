@@ -84,7 +84,7 @@
       (when-not (= "true" (attr-get after :auto-inspect/clean-finishing))
         (fail! "Clean inspection completion reservation cannot be removed"
                {:card (:id before)}))
-      (if (= "closed" (:state after))
+      (if (and (not= "closed" (:state before)) (= "closed" (:state after)))
         (when-not (= "claimed" (attr-get before :kanban/lane))
           (fail! "Clean inspection completion requires a claimed card"
                  {:card (:id before) :lane (attr-get before :kanban/lane)}))
@@ -229,17 +229,17 @@
           (recur continuation))
         (do
           (when-not
-           (or (and (= "active" (:state card-view))
-                    (contains? #{"blocked" "ready" "running"}
-                               (attr-get predecessor :harness/status)))
-               (and (= "closed" (:state card-view))
-                    (= "done" (attr-get card-view :kanban/outcome))
-                    (= "stopped" (attr-get predecessor :harness/status))
-                    (= "completed" (attr-get predecessor :harness/substatus))
-                    (= "true" (attr-get predecessor :harness/settled))
-                    (zero? (or (attr-get predecessor :harness/exit-code) -1))))
+           ;; A completed replay reads the durable cleanup result; it does not
+           ;; assert that the finisher subsequently exited successfully. Closing
+           ;; an assigned target may itself stop its owner with :requested.
+           (or (= "closed" (:state card-view))
+               (contains? #{"ready" "running"}
+                          (attr-get predecessor :harness/status)))
             (fail! "Clean inspection finisher lineage has no active accepted owner"
-                   {:original finisher-run-id :owner (:id predecessor)}))
+                   {:original finisher-run-id :owner (:id predecessor)
+                    :status (attr-get predecessor :harness/status)
+                    :substatus (attr-get predecessor :harness/substatus)
+                    :settled (attr-get predecessor :harness/settled)}))
           predecessor)))))
 
 (def ^:dynamic *cleanup-environment*
@@ -431,10 +431,13 @@
              :custody-audit custody))))
 
 (defn- branch-present? [canonical-root branch]
-  (zero? (:exit (run-command
-                  ["git" "-C" canonical-root "show-ref"
-                   "--verify" "--quiet" (str "refs/heads/" branch)]
-                  {}))))
+  (let [result (run-command ["git" "-C" canonical-root "show-ref"
+                            "--verify" "--quiet" (str "refs/heads/" branch)] {})]
+    (case (:exit result)
+      0 true
+      1 false
+      (fail! "Cannot inspect cleanup branch"
+             {:branch branch :exit (:exit result) :error (:err result)}))))
 
 (defn- cleanup-resources-present? [canonical-root branch worktree]
   (and (.exists (io/file worktree))
@@ -509,10 +512,15 @@
           (fail! "Clean inspection resources were absent before cleanup reservation"
                  {:card card :branch branch :worktree worktree}))
         (if (= "closed" (:state card-view))
-          (do
+          (let [cleanup-receipt (attr-get card-view :auto-inspect/cleanup-receipt)
+                receipt-keys [:request-id :worker-run-id :finisher-run-id
+                              :branch :worktree]]
             (when-not (and (= "true" (attr-get card-view
                                                 :auto-inspect/clean-finishing))
-                           complete?)
+                           complete?
+                           (some? (:effective-finisher-run-id cleanup-receipt))
+                           (= (select-keys request-receipt receipt-keys)
+                              (select-keys cleanup-receipt receipt-keys)))
               (fail! "Closed clean inspection is missing completed cleanup evidence"
                      {:card card :branch branch :worktree worktree}))
             {:outcome :finished
@@ -520,7 +528,7 @@
              :request-id request-id
              :worker-run-id (:worker-run-id verified)
              :finisher-run-id (:finisher-run-id verified)
-             :effective-finisher-run-id effective-finisher-run-id
+             :effective-finisher-run-id (:effective-finisher-run-id cleanup-receipt)
              :branch branch
              :worktree worktree})
           (do

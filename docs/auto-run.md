@@ -69,8 +69,10 @@ A clean result needs no PR and hands its resources to the independent canonical-
 clean finisher below. A fix follows the existing full-land continuation and landing
 finisher. Inspect existing hourly findings before selecting work to avoid duplicating
 a fix.
-To disable new hourly cards, remove the job module declaration and refresh;
-removing it does not cancel cards or assignments already created.
+For a temporary pause, use a source-owned handler that explicitly returns `paused`
+and verify its live result after refresh. Removing a module declaration alone does
+not reliably unregister the live Cron job at this pin. Neither action cancels
+cards or assignments already created.
 
 When upgrading the former machine-local job, remove its duplicate Cron/job
 registrations from `init.local.clj` and its redundant `millhouse/cron` entry from
@@ -172,18 +174,23 @@ card's actual auto-run delivery. It verifies all durable evidence and accepted
 canonical custody, freezes the original request, executes
 `.millstrand/clean-inspection-cleanup.sh`, then records the cleanup receipt. An older
 clean inspection does not need a fabricated step added to its closed workflow. Create
-a real task parented to the card whose body names the supported finish operation and
-exact evidence. Tag it as the `clean-finisher` target with the card and worker
-receipts, then accept its owner with `agent assign`. Record that accepted run as the
-original finisher receipt; do not synthesize a workflow step or rewrite old evidence.
+a real task under the recovery coordinator whose body names the supported finish
+operation and exact evidence. Keep it outside the inspection card's child tasks:
+finishing that card otherwise stops its assigned cleanup owner before handoff can
+return. Tag the task as `clean-finisher` with the inspection card and worker receipts,
+then accept its owner with `agent assign`. Record that accepted run as the original
+finisher receipt; do not synthesize a workflow step or rewrite old evidence.
 
 A positively settled failed assigned finisher may transfer custody through either
 supported accepted continuation: native `resume`, or a fresh `agent assign --after` when its
 native session is unusable. Both preserve the target, logical lineage and canonical
 cwd. The original finisher, initiating actor, and request remain immutable; the
 cleanup receipt separately names the continuation that performed completion. Exact
-replay remains harmless after interrupted cleanup and after a successfully completed
-continuation. Frozen requests from before checkpoint root IDs were recorded replay
+replay remains harmless after interrupted cleanup, while its owner is still active,
+and after it stops. A completed replay proves resource absence and returns the
+original cleanup receipt; it does not rewrite or claim successful finisher exit.
+Ordinary labels remain editable after completion. Frozen requests from before
+checkpoint root IDs were recorded replay
 against their original fields and are not rewritten. A
 first request with both branch and worktree already absent is refused rather than
 treated as successful cleanup. A legacy retained receipt missing the

@@ -392,13 +392,18 @@
                   (let [root (workflow/current-root run-id)
                         strands (:strands (graph/subgraph rt [(:id root)]))
                         workflow-finisher-target (role-step strands "clean-finisher")
+                        coordinator (weaver/add!
+                                     rt {:title "Independent cleanup coordination"
+                                         :attributes {:kanban/card "true"
+                                                      :kanban/type "feature"
+                                                      :kanban/lane "claimed"}})
                         cleanup-blocker
                         (:task (weaver/op! rt 'kanban
-                                           ["task" "add" (:id card)
+                                           ["task" "add" (:id coordinator)
                                             "Retain historical cleanup custody"]))
                         finisher-target
                         (:task (weaver/op! rt 'kanban
-                                           ["task" "add" (:id card)
+                                           ["task" "add" (:id coordinator)
                                             "Historical clean inspection finisher"
                                             "--body"
                                             "Use supported clean-inspection-finish with immutable receipts."
@@ -422,8 +427,7 @@
                     ;; separately created and accepted task can own this custody.
                     (is (not= (:id workflow-finisher-target)
                               (:id finisher-target)))
-                    (is (contains? #{"blocked" "ready"}
-                                   (attr-get finisher :harness/status)))
+                    (is (= "ready" (attr-get finisher :harness/status)))
                     (is (map? (attr-get finisher :harness/context)))
                     (weaver/update! rt (:id finisher-target)
                                     {:attributes
@@ -598,8 +602,7 @@
                           (is (= "active" (:state (weaver/show rt (:id card))))
                           (is (.exists worktree)))
                       (let [queued-finisher (weaver/show rt (:id finisher))]
-                        (is (contains? #{"blocked" "ready"}
-                                       (attr-get queued-finisher :harness/status)))
+                        (is (= "ready" (attr-get queued-finisher :harness/status)))
                         (is (nil? (attr-get queued-finisher
                                            :harness/invocation))))
                       (weaver/update! rt (:id finisher)
@@ -623,8 +626,7 @@
                                              :by-identity "fixture-continuation")]
                         (is (= (:id finisher)
                                (attr-get continuation :harness/after)))
-                        (is (contains? #{"blocked" "ready"}
-                                       (attr-get continuation :harness/status)))
+                        (is (= "ready" (attr-get continuation :harness/status)))
                         (is (nil? (attr-get continuation :harness/invocation)))
                         (is (= [(:id finisher)]
                                (mapv :to_strand_id
@@ -652,11 +654,33 @@
                                                "git" "-C" canonical-root
                                                "show-ref" "--verify" "--quiet"
                                                "refs/heads/auto/clean")))))
-                        (weaver/update! rt (:id continuation)
-                                        {:attributes {:harness/status "stopped"
-                                                      :harness/substatus "completed"
-                                                      :harness/settled "true"
-                                                      :harness/exit-code 0}})
+                        (testing "the still-active owner can replay a lost completion response"
+                          (is (= "ready" (attr-get (weaver/show rt (:id continuation))
+                                                  :harness/status)))
+                          (is (= :finished (:outcome (finish! continued)))))
+                        (testing "a failed Git query is not proof of branch absence"
+                          (let [metadata (io/file canonical ".git")
+                                unavailable (io/file canonical ".git-unavailable")]
+                            (is (.renameTo metadata unavailable))
+                            (try
+                              (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                                    #"Cannot inspect cleanup branch"
+                                                    (finish! continued)))
+                              (finally (is (.renameTo unavailable metadata))))))
+                        (testing "completed cleanup permits ordinary label edits"
+                          (is (= "true"
+                                 (attr-get
+                                  (weaver/update! rt (:id card)
+                                                  {:attributes
+                                                   {:kanban.label/verified "true"}})
+                                  :kanban.label/verified))))
+                        (weaver/op! rt 'agent
+                                    ["stop" (:id continuation)
+                                     "--by-identity" "fixture-continuation"
+                                     "--reason" "Completed cleanup fixture; never launch a provider"])
+                        (is (= "requested"
+                               (attr-get (weaver/show rt (:id continuation))
+                                         :harness/substatus)))
                         (is (= :finished (:outcome (finish! continued)))))))))))))))
       (finally (shell/sh "rm" "-rf" (.getPath canonical))))))
 
