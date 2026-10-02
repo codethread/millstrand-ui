@@ -5,6 +5,7 @@ import { networkInterfaces } from 'node:os';
 import { basename, dirname, extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { encodeAgentDirectory } from '../shared/agent-directory.ts';
 import {
   HttpError,
   parseDependencyCards,
@@ -280,7 +281,7 @@ const server = createServer((request, response) => {
     }
     if (path === '/api/agents' && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
-      json(response, 200, await strand.agents());
+      json(response, 200, encodeAgentDirectory(await strand.agents()));
       return;
     }
     if (path === '/api/log-activity' && method === 'GET') {

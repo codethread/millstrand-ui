@@ -277,7 +277,7 @@ export interface ApiError {
 /**
  * GET /api/workspaces → WorkspaceOption[] (known local mill weavers)
  * POST /api/workspaces/:id/lifecycle, { operation: WeaverOperation } → { ok: true }
- * GET /api/agents → AgentDirectory (identities, tracked runs, and owned work)
+ * GET /api/agents → compact AgentDirectoryPayload; the client restores AgentDirectory
  * GET /api/agent-runs/:id → AgentReply
  * GET /api/dependencies → CardGraph (workspace dependency endpoints and directed edges)
  * GET /api/board → Board
