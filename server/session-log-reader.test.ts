@@ -11,13 +11,14 @@ async function fixture(
   provider: 'pi' | 'codex' | 'claude',
   name: string,
   contents: string,
+  logger?: MemoryPerfLogger,
 ): Promise<SessionLogReader> {
   const root = await mkdtemp(join(tmpdir(), 'session-log-'));
   roots.push(root);
   const directory = join(root, `${provider}-dialogue`);
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, `${name}.jsonl`), contents);
-  return new SessionLogReader({ stateRoot: root });
+  return new SessionLogReader({ stateRoot: root, ...(logger ? { logger } : {}) });
 }
 
 function record(event: 'prompt' | 'reply', text: string): string {
@@ -69,6 +70,29 @@ describe('SessionLogReader snapshots', () => {
       skipped: 1,
       truncated: false,
     });
+  });
+
+  it('reuses an unchanged latest-event summary and refreshes it after append', async () => {
+    const logger = new MemoryPerfLogger();
+    const first = record('prompt', 'First prompt');
+    const reader = await fixture('pi', 'summary', `${first}\n`, logger);
+
+    await expect(reader.summary('pi', 'summary')).resolves.toMatchObject({
+      latest: { record: { text: 'First prompt' } },
+    });
+    await expect(reader.summary('pi', 'summary')).resolves.toMatchObject({
+      latest: { record: { text: 'First prompt' } },
+    });
+    expect(logger.samples).toHaveLength(1);
+
+    await appendFile(
+      join(reader.stateRoot, 'pi-dialogue/summary.jsonl'),
+      `${record('reply', 'New activity')}\n`,
+    );
+    await expect(reader.summary('pi', 'summary')).resolves.toMatchObject({
+      latest: { record: { text: 'New activity' } },
+    });
+    expect(logger.samples).toHaveLength(2);
   });
 
   it('picks up appended complete lines once without changing earlier IDs', async () => {

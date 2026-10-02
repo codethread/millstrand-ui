@@ -317,7 +317,7 @@ const server = createServer((request, response) => {
     }
     if (path === '/api/log-activity' && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
-      json(response, 200, await readLogActivity(await strand.provenance(), sessionLogs));
+      json(response, 200, await readLogActivity(await strand.logProvenance(), sessionLogs));
       return;
     }
     if (path === '/api/session-logs/snapshot' && method === 'GET') {

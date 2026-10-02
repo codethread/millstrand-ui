@@ -1,9 +1,9 @@
 import { ProvenanceIndex } from './provenance';
 import { expect, it } from 'vitest';
-import type { LogProvider, LogSnapshot } from '../shared/session-log';
+import type { LogProvider } from '../shared/session-log';
 import { parseSessionLogSource } from './session-logs';
 import { logBindings, readLogActivity } from './log-activity';
-import { SessionLogReader } from './session-log-reader';
+import { SessionLogReader, type SessionLogSummary } from './session-log-reader';
 
 function identityRow(identity: string, nativeSession?: string) {
   return {
@@ -110,15 +110,9 @@ it('keeps duplicate friendly identities bound to their immutable identity strand
   const reader = new (class extends SessionLogReader {
     readonly sessions: string[] = [];
 
-    override snapshot(provider: LogProvider, session: string): Promise<LogSnapshot> {
+    override summary(provider: LogProvider, session: string): Promise<SessionLogSummary> {
       this.sessions.push(`${provider}/${session}`);
-      return Promise.resolve({
-        events: [],
-        skipped: 0,
-        truncated: false,
-        bytes: 0,
-        modifiedAt: '2026-09-19T10:02:00Z',
-      });
+      return Promise.resolve({ latest: null, modifiedAt: '2026-09-19T10:02:00Z' });
     }
   })();
 

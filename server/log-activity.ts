@@ -11,20 +11,11 @@ export async function readLogActivity(
   provenance: ProvenanceIndex,
   reader: SessionLogReader,
 ): Promise<LogActivity> {
-  const { identities } = provenance.agents();
-  const active = new Set(
-    identities
-      .filter((identity) => identity.runs.some((run) => run.status === 'running'))
-      .map((identity) => identity.strandId),
-  );
-  const bindings = provenance.logBindings();
+  const { bindings, activeIdentityStrandIds } = provenance.logActivityBindings();
   // Overview summaries are bounded; full session tails are fetched only on demand.
   let watched = 0;
   for (const binding of bindings) {
-    const identity = identities.find(
-      (candidate) => candidate.strandId === binding.identityStrandId,
-    );
-    if (!binding.source || !identity || !active.has(identity.strandId)) continue;
+    if (!binding.source || !activeIdentityStrandIds.has(binding.identityStrandId)) continue;
     if (watched++ >= 60) {
       binding.activity = {
         kind: 'unavailable',
@@ -33,11 +24,11 @@ export async function readLogActivity(
       continue;
     }
     try {
-      const log = await reader.snapshot(binding.source.provider, binding.source.session);
+      const summary = await reader.summary(binding.source.provider, binding.source.session);
       binding.activity = {
         kind: 'available',
-        latest: log.events.at(-1) ?? null,
-        modifiedAt: log.modifiedAt,
+        latest: summary.latest,
+        modifiedAt: summary.modifiedAt,
       };
     } catch {
       binding.activity = { kind: 'unavailable', message: 'No readable local dialogue log yet.' };

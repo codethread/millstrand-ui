@@ -116,6 +116,25 @@ it('runs one selective graph read without note strands or workspace interpolatio
   expect(parameters).toContain('harness/ownership');
 });
 
+it('scopes log provenance to identities, published runs and performed edges', async () => {
+  const database = fakeDatabase([]);
+  const reader = new WorkspaceDatabase(workspace, {
+    discover: async () => '/state/workspace.sqlite',
+    open: () => database,
+  });
+
+  await expect(reader.readLogProvenance()).resolves.toEqual({ strands: [], edges: [] });
+  const [sql, parameters] = database.all.mock.calls[0]!;
+  expect(sql).toContain("strand_edges.edge_type = 'performed'");
+  expect(sql).toContain('target.is_published');
+  expect(sql).not.toContain("strand_edges.edge_type = 'depends-on'");
+  expect(parameters).toContain('identity/native-session-id');
+  expect(parameters).toContain('harness/session-id');
+  expect(parameters).toContain('harness/status');
+  expect(parameters).not.toContain('kanban/card');
+  expect(parameters).not.toContain('identity/by-identity');
+});
+
 it('captures successful SQL measurements with only in-memory dependencies', async () => {
   const logger = new MemoryPerfLogger();
   const reader = new WorkspaceDatabase(workspace, {

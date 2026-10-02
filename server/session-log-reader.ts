@@ -19,6 +19,16 @@ export interface SessionLogReaderOptions {
   logger?: PerfLogger;
 }
 
+export interface SessionLogSummary {
+  latest: LogEvent | null;
+  modifiedAt: string;
+}
+
+interface CachedSummary {
+  fingerprint: string;
+  value: SessionLogSummary;
+}
+
 interface AllowedSession {
   provider: LogProvider;
   stem: string;
@@ -36,6 +46,7 @@ function sourceError(error: unknown): Error {
 export class SessionLogReader {
   readonly stateRoot: string;
   private readonly logger: PerfLogger;
+  private readonly summaries = new Map<string, CachedSummary>();
 
   constructor(options: SessionLogReaderOptions = {}) {
     this.stateRoot = resolve(options.stateRoot ?? resolve(homedir(), '.local/state'));
@@ -149,6 +160,20 @@ export class SessionLogReader {
       bytes: file.size,
       modifiedAt: file.modifiedAt,
     };
+  }
+
+  async summary(provider: LogProvider, stem: string): Promise<SessionLogSummary> {
+    const fingerprint = await this.sourceModifiedAt(provider, stem);
+    const key = `${provider}/${stem}`;
+    const cached = this.summaries.get(key);
+    if (cached?.fingerprint === fingerprint) return cached.value;
+    const snapshot = await this.snapshot(provider, stem);
+    const value = {
+      latest: snapshot.events.at(-1) ?? null,
+      modifiedAt: snapshot.modifiedAt,
+    };
+    this.summaries.set(key, { fingerprint, value });
+    return value;
   }
 
   async sourceModifiedAt(provider: LogProvider, stem: string): Promise<string> {

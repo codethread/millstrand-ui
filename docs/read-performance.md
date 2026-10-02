@@ -110,6 +110,37 @@ its shared-JVM `notes` peer and the other five reported logs were readable and c
 no query timing relevant to this route. This changes only the UI HTTP response, so no
 Weaver dependency or runtime changed and no Weaver restart was needed.
 
+## 2026-10-02 scoped log activity provenance
+
+Selected the recurring log-activity read for `millhouse.spool` from the current default
+performance log:
+
+```text
+2026-10-02T09:50:43.644Z perf SLOW 191.27ms server GET /api/log-activity status=200 bytes=149060
+2026-10-02T09:51:34.614Z perf SLOW 72.92ms server GET /api/log-activity status=200 bytes=149060
+```
+
+The route loaded the generic provenance snapshot on every five-second poll: 8,640 rows
+covering cards, tasks, claims, dependencies and every agent record. It then constructed
+the full agent directory, including work ownership, only to select session sources and
+reparsed up to 60 unchanged dialogue tails for their latest event. Since 09:00 the route
+had produced 250 SLOW samples at capture, averaging 82.8 ms.
+
+The route now uses a read-only persisted projection containing only identities, published
+runs and their `performed` edges. Session source precedence and ordering are projected
+directly from those records, and unchanged latest-event summaries are reused after a
+metadata check. The 60-live-summary bound, full on-demand session tails, response shape,
+active detection, cache lifetime and spool semantics are unchanged. Direct comparison
+against the generic projection matched every binding and active identity across all live
+workspaces (238/18, 136/14, 1,334/34, 577/104, 692/227 and 0/0 bindings/active).
+
+On an isolated production server polling the real `millhouse.spool` workspace every 5.1
+seconds, the persisted read fell from 8,640 to 2,142 rows. Across 12 reads the route median
+fell from 77.63 to 39.48 ms and SLOW samples fell from 12/12 to 4/12; the three warm SLOW
+samples followed matching SQLite variance. The response retained all 692 bindings and
+149,777 bytes. Focused persisted-read, provenance and session-summary checks passed.
+No dependency basis or Weaver runtime changed, so no Weaver restart was needed.
+
 ## 2026-10-02 normalized agent directory transport
 
 Selected the recurring full agent-directory response for `millhouse.spool` from the

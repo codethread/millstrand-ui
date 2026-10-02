@@ -7,6 +7,7 @@ import { dependencyCountAttributes } from './provenance.ts';
 import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 import type { CardGraph, DependencyCounts } from '../shared/api.ts';
 import { discoverDatabase } from './workspace-storage.ts';
+import { logProvenanceAttributeKeys, logProvenanceSql } from './log-provenance-sql.ts';
 
 const edgeLimit = 50_000;
 const supportedSchemaVersion = 1;
@@ -410,6 +411,7 @@ function decodeDependencyCounts(value: unknown): Map<string, DependencyCounts> {
 
 export interface PersistedWorkspaceReads {
   readProvenance(): Promise<unknown>;
+  readLogProvenance(): Promise<unknown>;
   readNoteProvenance(noteIds: readonly string[]): Promise<unknown>;
   readDependencies(cardIds?: readonly string[]): Promise<CardGraph>;
 }
@@ -480,6 +482,15 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
       'provenance',
       provenanceSql,
       [...provenanceMarkerKeys, ...provenanceAttributeKeys, ...provenanceEdgeKinds],
+      decodeProvenance,
+    );
+  }
+
+  readLogProvenance(): Promise<unknown> {
+    return this.readSnapshot(
+      'log-provenance',
+      logProvenanceSql(edgeLimit),
+      logProvenanceAttributeKeys,
       decodeProvenance,
     );
   }
