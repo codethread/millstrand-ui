@@ -174,6 +174,9 @@
   (let [root (workflow/current-root run-id)]
     (map workflow/step-view (:strands (graph/subgraph rt [(:id root)])))))
 
+(defn- workflow-root-id [rt step-id]
+  (:from_strand_id (first (graph/incoming-edges rt [step-id] "parent-of"))))
+
 (defn- prepare-inspection! [ctx run-id on-change]
   (workflow/start! run-id :auto-inspect (inspect-params ctx on-change))
   (workflow/complete! run-id))
@@ -221,12 +224,16 @@
 (defn- cleanup-tool-environment! [canonical]
   (let [bin (io/file canonical ".fixture-bin")
         wktree (io/file bin "wktree")
+        lsof-warning (io/file bin "lsof-warning")
         mill (io/file bin "mill")]
     (.mkdirs bin)
     (spit wktree
           "#!/usr/bin/env python3\nimport json, os, subprocess, sys\ndef git(*args):\n    return subprocess.check_output(['git', *args], text=True).strip()\ndef items():\n    blocks = git('worktree', 'list', '--porcelain').split('\\n\\n')\n    result = []\n    for block in blocks:\n        fields = dict(line.split(' ', 1) if ' ' in line else (line, True) for line in block.splitlines())\n        ref = fields.get('branch')\n        result.append({'path': fields['worktree'], 'branch': ref.removeprefix('refs/heads/') if ref else None, 'canonical': len(result) == 0, 'detached': 'detached' in fields, 'locked': 'locked' in fields})\n    return result\nargs = sys.argv[1:]\nif args == ['list', '--json']:\n    print(json.dumps(items()))\nelif args and args[0] == 'remove':\n    branch = args[args.index('--branch') + 1]\n    match = next(item for item in items() if item['branch'] == branch)\n    subprocess.check_call(['git', 'worktree', 'remove', match['path']], stdout=subprocess.DEVNULL)\n    subprocess.check_call(['git', 'branch', '-D', branch], stdout=subprocess.DEVNULL)\n    print(json.dumps({'kind': 'ready', 'worktree_path': match['path'], 'removed': True, 'session': None}))\nelse:\n    raise SystemExit('unsupported fixture wktree invocation: ' + repr(args))\n")
+    (spit lsof-warning
+          "#!/bin/sh\nprintf '%s\\n' 'lsof: incomplete process inventory' >&2\nexit 1\n")
     (spit mill "#!/bin/sh\nprintf '%s\\n' \"${MILL_WEAVER_LIST:-[]}\"\n")
     (.setExecutable wktree true)
+    (.setExecutable lsof-warning true)
     (.setExecutable mill true)
     (assoc (into {} (System/getenv))
            "PATH" (str (.getAbsolutePath bin) java.io.File/pathSeparator
@@ -265,6 +272,10 @@
               worktree-path (.getCanonicalPath worktree)
               cleanup-environment-var
               (requiring-resolve 'millstrand-ui.auto-run/*cleanup-environment*)
+              lsof-command-var
+              (requiring-resolve 'millstrand-ui.auto-run/*lsof-command*)
+              lsof-warning-command
+              (.getCanonicalPath (io/file canonical ".fixture-bin" "lsof-warning"))
               mill-command-var
               (requiring-resolve 'millstrand-ui.auto-run/*mill-command*)
               mill-command (.getCanonicalPath
@@ -310,8 +321,7 @@
                                                    :harness/target (:id finisher-target)
                                                    :harness/logical-id "clean-finisher-lineage"
                                                    :identity/id "fixture-finisher"
-                                                   :harness/published "true"
-                                                   :harness/publication-outcome "committed"}})]
+                                                   :harness/published "true"}})]
                     (weaver/update! rt (:id finisher-target)
                                     {:attributes {:auto-run/worker-run-id (:id worker)
                                                   :auto-run/finisher-run-id (:id finisher)}})
@@ -350,15 +360,17 @@
                           finish! (requiring-resolve
                                    'millstrand-ui.auto-run/finish-clean-inspection!)]
                       (workflow/choose! run-id :retained receipt)
-                      (testing "both evidence roots must match the card delivery"
-                        (weaver/update! rt (:id card)
-                                        {:attributes {:auto-run/workflow-run-id
-                                                      "wrong-delivery"}})
-                        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                                              #"delivery context"
-                                              (finish! request)))
-                        (weaver/update! rt (:id card)
-                                        {:attributes {:auto-run/workflow-run-id run-id}}))
+                      (testing "each evidence root must match the card delivery"
+                        (doseq [root-id [(workflow-root-id rt disposition-step)
+                                         (workflow-root-id rt retention-step)]]
+                          (weaver/update! rt root-id
+                                          {:attributes {:workflow/run-id
+                                                        "wrong-delivery"}})
+                          (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                                #"delivery context"
+                                                (finish! request)))
+                          (weaver/update! rt root-id
+                                          {:attributes {:workflow/run-id run-id}})))
                       (testing "legacy receipts require explicit reconciliation"
                         (weaver/update! rt retention-step
                                         {:attributes
@@ -396,6 +408,24 @@
                                             :auto-inspect/clean-finish-request)))
                         (git! canonical "git" "worktree" "add" "--quiet" "-b"
                               "auto/clean" worktree-path expected-head))
+                      (testing "an incomplete lsof audit fails closed"
+                        (with-bindings {lsof-command-var lsof-warning-command}
+                          (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                                #"Cannot inspect local process"
+                                                (finish! request)))))
+                      (testing "a live Weaver refuses deletion"
+                        (with-bindings
+                         {cleanup-environment-var
+                          (assoc cleanup-environment
+                                 "MILL_WEAVER_LIST"
+                                 (json/write-str
+                                  [{"config_dir" (str worktree-path "/.millstrand")
+                                    "pid" 4242
+                                    "state" "running"
+                                    "weaver_id" "fixture-live"}]))}
+                          (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                                #"Live Weaver processes"
+                                                (finish! request)))))
                       (testing "a live local process refuses deletion"
                         (let [holder (worktree-holder! worktree)]
                           (try
@@ -429,11 +459,25 @@
                           (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                                 #"External run observations"
                                                 (finish! request))))
+                        (let [historical-request-receipt
+                              (assoc
+                               (select-keys
+                                reconciled
+                                [:card :disposition-step :retention-step
+                                 :worker-run-id :finisher-run-id :branch :worktree
+                                 :expected-head :canonical-root :handoff-note
+                                 :reconciliation :request-id :by-identity])
+                               :workflow-run-id run-id)]
+                          (weaver/update!
+                           rt (:id card)
+                           {:attributes
+                            {:auto-inspect/clean-finish-request
+                             historical-request-receipt}}))
                         (.mkdirs (io/file worktree "node_modules" "fixture"))
                         (spit (io/file worktree "node_modules" "fixture" "artifact.js")
                               "ignored")
                         (spit (io/file worktree ".env") "SECRET=unknown")
-                        (testing "unknown ignored files fail visibly and freeze the original request"
+                        (testing "rootless historical requests replay without rewriting evidence"
                           (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                                 #"cleanup failed"
                                                 (finish! reconciled)))
@@ -441,7 +485,9 @@
                                                    :auto-inspect/clean-finish-request)]
                             (is (= (:request-id request) (:request-id recorded)))
                             (is (= (:id finisher) (:finisher-run-id recorded)))
-                            (is (= "fixture-finisher" (:by-identity recorded))))
+                            (is (= "fixture-finisher" (:by-identity recorded)))
+                            (is (not (contains? recorded :disposition-root-id)))
+                            (is (not (contains? recorded :retention-root-id))))
                           (is (thrown? clojure.lang.ExceptionInfo
                                        (weaver/update! rt (:id card)
                                                        {:attributes
@@ -464,8 +510,7 @@
                                                 :harness/resumes (:id finisher)
                                                 :harness/logical-id "clean-finisher-lineage"
                                                 :identity/id "fixture-continuation"
-                                                :harness/published "true"
-                                                :harness/publication-outcome "committed"}
+                                                :harness/published "true"}
                                    :edges [{:type "resumes" :to (:id finisher)}]})
                               continued (assoc reconciled
                                                :by-identity "fixture-continuation")]

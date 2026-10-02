@@ -162,9 +162,11 @@ A positively settled failed finisher may transfer custody only through its accep
 native continuation lineage. The original finisher, initiating actor, and request
 remain immutable; the cleanup receipt separately names the continuation that
 performed completion. Exact replay remains harmless after interrupted cleanup and
-after a successfully completed continuation. A first request with both branch and
-worktree already absent is refused rather than treated as successful cleanup. A
-legacy retained receipt missing the branch/worktree/HEAD fields, or stale external
+after a successfully completed continuation. Frozen requests from before checkpoint
+root IDs were recorded replay against their original fields and are not rewritten. A
+first request with both branch and worktree already absent is refused rather than
+treated as successful cleanup. A legacy retained receipt missing the
+branch/worktree/HEAD fields, or stale external
 cwd observations after a clean local audit, requires explicit `--reconciliation`
 evidence. These are bounded existing-run paths, not inferred backfill. Do not use the
 operation for needs-review or blocked outcomes, and do not mutate the database or

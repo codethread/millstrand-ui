@@ -7,6 +7,7 @@
             [millhouse.auto-run :as auto-run]
             [millhouse.auto-run-reporting :as reporting]
             [millhouse.auto-run-worktree :as auto-run-worktree]
+            [millhouse.harnesses.internal.lifecycle :as harness-life]
             [millhouse.land.card-actions :as card-actions]
             [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
@@ -166,8 +167,7 @@
 
 (defn- accepted-run? [run]
   (and (= "true" (attr-get run :harness/run))
-       (= "true" (attr-get run :harness/published))
-       (= "committed" (attr-get run :harness/publication-outcome))))
+       (harness-life/accepted? run)))
 
 (defn- accepted-resumption [rt run]
   (let [children (->> (graph/incoming-edges rt [(:id run)] "resumes")
@@ -231,6 +231,10 @@
   "Complete subprocess environment override used by disposable cleanup fixtures."
   nil)
 
+(def ^:dynamic *lsof-command*
+  "Lsof executable override used by disposable process-audit fixtures."
+  "lsof")
+
 (def ^:dynamic *mill-command*
   "Mill executable override used by disposable process-audit fixtures."
   "mill")
@@ -242,8 +246,11 @@
                  (when *cleanup-environment* [:env *cleanup-environment*]))))
 
 (defn- live-worktree-processes [worktree]
-  (let [result (run-command ["lsof" "-a" "-d" "cwd" "-Fn"] {})]
-    (when-not (contains? #{0 1} (:exit result))
+  (let [result (run-command [*lsof-command* "-a" "-d" "cwd" "-Fn"] {})]
+    (when-not (or (zero? (:exit result))
+                  (and (= 1 (:exit result))
+                       (str/blank? (:out result))
+                       (str/blank? (:err result))))
       (fail! "Cannot inspect local process working directories"
              {:exit (:exit result) :error (:err result)}))
     (loop [lines (str/split-lines (:out result))
@@ -460,13 +467,26 @@
                               :reconciliation :request-id :by-identity :workflow-run-id])
             card-view (weaver/show rt card)
             recorded (attr-get card-view :auto-inspect/clean-finish-request)
+            recorded-root-keys (when recorded
+                                 (select-keys recorded
+                                              [:disposition-root-id
+                                               :retention-root-id]))
+            legacy-rootless? (and recorded (empty? recorded-root-keys))
+            requested-for-comparison (if legacy-rootless?
+                                       (dissoc request-receipt
+                                               :disposition-root-id
+                                               :retention-root-id)
+                                       request-receipt)
             complete? (cleanup-complete? canonical-root branch worktree)
             present? (cleanup-resources-present? canonical-root branch worktree)]
         ;; The initiating actor stays in the original receipt, while a positively
         ;; settled failed finisher may transfer execution to its accepted resume.
+        ;; Pre-root-binding receipts remain immutable and are checked against every
+        ;; field they originally froze; a receipt with only one root is malformed.
         (when (and recorded
-                   (not= (dissoc recorded :by-identity)
-                         (dissoc request-receipt :by-identity)))
+                   (or (= 1 (count recorded-root-keys))
+                       (not= (dissoc recorded :by-identity)
+                             (dissoc requested-for-comparison :by-identity))))
           (fail! "Clean inspection finish request conflicts with its durable receipt"
                  {:card card :request-id request-id
                   :recorded recorded :requested request-receipt}))
