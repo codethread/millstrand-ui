@@ -2,11 +2,15 @@ import { queryOptions } from '@tanstack/react-query';
 import type { ReviewDetail, ReviewDirectory } from '../../../shared/reviews';
 import { request } from './transport';
 
+export function reviewDirectoryPollInterval(directory: ReviewDirectory | undefined): 5000 | false {
+  return directory?.kind === 'unsupported' ? false : 5000;
+}
+
 export function reviewsQueryOptions(workspace: string | null) {
   return queryOptions({
     queryKey: ['reviews', workspace],
     queryFn: () => request<ReviewDirectory>('/reviews', workspace),
-    refetchInterval: 5000,
+    refetchInterval: (query) => reviewDirectoryPollInterval(query.state.data),
   });
 }
 

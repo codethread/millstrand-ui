@@ -1,5 +1,37 @@
 # Dashboard read audit
 
+## 2026-10-02 lazy unsupported reviews
+
+Selected the recurring unsupported-review probe from the production perf log:
+
+```text
+2026-10-02T07:01:27.915Z perf SLOW 64.46ms strand strand review list workspace=millhouse.spool outcome=failed
+2026-10-02T07:01:27.916Z perf SLOW 64.69ms server GET /api/reviews status=200 bytes=146
+```
+
+The current and rotated default logs contained 63 slow `review list` probes for
+`millhouse.spool` at capture. The selected-workspace owner requested `/api/reviews`
+every five seconds. Its server cache returned the known unsupported directory cheaply
+for one minute, then retried the absent operation and produced another 62–120 ms slow
+sample. Relevant Weaver logs showed a running `millhouse` generation and no current
+runtime error; the operation itself is not registered in that workspace.
+
+`reviewsQueryOptions` now disables its periodic interval after the server returns the
+explicit `unsupported` directory. Available review directories retain their five-second
+poll. Focus/reconnect refreshes and workspace lifecycle invalidation remain available,
+so a changed Weaver can be checked without a permanent negative capability cache.
+Server detection, review domain commands, cache keys and unsupported UI semantics are
+unchanged.
+
+Browser verification used the production build on port 4188. On real
+`millhouse.spool`, the unsupported state rendered as **Reviews are not configured**
+and made one review request while board and agent requests each advanced from four
+to seven. A routed available response made three review requests at the normal
+five-second cadence. No uncaught browser errors occurred. Focused review, polling and
+server-cache checks passed (20 tests). `pnpm quality` passed formatting, zero-warning
+Oxlint, strict TypeScript, 379 tests and the production build. No Weaver restart was
+needed for this client-only change.
+
 ## 2026-10-02 lazy run replies
 
 Selected one real slow read from the rotated production perf log:
