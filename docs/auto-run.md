@@ -9,9 +9,16 @@ run. Existing feature dependencies still mean prerequisite code is landed.
 
 `.millstrand/me/auto_run.clj` sets two concurrent worker slots, a 15-second
 cadence, worktree preparation through `wktree`, and Sol/high as the default
-worker. The default delivery workflow is `auto-human-review`. Disable new
-admission by setting `:enabled? false` and refreshing workspace modules;
-accepted runs remain under normal Harnesses control.
+worker. The default delivery workflow is `auto-human-review`. Before enabling,
+the small shared guard in `.millstrand/me/admission_authority.clj` derives the
+canonical checkout from Git's absolute common directory. Only the Weaver rooted at
+that checkout's `.millstrand` enables admission; a linked-worktree Weaver disables
+itself even when its branch is `main`.
+Non-Git or unsupported workspace layouts also disable admission explicitly. The
+resource result reports the inspected checkout authority, while `auto-run status`
+reports whether dispatch is enabled. Disable new admission by setting `:enabled?`
+false and refreshing workspace modules; accepted runs remain under normal Harnesses
+control.
 
 `.millstrand/me/auto_run_workflows.clj` owns three delivery workflows:
 
@@ -42,6 +49,11 @@ wake offers a Sol/high `auto-inspect` feature with `auto-run/on-change=full-land
 The job only creates cards: Auto-run owns capacity, preparation, workflow creation
 and assignment; the worker claims with its own identity. Scheduled cards have no
 fabricated creator, reporter or owner.
+
+The hourly handler independently checks the same Git common-root authority before
+reading or mutating its Weaver. A linked-worktree or unsupported Weaver returns
+`not-authoritative` with its inspected checkout paths and cannot create a card, even
+when its private database is empty.
 
 The complete policy, opt-in label, `maintenance/job=hourly-slow-query`, and
 UTC-hour source receipt are published in one mutation. Duplicate delivery of that

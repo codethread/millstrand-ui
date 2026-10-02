@@ -1,6 +1,7 @@
 (ns millstrand-ui.hourly-slow-query
   "Hourly inspection cards; Auto-run owns worker admission and delivery."
   (:require [millhouse.cron :as cron]
+            [millstrand-ui.admission-authority :as admission-authority]
             [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.weaver.alpha :as weaver])
   (:import [java.time Instant]
@@ -17,14 +18,7 @@ A bounded fix follows the admitted on-change=full-land policy: use the workflow'
 
 (def ^:private job "hourly-slow-query")
 
-(defn create-ticket!
-  "Publish one complete admission only when no prior job card remains open.
-
-  A persisted hourly source wins before open-card admission checks, including
-  after closure or a lost response. Repeated delivery never edits, rearms or
-  claims an existing card. The runtime lock serializes both reads with creation;
-  card policy, job identity and source receipt commit together."
-  [rt]
+(defn- create-authoritative-ticket! [rt]
   (let [lock (runtime/spool-state rt ::admission-lock (fn [] (Object.)))]
     (locking lock
       (let [hour (str (.truncatedTo ^Instant (runtime/now rt) ChronoUnit/HOURS))
@@ -64,6 +58,21 @@ A bounded fix follows the admitted on-change=full-land policy: use the workflow'
                 {:outcome :created
                  :card (:id card)
                  :hour hour}))))))))
+
+(defn create-ticket!
+  "Publish one complete admission only from the canonical Git checkout.
+
+  A persisted hourly source wins before open-card admission checks, including
+  after closure or a lost response. Repeated delivery never edits, rearms or
+  claims an existing card. The runtime lock serializes both reads with creation;
+  card policy, job identity and source receipt commit together. Linked-worktree
+  and unsupported Weavers return their inspected authority without mutation."
+  [rt]
+  (let [authority (admission-authority/inspect rt)]
+    (if (= :canonical (:kind authority))
+      (assoc (create-authoritative-ticket! rt) :authority authority)
+      {:outcome :not-authoritative
+       :authority authority})))
 
 (cron/defjob! hourly-slow-query
   "Offer one Sol/high SLOW-query inspection to Auto-run every hour."

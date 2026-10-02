@@ -34,20 +34,30 @@
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                       "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                      "me/admission_authority.clj"
                                       "me/hourly_slow_query.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)
+          open! (requiring-resolve 'millstrand-ui.auto-run/open!)
+          create! (requiring-resolve
+                   'millstrand-ui.hourly-slow-query/create-ticket!)
+          activation (open! {:runtime rt})
+          ticket (create! rt)
           status (auto-run/status rt)]
       (is (= 'millstrand.spools.batteries
              (:owner (help-transform/default-help-transform rt))))
-      (is (= {:enabled true
-              :max-running 2
-              :workflow "auto-human-review"
-              :workflows ["auto-full-land" "auto-human-review" "auto-inspect"]
-              :start-params "millstrand-ui.auto-run/start-params!"}
-             (select-keys (assoc (:config status) :enabled (:enabled status))
-                          [:enabled :max-running :workflow :workflows :start-params])))
-      (is (empty? (:dispatched (auto-run/scan! rt))))
+      (testing "non-Git fixture admission fails closed with inspectable outcomes"
+        (is (= :disabled-not-authoritative (:outcome activation)))
+        (is (= :unsupported (get-in activation [:authority :kind])))
+        (is (contains? #{:workspace-is-not-dot-millstrand
+                         :git-common-root-unavailable}
+                       (get-in activation [:authority :reason])))
+        (is (= :not-authoritative (:outcome ticket)))
+        (is (= :unsupported (get-in ticket [:authority :kind])))
+        (is (false? (:enabled status)))
+        (is (= {:enabled false :dispatched []} (auto-run/scan! rt)))
+        (is (empty? (weaver/list rt [:= [:attr "kanban/card"] "true"] {})))
+        (is (empty? (weaver/list rt [:= [:attr "harness/run"] "true"] {}))))
       (testing "the repository owns its squash landing policy"
         (let [{:keys [prepare-policy merge-tail abort-definition
                       queue-instruction signoff-instruction]}
@@ -204,6 +214,14 @@
     (git! dir "git" "checkout" "--quiet" "-b" "auto/fixture")
     dir))
 
+(defn- temporary-authority-fixture! []
+  (let [canonical (temporary-git-worktree!)
+        linked (io/file canonical "foreign-main")]
+    ;; The canonical checkout deliberately uses auto/fixture while the linked
+    ;; worktree uses main, proving authority comes from Git topology, not branch.
+    (git! canonical "git" "worktree" "add" "--quiet" (.getPath linked) "main")
+    {:canonical canonical :linked linked}))
+
 (defn- temporary-cleanup-fixture! []
   (let [canonical (.toFile (Files/createTempDirectory (.toPath (io/file "/tmp")) "ui-clean-"
                                                        (make-array FileAttribute 0)))
@@ -251,12 +269,74 @@
       (throw (ex-info "Fixture holder did not enter the worktree" {:output ready})))
     process))
 
+(deftest canonical-checkout-owns-repository-admission
+  (let [{:keys [canonical linked]} (temporary-authority-fixture!)
+        files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
+                                  "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                  "me/admission_authority.clj"
+                                  "me/hourly_slow_query.clj"]]
+                        [path (slurp path)]))
+        options {:storage :sqlite-memory
+                 :deps-edn (pr-str
+                            (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
+                 :init-clj (slurp "init.clj")
+                 :files files}]
+    (try
+      (is (= "auto/fixture"
+             (str/trim (:out (git! canonical "git" "branch" "--show-current")))))
+      (is (= "main"
+             (str/trim (:out (git! linked "git" "branch" "--show-current")))))
+      (testing "canonical checkout enables dispatch and admits the hourly card"
+        (t/with-weaver-world
+          [ctx (assoc options :root (.getPath (io/file canonical ".millstrand")))]
+          (let [rt (:runtime ctx)
+                open! (requiring-resolve 'millstrand-ui.auto-run/open!)
+                create! (requiring-resolve
+                         'millstrand-ui.hourly-slow-query/create-ticket!)
+                activation (open! {:runtime rt})
+                enabled-before-stop? (:enabled (auto-run/status rt))]
+            ;; Stop before creating a card: tests prove admission configuration
+            ;; without ever allowing a paid worker launch.
+            (auto-run/stop! rt)
+            (let [ticket (create! rt)]
+              (is enabled-before-stop?)
+              (is (= :enabled-canonical (:outcome activation)))
+              (is (= :canonical (get-in activation [:authority :kind])))
+              (is (= (.getCanonicalPath canonical)
+                     (get-in activation [:authority :canonical-checkout])))
+              (is (= :created (:outcome ticket)))
+              (is (= :canonical (get-in ticket [:authority :kind])))
+              (is (= 1 (count (weaver/list rt [:= [:attr "kanban/card"] "true"] {}))))
+              (is (empty? (weaver/list rt [:= [:attr "harness/run"] "true"] {})))))))
+      (testing "linked main worktree cannot create or dispatch work"
+        (t/with-weaver-world
+          [ctx (assoc options :root (.getPath (io/file linked ".millstrand")))]
+          (let [rt (:runtime ctx)
+                open! (requiring-resolve 'millstrand-ui.auto-run/open!)
+                create! (requiring-resolve
+                         'millstrand-ui.hourly-slow-query/create-ticket!)
+                activation (open! {:runtime rt})
+                ticket (create! rt)]
+            (is (= :disabled-not-authoritative (:outcome activation)))
+            (is (= :linked-worktree (get-in activation [:authority :kind])))
+            (is (= (.getCanonicalPath canonical)
+                   (get-in activation [:authority :canonical-checkout])))
+            (is (= :not-authoritative (:outcome ticket)))
+            (is (= :linked-worktree (get-in ticket [:authority :kind])))
+            (is (false? (:enabled (auto-run/status rt))))
+            (is (= {:enabled false :dispatched []} (auto-run/scan! rt)))
+            (is (empty? (weaver/list rt [:= [:attr "kanban/card"] "true"] {})))
+            (is (empty? (weaver/list rt [:= [:attr "harness/run"] "true"] {}))))))
+      (finally
+        (shell/sh "rm" "-rf" (.getPath canonical))))))
+
 (deftest clean-inspection-finish-is-safe-and-replayable
   (let [{:keys [canonical worktree]} (temporary-cleanup-fixture!)
         cleanup-environment (cleanup-tool-environment! canonical)
         config (io/file canonical ".millstrand")
         files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                   "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                  "me/admission_authority.clj"
                                   "me/hourly_slow_query.clj"
                                   "clean-inspection-cleanup.sh"]]
                         [path (slurp path)]))]
@@ -550,6 +630,7 @@
         canonical (io/file repo ".millstrand")
         files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                   "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                  "me/admission_authority.clj"
                                   "me/hourly_slow_query.clj"]]
                         [path (slurp path)]))
         options {:storage :sqlite-memory
@@ -595,6 +676,7 @@
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                       "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                      "me/admission_authority.clj"
                                       "me/hourly_slow_query.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)]
@@ -824,6 +906,7 @@
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                       "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                      "me/admission_authority.clj"
                                       "me/hourly_slow_query.clj"]]
                             [path (slurp path)]))}]
     ;; The real Code executor supplies settlement. The continuation is deliberately
@@ -885,10 +968,23 @@
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                       "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                      "me/admission_authority.clj"
                                       "me/hourly_slow_query.clj"]]
                             [path (slurp path)]))}]
     (let [rt (:runtime ctx)
-          create! (requiring-resolve 'millstrand-ui.hourly-slow-query/create-ticket!)]
+          create-raw! (requiring-resolve
+                       'millstrand-ui.hourly-slow-query/create-ticket!)
+          authority-var (requiring-resolve
+                         'millstrand-ui.admission-authority/inspect)
+          authority {:kind :canonical
+                     :workspace "fixture"
+                     :checkout "fixture"
+                     :canonical-checkout "fixture"}
+          create! (fn [runtime]
+                    (with-redefs-fn {authority-var (constantly authority)}
+                      #(create-raw! runtime)))]
+      ;; Git authority has its own real linked-worktree regression. This world
+      ;; isolates hourly replay and open-card semantics without dispatching.
       ;; Admission is inspected, never dispatched. The manual clock is before
       ;; activation's scheduled wake, so advancing it cannot run the cron job.
       (auto-run/stop! rt)
@@ -927,7 +1023,8 @@
             (is (= {:outcome :skipped-open
                     :open-cards [card-id]
                     :hour (str (.truncatedTo ^Instant (runtime/now rt)
-                                             ChronoUnit/HOURS))}
+                                             ChronoUnit/HOURS))
+                    :authority authority}
                    (create! rt)))))
         (testing "closing the prior job admits exactly one later-hour receipt"
           (let [closed (weaver/update! rt card-id

@@ -10,6 +10,7 @@
             [millhouse.harnesses.internal.lifecycle :as harness-life]
             [millhouse.land.card-actions :as card-actions]
             [millhouse.workflow :as workflow]
+            [millstrand-ui.admission-authority :as admission-authority]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.lifecycle.alpha :as lifecycle]
@@ -594,20 +595,28 @@
     {}))
 
 (defn open!
-  "Configure two worker slots, defaulting to a human-reviewed delivery."
+  "Enable repository admission only in the canonical Git checkout."
   [{:keys [runtime]}]
-  (auto-run/configure!
-   runtime
-   {:repo (.getCanonicalPath (.getParentFile (io/file (get-in runtime [:metadata :config-dir]))))
-    :seat "sol"
-    :effort "high"
-    :workflow "auto-human-review"
-    :workflows #{"auto-human-review" "auto-full-land" "auto-inspect"}
-    :prepare 'millstrand-ui.auto-run/prepare!
-    :start-params 'millstrand-ui.auto-run/start-params!
-    :enabled? true
-    :max-running 2
-    :interval-ms 15000}))
+  (let [authority (admission-authority/inspect runtime)]
+    (if (= :canonical (:kind authority))
+      (assoc
+       (auto-run/configure!
+        runtime
+        {:repo (:canonical-checkout authority)
+         :seat "sol"
+         :effort "high"
+         :workflow "auto-human-review"
+         :workflows #{"auto-human-review" "auto-full-land" "auto-inspect"}
+         :prepare 'millstrand-ui.auto-run/prepare!
+         :start-params 'millstrand-ui.auto-run/start-params!
+         :enabled? true
+         :max-running 2
+         :interval-ms 15000})
+       :outcome :enabled-canonical
+       :authority authority)
+      (assoc (auto-run/stop! runtime)
+             :outcome :disabled-not-authoritative
+             :authority authority))))
 
 (defn close!
   "Stop new admissions without stopping any accepted worker."
