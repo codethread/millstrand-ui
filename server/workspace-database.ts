@@ -91,59 +91,51 @@ const provenanceEdgeKinds = [
   'parent-of',
   'depends-on',
 ] as const;
+const provenanceMarkerKeys = [
+  'identity/session',
+  'kanban/card',
+  'kanban/task',
+  'kanban/ownership-claim',
+  'harness/run',
+  'harness/published',
+] as const;
 function placeholders(values: readonly string[]): string {
   return values.map(() => '?').join(', ');
 }
 
 const provenanceSql = `
-  WITH candidate_ids(strand_id) AS (
-    SELECT DISTINCT marker.strand_id
+  WITH candidate_markers AS (
+    SELECT marker.strand_id,
+           MAX(marker.key = 'identity/session') AS is_identity,
+           MAX(marker.key = 'kanban/card') AS is_card,
+           MAX(marker.key = 'kanban/task') AS is_task,
+           MAX(marker.key = 'kanban/ownership-claim') AS is_ownership_claim,
+           MAX(marker.key = 'harness/run') AS is_run,
+           MAX(marker.key = 'harness/published') AS is_published
     FROM attributes AS marker
     WHERE marker.archived = 0
-      AND (
-        (marker.key IN (
-          'identity/session',
-          'kanban/card',
-          'kanban/task',
-          'kanban/ownership-claim'
-        ) AND marker.value = '"true"')
-        OR (
-          marker.key = 'harness/run'
-          AND marker.value = '"true"'
-          AND EXISTS (
-            SELECT 1
-            FROM attributes AS published
-            WHERE published.strand_id = marker.strand_id
-              AND published.archived = 0
-              AND published.key = 'harness/published'
-              AND published.value = '"true"'
-          )
-        )
-      )
-    ORDER BY marker.strand_id
-  ),
-  candidate_strands AS (
-    SELECT strands.id,
-           strands.title,
-           strands.state,
-           strands.created_at,
-           strands.updated_at
-    FROM candidate_ids
-    JOIN strands ON strands.id = candidate_ids.strand_id
+      AND marker.key IN (${placeholders(provenanceMarkerKeys)})
+      AND marker.value = '"true"'
+    GROUP BY marker.strand_id
+    HAVING is_identity
+      OR is_card
+      OR is_task
+      OR is_ownership_claim
+      OR (is_run AND is_published)
   ),
   projected_strands AS (
     SELECT json_object(
              'kind', 'strand',
-             'id', candidate_strands.id,
-             'title', candidate_strands.title,
-             'state', candidate_strands.state,
-             'created_at', candidate_strands.created_at,
-             'updated_at', candidate_strands.updated_at,
+             'id', strands.id,
+             'title', strands.title,
+             'state', strands.state,
+             'created_at', strands.created_at,
+             'updated_at', strands.updated_at,
              'attributes', json(COALESCE(
                (
                  SELECT json_group_object(attributes.key, json(attributes.value))
                  FROM attributes
-                 WHERE attributes.strand_id = candidate_strands.id
+                 WHERE attributes.strand_id = strands.id
                    AND attributes.archived = 0
                    AND (
                      attributes.key IN (${placeholders(provenanceAttributeKeys)})
@@ -153,8 +145,9 @@ const provenanceSql = `
                '{}'
              ))
            ) AS record
-    FROM candidate_strands
-    ORDER BY candidate_strands.id
+    FROM candidate_markers
+    JOIN strands ON strands.id = candidate_markers.strand_id
+    ORDER BY strands.id
   ),
   projected_edges AS (
     SELECT json_object(
@@ -164,55 +157,20 @@ const provenanceSql = `
              'edge_type', strand_edges.edge_type
            ) AS record
     FROM strand_edges
+    LEFT JOIN candidate_markers AS source
+      ON source.strand_id = strand_edges.from_strand_id
+    LEFT JOIN candidate_markers AS target
+      ON target.strand_id = strand_edges.to_strand_id
     WHERE strand_edges.edge_type IN (${placeholders(provenanceEdgeKinds)})
       AND (
         strand_edges.edge_type = 'depends-on'
-        OR strand_edges.from_strand_id IN (SELECT strand_id FROM candidate_ids)
-        OR strand_edges.to_strand_id IN (SELECT strand_id FROM candidate_ids)
+        OR source.strand_id IS NOT NULL
+        OR target.strand_id IS NOT NULL
       )
       AND (
         strand_edges.edge_type <> 'parent-of'
-        OR (
-          EXISTS (
-            SELECT 1 FROM attributes AS parent_card
-            WHERE parent_card.strand_id = strand_edges.from_strand_id
-              AND parent_card.archived = 0
-              AND parent_card.key = 'kanban/card'
-              AND parent_card.value = '"true"'
-          )
-          AND (
-            EXISTS (
-              SELECT 1 FROM attributes AS child_task
-              WHERE child_task.strand_id = strand_edges.to_strand_id
-                AND child_task.archived = 0
-                AND child_task.key = 'kanban/task'
-                AND child_task.value = '"true"'
-            )
-            OR EXISTS (
-              SELECT 1 FROM attributes AS child_card
-              WHERE child_card.strand_id = strand_edges.to_strand_id
-                AND child_card.archived = 0
-                AND child_card.key = 'kanban/card'
-                AND child_card.value = '"true"'
-            )
-          )
-        )
-        OR (
-          EXISTS (
-            SELECT 1 FROM attributes AS parent_identity
-            WHERE parent_identity.strand_id = strand_edges.from_strand_id
-              AND parent_identity.archived = 0
-              AND parent_identity.key = 'identity/session'
-              AND parent_identity.value = '"true"'
-          )
-          AND EXISTS (
-            SELECT 1 FROM attributes AS child_identity
-            WHERE child_identity.strand_id = strand_edges.to_strand_id
-              AND child_identity.archived = 0
-              AND child_identity.key = 'identity/session'
-              AND child_identity.value = '"true"'
-          )
-        )
+        OR (source.is_card AND (target.is_task OR target.is_card))
+        OR (source.is_identity AND target.is_identity)
       )
     LIMIT ${edgeLimit + 1}
   )
@@ -496,7 +454,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     return this.readSnapshot(
       'provenance',
       provenanceSql,
-      [...provenanceAttributeKeys, ...provenanceEdgeKinds],
+      [...provenanceMarkerKeys, ...provenanceAttributeKeys, ...provenanceEdgeKinds],
       decodeProvenance,
     );
   }
