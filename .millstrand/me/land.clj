@@ -3,7 +3,12 @@
   (:require [clojure.spec.alpha :as s]
             [millhouse.land.support :as support]
             [millhouse.workflow :as workflow]
-            [millstrand.api.format.alpha :as format-alpha]))
+            [millhouse.workflow.execution :as execution]
+            [millstrand.api.current.alpha :as current]
+            [millstrand.api.format.alpha :as format-alpha]
+            [millstrand.api.millstrand.alpha :as millstrand]
+            [millstrand.api.runtime.alpha :as runtime]
+            [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]))
 
 (defn- non-blank-string?
   "Return true when v is a non-blank string."
@@ -300,6 +305,13 @@
                               strand --workspace \"{workspace}\" workflow choices <run-id>
                               ```
 
+                              Submit approval or abort through `land-signoff`, which
+                              retires the completed managed root before choosing its route:
+
+                              ```text
+                              strand --workspace \"{workspace}\" land-signoff <run-id> approved --step <signoff-id> --by-identity <actor> --input '<choice-input-json>'
+                              ```
+
                               Before approval, remove owned scratch files and stop owned
                               processes by exact PID or session name. Record retained
                               resources and their owners on the work card. Resources
@@ -315,3 +327,54 @@
                               ownership; abort before merge if that decision changes the
                               plan.
                             " {:workspace (str worktree "/.millstrand")}))})))
+
+(defn signoff!
+  "Retire a ready landing root before its explicit approved/abort route.
+
+  Unknown settlement leaves the same signoff frozen and inspectable; repeat this
+  command after resolving custody. Only Workflow owns the retirement evidence."
+  [{:keys [run-id step choice input by-identity]}]
+  (require-valid! ::non-blank-string by-identity "Signoff requires an actor")
+  (require-valid! #{"approved" "abort"} choice "Choose approved or abort")
+  (require-valid! (if (= "approved" choice) ::land-merge-input ::land-abort-input)
+                  input "Invalid landing choice input")
+  (let [rt (current/runtime)]
+    ;; The public quiesce API resolves a run's current root. Serialize signoffs
+    ;; through validation AND routing so a second caller cannot freeze its successor.
+    ;; Runtime state preserves the monitor across module refreshes.
+    #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+    (locking (:monitor (runtime/spool-state rt ::signoff-lock {:version 1}
+                                            (fn [] {:monitor (Object.)})))
+      (let [root (workflow/current-root run-id)
+            frontier (workflow/ready run-id)]
+        (when-not (and (= "land" (attr-get root :workflow/family))
+                       (= "ready" (attr-get root :land/stage))
+                       (= 1 (count frontier))
+                       (= step (:id (first frontier)))
+                       (= "signoff" (:checkpoint (first frontier))))
+          (fail! "Expected the sole ready landing signoff; no work was retired"
+                 {:run-id run-id :step step}))
+        (let [freeze (execution/quiesce-run! rt run-id "Explicit landing signoff")
+              receipt (execution/retire! rt freeze)]
+          (if (= :settled (:status receipt))
+            (workflow/choose! run-id choice input
+                              {:step step :by-identity by-identity :retirement receipt})
+            {:run-id run-id :status "waiting-for-settlement" :retirement receipt}))))))
+
+(millstrand/defop! land-signoff
+  "Retire the ready landing root, then approve or abort through its declared route."
+  {:arg-spec {:op "land-signoff"
+              :hook-class :mutating
+              :deadline-class :standard
+              :positionals [{:name :run-id :type :string :required? true}
+                            {:name :choice :type :string :required? true}]
+              :flags {:step {:type :string :required? true
+                             :doc "Exact ready signoff checkpoint ID."}
+                      :by-identity {:type :string :required? true
+                                    :doc "Friendly identity authorizing the route."}
+                      :input {:type :string :parse :json :required? true
+                              :doc "Choice input from workflow choices, as JSON."}}}
+   :returns {:type :map :extra :json}}
+  [{:op/keys [args]}]
+  (assoc (signoff! (update args :input workflow/json->params))
+         :operation "land-signoff"))

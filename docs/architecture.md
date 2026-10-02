@@ -132,7 +132,7 @@ parameters are URI-encoded. The only global key is discovery. No key was renamed
 | `['workspaces']`                | `/workspaces?refresh`                | 30s             | One app owner; readers disabled (no independent fetch policy)                                                       |
 | `['board', w]`                  | `/board`                             | 5s              | Always in workspace dashboard; overview only while discovered running                                               |
 | `['agents', w]`                 | `/agents`                            | 5s              | Workspace consumers; overview only while discovered running                                                         |
-| `['agent-reply', w, id]`        | `/agent-runs/:id`                    | 5s when enabled | Explicit enabled; run details and proposals share these keys; terminal replies continue polling                     |
+| `['agent-reply', w, id]`        | `/agent-runs/:id`                    | 5s when enabled | Expanded prompt/reply disclosure or review proposals; shared keys; visible terminal replies keep polling            |
 | `['views', w]`                  | `/views`                             | 15s             | Always in workspace dashboard                                                                                       |
 | `['card', w, id]`               | `/cards/:id`                         | 5s              | While detail/inspector mounted                                                                                      |
 | `['graph', w, id]`              | `/cards/:id/graph`                   | 10s             | `id !== null`                                                                                                       |
@@ -341,7 +341,11 @@ page to consume. Domain options must not import Router; navigation belongs in ho
   `WorkspaceResourcePolls` calls `useAgentsPoll`.
 - Import `IssueAgents` from `src/components/agent-activity.tsx`.
   Do not import shared UI from `agents-view.tsx`; it exports only the `AgentsView` page entry.
-- `useAgentReply` continues polling terminal runs so a late result remains observable.
+- `AgentRunReply` mounts its query-backed content only while **Prompt and agent reply**
+  is expanded, including direct/unlinked-run inspectors. Closing it unmounts that poll;
+  Query retains the snapshot under its normal cache lifetime. `useAgentReply` continues
+  polling visible terminal runs so a late result remains observable. Review proposal
+  readers and workspace directory/log poll owners are unchanged.
   Run links retain explicit card/graph/review/comment attribution. Exact `agentRun`
   URLs resolve through persisted `performed` edges; pre-binding and multi-participant
   runs remain run-only rather than selecting an invented primary actor.
