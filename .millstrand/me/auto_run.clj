@@ -170,16 +170,25 @@
   (and (= "true" (attr-get run :harness/run))
        (harness-life/accepted? run)))
 
-(defn- accepted-resumption [rt run]
-  (let [children (->> (graph/incoming-edges rt [(:id run)] "resumes")
-                      (map :from_strand_id)
-                      (map #(weaver/show rt %))
-                      (filter accepted-run?)
-                      vec)]
-    (when (next children)
+(defn- accepted-continuation [rt run]
+  (let [continuations
+        (->> [[:resumes "resumes"] [:continues "continues"]]
+             (mapcat (fn [[relation edge-type]]
+                       (map (fn [edge]
+                              {:relation relation
+                               :continuation
+                               (weaver/show rt (:from_strand_id edge))})
+                            (graph/incoming-edges rt [(:id run)] edge-type))))
+             (filter #(accepted-run? (:continuation %)))
+             vec)]
+    (when (next continuations)
       (fail! "Clean finisher has multiple accepted continuations"
-             {:run (:id run) :continuations (mapv :id children)}))
-    (first children)))
+             {:run (:id run)
+              :continuations
+              (mapv (fn [{:keys [relation continuation]}]
+                      {:run (:id continuation) :relation relation})
+                    continuations)}))
+    (first continuations)))
 
 (defn- require-finisher-owner!
   [rt card-view worker-run-id finisher-run-id canonical-root]
@@ -195,14 +204,18 @@
                    (= (:id card-view) (attr-get target :auto-run/card))
                    (= worker-run-id (attr-get target :auto-run/worker-run-id))
                    (= finisher-run-id (attr-get target :auto-run/finisher-run-id)))
-      (fail! "Clean inspection finisher is not the accepted workflow owner"
+      (fail! "Clean inspection finisher is not the accepted cleanup owner"
              {:run finisher-run-id :target (:id target) :card (:id card-view)}))
     (loop [predecessor original]
-      (if-let [continuation (accepted-resumption rt predecessor)]
-        (do
+      (if-let [{:keys [relation continuation]}
+               (accepted-continuation rt predecessor)]
+        (let [linked-predecessor
+              (case relation
+                :resumes (attr-get continuation :harness/resumes)
+                :continues (attr-get continuation :harness/after))]
           (when-not (and (= "failed" (attr-get predecessor :harness/status))
                          (= "true" (attr-get predecessor :harness/settled))
-                         (= (:id predecessor) (attr-get continuation :harness/resumes))
+                         (= (:id predecessor) linked-predecessor)
                          (= (attr-get original :harness/target)
                             (attr-get continuation :harness/target))
                          (= (canonical-path (attr-get original :harness/cwd))
@@ -211,7 +224,8 @@
                             (attr-get continuation :harness/logical-id)))
             (fail! "Clean finisher continuation does not preserve settled custody"
                    {:predecessor (:id predecessor)
-                    :continuation (:id continuation)}))
+                    :continuation (:id continuation)
+                    :relation relation}))
           (recur continuation))
         (do
           (when-not

@@ -168,13 +168,18 @@ request ID. Read its live help before use. The operation resolves both checkpoin
 roots and requires their workflow run and card/branch/worktree contexts to match the
 card's actual auto-run delivery. It verifies all durable evidence and accepted
 canonical custody, freezes the original request, executes
-`.millstrand/clean-inspection-cleanup.sh`, then records the cleanup receipt.
+`.millstrand/clean-inspection-cleanup.sh`, then records the cleanup receipt. An older
+clean inspection does not need a fabricated step added to its closed workflow. Its
+separately assigned owner may use a real task parented to the card and tagged as the
+`clean-finisher` target with the exact card, worker, and original finisher receipts.
 
-A positively settled failed finisher may transfer custody only through its accepted
-native continuation lineage. The original finisher, initiating actor, and request
-remain immutable; the cleanup receipt separately names the continuation that
-performed completion. Exact replay remains harmless after interrupted cleanup and
-after a successfully completed continuation. Frozen requests from before checkpoint
+A positively settled failed finisher may transfer custody through either supported
+accepted continuation: native `resume`, or a fresh `agent assign --after` when its
+native session is unusable. Both preserve the target, logical lineage and canonical
+cwd. The original finisher, initiating actor, and request remain immutable; the
+cleanup receipt separately names the continuation that performed completion. Exact
+replay remains harmless after interrupted cleanup and after a successfully completed
+continuation. Frozen requests from before checkpoint
 root IDs were recorded replay against their original fields and are not rewritten. A
 first request with both branch and worktree already absent is refused rather than
 treated as successful cleanup. A legacy retained receipt missing the

@@ -391,19 +391,30 @@
                   (workflow/choose! run-id :clean inspection-summary)
                   (let [root (workflow/current-root run-id)
                         strands (:strands (graph/subgraph rt [(:id root)]))
-                        finisher-target (role-step strands "clean-finisher")
+                        workflow-finisher-target (role-step strands "clean-finisher")
+                        finisher-target
+                        (:task (weaver/op! rt 'kanban
+                                           ["task" "add" (:id card)
+                                            "Historical clean inspection finisher"]))
                         finisher (weaver/add!
                                   rt {:title "Canonical clean finisher"
                                       :attributes {:harness/run "true"
                                                    :harness/status "running"
                                                    :harness/settled "false"
+                                                   :harness/session-usable "false"
                                                    :harness/cwd canonical-root
                                                    :harness/target (:id finisher-target)
                                                    :harness/logical-id "clean-finisher-lineage"
                                                    :identity/id "fixture-finisher"
                                                    :harness/published "true"}})]
+                    ;; Historical clean roots have no finisher target. A real
+                    ;; separately created task can truthfully own this custody.
+                    (is (not= (:id workflow-finisher-target)
+                              (:id finisher-target)))
                     (weaver/update! rt (:id finisher-target)
-                                    {:attributes {:auto-run/worker-run-id (:id worker)
+                                    {:attributes {:auto-run/role "clean-finisher"
+                                                  :auto-run/card (:id card)
+                                                  :auto-run/worker-run-id (:id worker)
                                                   :auto-run/finisher-run-id (:id finisher)}})
                     (let [gate (first (workflow/ready run-id))]
                       (is (zero? (command-exit worktree
@@ -587,15 +598,15 @@
                                                 :harness/settled "false"
                                                 :harness/cwd canonical-root
                                                 :harness/target (:id finisher-target)
-                                                :harness/resumes (:id finisher)
+                                                :harness/after (:id finisher)
                                                 :harness/logical-id "clean-finisher-lineage"
                                                 :identity/id "fixture-continuation"
                                                 :harness/published "true"}
-                                   :edges [{:type "resumes" :to (:id finisher)}]})
+                                   :edges [{:type "continues" :to (:id finisher)}]})
                               continued (assoc reconciled
                                                :by-identity "fixture-continuation")]
                           (io/delete-file (io/file worktree ".env"))
-                          (testing "a settled failed owner hands off without rewriting the request"
+                          (testing "an unusable failed owner hands off through accepted --after"
                             (let [result (finish! continued)
                                   finished (weaver/show rt (:id card))
                                   cleanup (attr-get finished :auto-inspect/cleanup-receipt)

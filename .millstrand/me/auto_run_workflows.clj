@@ -349,8 +349,9 @@
          {worktree}. This target is a custody anchor, not the next phase. Require
          its immutable finisher receipt names your lineage's original run and its
          worker receipt names a different run. A positively settled failed owner
-         may hand custody only to its accepted native continuation; never rewrite
-         the original receipt or launch an unrelated replacement. Drive the ready
+         may hand custody only to its accepted native resume or accepted fresh
+         `agent assign --after` continuation; never rewrite the original receipt or
+         launch an unrelated replacement. Drive the ready
          clean-finisher phases with explicit step IDs. Keep this anchor open until
          cleanup and card completion are verified.
        " {:card card :worktree worktree})))
