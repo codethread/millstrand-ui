@@ -264,10 +264,15 @@
               canonical-root (.getCanonicalPath canonical)
               worktree-path (.getCanonicalPath worktree)
               cleanup-environment-var
-              (requiring-resolve 'millstrand-ui.auto-run/*cleanup-environment*)]
+              (requiring-resolve 'millstrand-ui.auto-run/*cleanup-environment*)
+              mill-command-var
+              (requiring-resolve 'millstrand-ui.auto-run/*mill-command*)
+              mill-command (.getCanonicalPath
+                            (io/file canonical ".fixture-bin" "mill"))]
           (auto-run/stop! rt)
           (current/with-runtime rt
-            (with-bindings {cleanup-environment-var cleanup-environment}
+            (with-bindings {cleanup-environment-var cleanup-environment
+                            mill-command-var mill-command}
               (let [run-id "clean-finish-fixture"
                     card (weaver/add!
                           rt {:title "Clean retained inspection"

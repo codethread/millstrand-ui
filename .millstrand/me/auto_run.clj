@@ -231,6 +231,10 @@
   "Complete subprocess environment override used by disposable cleanup fixtures."
   nil)
 
+(def ^:dynamic *mill-command*
+  "Mill executable override used by disposable process-audit fixtures."
+  "mill")
+
 (defn- run-command [argv options]
   (apply shell/sh
          (concat argv
@@ -259,7 +263,7 @@
         found))))
 
 (defn- live-worktree-weavers [worktree]
-  (let [result (run-command ["mill" "weaver" "list"] {})]
+  (let [result (run-command [*mill-command* "weaver" "list"] {})]
     (when-not (zero? (:exit result))
       (fail! "Cannot inspect local Weaver processes"
              {:exit (:exit result) :error (:err result)}))
