@@ -62,15 +62,15 @@ it('polls selected-workspace logs only where an activity consumer is visible', (
   const nothingSelected = { issue: null, agent: null, agentRun: null };
   expect(needsWorkspaceLogActivity('board', nothingSelected)).toBe(true);
   expect(needsWorkspaceLogActivity('outline', nothingSelected)).toBe(true);
-  expect(needsWorkspaceLogActivity('graph', nothingSelected)).toBe(true);
-  expect(needsWorkspaceLogActivity('completed', nothingSelected)).toBe(true);
+  expect(needsWorkspaceLogActivity('graph', nothingSelected)).toBe(false);
+  expect(needsWorkspaceLogActivity('completed', nothingSelected)).toBe(false);
   expect(needsWorkspaceLogActivity('agents', nothingSelected)).toBe(false);
   expect(needsWorkspaceLogActivity('reviews', nothingSelected)).toBe(false);
   expect(
     needsWorkspaceLogActivity('agents', { ...nothingSelected, agent: 'identity-strand' }),
   ).toBe(true);
   expect(needsWorkspaceLogActivity('agents', { ...nothingSelected, agentRun: 'run' })).toBe(true);
-  expect(needsWorkspaceLogActivity('reviews', { ...nothingSelected, issue: 'card' })).toBe(true);
+  expect(needsWorkspaceLogActivity('graph', { ...nothingSelected, issue: 'card' })).toBe(true);
   expect(logActivityOptions('workspace', false)).toMatchObject({
     enabled: false,
     refetchInterval: false,

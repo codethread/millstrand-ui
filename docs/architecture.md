@@ -49,7 +49,7 @@ for those exceptions.
 | `src/components/issue-surface.tsx`                                                                                                       | Board/outline/graph page entry; owns issue filtering and delegates to existing surface views                                                                                                  |
 | `src/components/reviews-view.tsx`, `review-inbox.tsx`, `review-report.tsx`                                                               | Review page composition, focused inbox rendering, and the read-only report plus comments slot; see `docs/reviews.md`                                                                          |
 | `src/components/overlays.tsx`, `saved-view-dialog.tsx`, `shortcut-dialog.tsx`                                                            | Narrow overlay dispatch; Query-backed saved-view workflow and focused browser-preference editor                                                                                               |
-| `src/components/workspace-resource-polls.tsx`                                                                                            | Single selected-workspace poll owner for board, agents, reviews and saved views; log activity is enabled only on issue surfaces or while an issue/agent detail is open                        |
+| `src/components/workspace-resource-polls.tsx`                                                                                            | Single selected-workspace poll owner for board, agents, reviews and saved views; log activity is enabled only on board/outline or while an issue/agent detail is open                         |
 | `src/components/workspace-discovery.tsx`                                                                                                 | Single app-lifetime discovery poll owner, mounted in `src/main.tsx`                                                                                                                           |
 | `src/components/workspace-switcher.tsx`                                                                                                  | Working pilot: selected option and filtered options use `select`; separate discovery health reader; URL-owned switching                                                                       |
 | `src/lib/workspaces.ts`                                                                                                                  | Pure `selectedWorkspace` and `matchingWorkspaces` projections                                                                                                                                 |
@@ -143,7 +143,7 @@ parameters are URI-encoded. The only global key is discovery. No key was renamed
 | `['reviews', w]`                | `/reviews`                           | 5s when supported | Workspace consumers (including sidebar); an explicit unsupported directory disables the interval                    |
 | `['review', w, id]`             | `/reviews/:id`                       | 5s                | Selected detail mounted                                                                                             |
 | `['review-comments', w, id]`    | `/reviews/:id/comments`              | 5s                | Selected comments mounted                                                                                           |
-| `['log-activity', w]`           | `/log-activity`                      | 5s when visible   | Overview, issue surfaces, or an open issue/agent detail; bindings and latest-event summaries                        |
+| `['log-activity', w]`           | `/log-activity`                      | 5s when visible   | Overview, board/outline, or an open issue/agent detail; bindings and latest-event summaries                         |
 | `['session-log', p, s]`         | `/session-logs/snapshot`             | none              | Disabled cache entry; the visible compact tail or expanded viewer writes SSE snapshots                              |
 
 Unless listed, queries inherit retry 1, stale time 3s, structural sharing and Query's
@@ -156,8 +156,8 @@ runs targeting the review and poll each reply, preserving late terminal results.
 Standard `pnpm dev`, `pnpm build`, and `pnpm start` include log activity, compact
 tails, and the expanded Conversation/Inspector/Console viewer. `['log-activity', w]`
 reads `/log-activity` every five seconds, owned by `OverviewLogPolls` or
-`WorkspaceResourcePolls`; the selected-workspace owner enables it only on issue
-surfaces or while an issue/agent detail is open. Inline hints use disabled projection
+`WorkspaceResourcePolls`; the selected-workspace owner enables it only on board and
+outline or while an issue/agent detail is open. Inline hints use disabled projection
 readers. It contains persisted native-session bindings and latest-event summaries. A visible compact tail
 or expanded overlay owns `/session-logs/stream`; it validates and writes bounded
 snapshots to `['session-log', provider, session]`. The compact subscription pauses
@@ -227,9 +227,9 @@ Infinity`, `subscribed: false`, or a new key as a substitute.
 - `WorkspaceResourcePolls` is the selected-workspace owner for board, agents,
   reviews, saved views, and log activity. It remains mounted across issue, agent, and
   review modes, so sidebar counts and agent freshness stay current in the background.
-  Log activity is disabled on bare Agents and Reviews pages because neither renders a
-  log consumer; opening an issue/agent detail enables it, and issue surfaces keep it
-  enabled for their inline activity hints. A review
+  Log activity is disabled on bare Graph, Agents, Reviews, and Completed pages because
+  none renders a log consumer; opening an issue/agent detail enables it, while board and
+  outline keep it enabled for their inline activity hints. A review
   directory that explicitly reports `unsupported` stops only its periodic interval;
   focus/reconnect behavior and workspace lifecycle invalidation remain intact.
   `useSavedViews` reads the saved-view array directly (that response has no refresh

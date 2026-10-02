@@ -16,11 +16,12 @@ hint, compact tail, or activity detail, so it repeatedly paid for shared persist
 provenance, up to 60 local session snapshots, and a 149,777-byte response that had no
 consumer. The same was true of the bare Reviews page.
 
-`WorkspaceResourcePolls` now disables log activity on bare Agents and Reviews pages.
-Opening an issue or agent detail enables the existing query and interval; closing it
-stops them again. Issue surfaces retain their normal five-second owner for inline log
-hints, and the all-weaver overview owner is unchanged. Cache keys, binding selection,
-session reads, polling cadence while visible, and spool semantics are unchanged.
+`WorkspaceResourcePolls` now disables log activity on bare Graph, Agents, Reviews,
+and Completed pages. Opening an issue or agent detail enables the existing query and
+interval; closing it stops them again. Board and outline retain their normal five-second
+owner for inline log hints, and the all-weaver overview owner is unchanged. Cache keys,
+binding selection, session reads, polling cadence while visible, and spool semantics are
+unchanged.
 
 An isolated production server on port 4191 used `/tmp/1izqe-perf.log` against real
 `millhouse.spool` data. The bare Agents page rendered 692 identities and unbound runs
@@ -28,7 +29,9 @@ with zero `/api/log-activity` requests over 11 seconds. Opening a real agent det
 started the request immediately and retained the five-second poll; closing it produced
 zero requests over the next 11 seconds. The unsupported Reviews page also made zero log
 requests, while the Board retained its normal log poll and a 390×844 layout remained
-usable. No uncaught browser error occurred.
+usable. Recovery verification additionally confirmed zero requests on bare Graph and
+Completed pages, with an opened completed-card detail enabling the poll. No uncaught
+browser error occurred.
 
 The running default server had no `MILLSTRAND_UI_PERF_LOG` override. The current and
 single rotated default UI logs were readable and inspected. Of the six live Weaver log

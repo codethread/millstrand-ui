@@ -16,7 +16,8 @@ export function needsWorkspaceLogActivity(
   selected: { issue: string | null; agent: string | null; agentRun: string | null },
 ): boolean {
   return (
-    (mode !== 'agents' && mode !== 'reviews') ||
+    mode === 'board' ||
+    mode === 'outline' ||
     selected.issue !== null ||
     selected.agent !== null ||
     selected.agentRun !== null
