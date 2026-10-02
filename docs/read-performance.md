@@ -1,5 +1,37 @@
 # Dashboard read audit
 
+## 2026-10-02 normalized agent directory transport
+
+Selected the recurring full agent-directory response for `millhouse.spool` from the
+current default performance log:
+
+```text
+2026-10-02T08:54:24.005Z perf SLOW 71.88ms server GET /api/agents status=200 bytes=1123304
+2026-10-02T08:54:34.216Z perf SLOW 101.19ms server GET /api/agents status=200 bytes=1123304
+```
+
+The persisted projection contained 689 identities and 731 runs. Its HTTP shape embedded
+713 complete run objects beneath participant identities and then sent the same records
+again in the top-level run directory. The route now sends each run once and identity
+records carry ordered run IDs; the client restores the existing `AgentDirectory` before
+it reaches Query or domain consumers. This changes only the same-origin wire shape:
+identity history, multi-participant runs, ordering, polling, cache keys and spool
+semantics are unchanged. A boundary round-trip rejects a missing run reference rather
+than returning incomplete data.
+
+On isolated production servers against the real workspace, ten cold five-second reads
+reduced the response from 1,123,304 to 655,523 bytes (42%). The route median moved from
+55.70 to 48.86 ms and SLOW samples from 8/10 to 4/10 despite local SQL variance; median
+post-SQL projection/serialization time moved from 19.95 to 17.66 ms. Decoding a fresh
+response matched the old full directory exactly after ignoring its capture timestamp
+(689 identities, 731 runs). Browser verification rendered all 689 identities plus
+unbound runs, opened a real identity with its run history, and reported no uncaught
+errors. The current and rotated UI logs and every live Weaver log reported by
+`mill weaver list` were inspected; Weaver logs contained no query timings relevant to
+this route. Focused agent projection checks passed, and `pnpm quality` passed formatting,
+zero-warning Oxlint, strict TypeScript, 383 tests and the production build. No dependency
+or Weaver runtime changed, so no Weaver restart was needed.
+
 ## 2026-10-02 provenance marker projection
 
 Selected the recurring persisted provenance read for `millhouse.spool` from the

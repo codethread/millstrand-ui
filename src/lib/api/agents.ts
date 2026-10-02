@@ -1,11 +1,13 @@
 import { queryOptions } from '@tanstack/react-query';
-import type { AgentDirectory, AgentReply } from '../../../shared/api';
+import type { AgentReply } from '../../../shared/api';
+import { decodeAgentDirectory, type AgentDirectoryPayload } from '../../../shared/agent-directory';
 import { request } from './transport';
 
 export function agentQueryOptions(workspace: string | null) {
   return queryOptions({
     queryKey: ['agents', workspace],
-    queryFn: () => request<AgentDirectory>('/agents', workspace),
+    queryFn: async () =>
+      decodeAgentDirectory(await request<AgentDirectoryPayload>('/agents', workspace)),
     refetchInterval: 5000,
   });
 }
