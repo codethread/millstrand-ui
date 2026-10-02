@@ -17,6 +17,7 @@ import { defaultPerfLogPath, PerfLog } from './perf.ts';
 import { parseCurateReview, parsePublishReview } from './review-comments.ts';
 import { parseWeaverOperation, WorkspaceDirectory } from './workspaces.ts';
 import { parseCardLane } from './card-actions.ts';
+import { encodeJson } from './json.ts';
 import { readLogActivity } from './log-activity.ts';
 import { SessionLogReader } from './session-log-reader.ts';
 import { parseSessionLogSource, SessionLogStreams } from './session-logs.ts';
@@ -87,6 +88,36 @@ function json(response: ServerResponse, status: number, data: unknown): void {
     'Cache-Control': 'no-store',
   });
   response.end(payload);
+}
+
+async function compressedJson(
+  request: IncomingMessage,
+  response: ServerResponse,
+  status: number,
+  data: unknown,
+): Promise<void> {
+  const representation = await encodeJson(data, request.headers['accept-encoding']);
+  if (representation === null) {
+    responseBytes.set(response, 0);
+    response.writeHead(406, {
+      'Cache-Control': 'no-store',
+      'Content-Length': 0,
+      Vary: 'Accept-Encoding',
+    });
+    response.end();
+    return;
+  }
+  responseBytes.set(response, representation.body.length);
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Content-Length': representation.body.length,
+    Vary: 'Accept-Encoding',
+    ...(representation.contentEncoding === null
+      ? {}
+      : { 'Content-Encoding': representation.contentEncoding }),
+  });
+  response.end(representation.body);
 }
 
 async function body(request: IncomingMessage): Promise<unknown> {
@@ -281,7 +312,7 @@ const server = createServer((request, response) => {
     }
     if (path === '/api/agents' && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
-      json(response, 200, encodeAgentDirectory(await strand.agents()));
+      await compressedJson(request, response, 200, encodeAgentDirectory(await strand.agents()));
       return;
     }
     if (path === '/api/log-activity' && method === 'GET') {
