@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { basename, dirname } from 'node:path';
 import { z } from 'zod';
 import { HttpError, parseGraph } from './parse.ts';
+import { dependencyCountAttributes } from './provenance.ts';
 import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 import type { CardGraph, DependencyCounts } from '../shared/api.ts';
 import { discoverDatabase } from './workspace-storage.ts';
@@ -89,7 +90,6 @@ const provenanceEdgeKinds = [
   'resumes',
   'continues',
   'parent-of',
-  'depends-on',
 ] as const;
 const provenanceMarkerKeys = [
   'identity/session',
@@ -123,31 +123,60 @@ const provenanceSql = `
       OR is_ownership_claim
       OR (is_run AND is_published)
   ),
+  candidate_strands AS (
+    SELECT candidate_markers.*,
+           strands.id,
+           strands.title,
+           strands.state,
+           strands.created_at,
+           strands.updated_at,
+           COALESCE(
+             (
+               SELECT json_group_object(attributes.key, json(attributes.value))
+               FROM attributes
+               WHERE attributes.strand_id = strands.id
+                 AND attributes.archived = 0
+                 AND (
+                   attributes.key IN (${placeholders(provenanceAttributeKeys)})
+                   OR attributes.key LIKE 'kanban.label/%'
+                 )
+             ),
+             '{}'
+           ) AS projected_attributes
+    FROM candidate_markers
+    JOIN strands ON strands.id = candidate_markers.strand_id
+  ),
   projected_strands AS (
     SELECT json_object(
              'kind', 'strand',
-             'id', strands.id,
-             'title', strands.title,
-             'state', strands.state,
-             'created_at', strands.created_at,
-             'updated_at', strands.updated_at,
-             'attributes', json(COALESCE(
-               (
-                 SELECT json_group_object(attributes.key, json(attributes.value))
-                 FROM attributes
-                 WHERE attributes.strand_id = strands.id
-                   AND attributes.archived = 0
-                   AND (
-                     attributes.key IN (${placeholders(provenanceAttributeKeys)})
-                     OR attributes.key LIKE 'kanban.label/%'
+             'id', candidate_strands.id,
+             'title', candidate_strands.title,
+             'state', candidate_strands.state,
+             'created_at', candidate_strands.created_at,
+             'updated_at', candidate_strands.updated_at,
+             'attributes', json(
+               CASE WHEN candidate_strands.is_card OR candidate_strands.is_task
+                 THEN json_set(
+                   candidate_strands.projected_attributes,
+                   '$."${dependencyCountAttributes.incoming}"',
+                   (
+                     SELECT count(*) FROM strand_edges
+                     WHERE strand_edges.to_strand_id = candidate_strands.id
+                       AND strand_edges.edge_type = 'depends-on'
+                   ),
+                   '$."${dependencyCountAttributes.outgoing}"',
+                   (
+                     SELECT count(*) FROM strand_edges
+                     WHERE strand_edges.from_strand_id = candidate_strands.id
+                       AND strand_edges.edge_type = 'depends-on'
                    )
-               ),
-               '{}'
-             ))
+                 )
+                 ELSE candidate_strands.projected_attributes
+               END
+             )
            ) AS record
-    FROM candidate_markers
-    JOIN strands ON strands.id = candidate_markers.strand_id
-    ORDER BY strands.id
+    FROM candidate_strands
+    ORDER BY candidate_strands.id
   ),
   projected_edges AS (
     SELECT json_object(
@@ -162,11 +191,7 @@ const provenanceSql = `
     LEFT JOIN candidate_markers AS target
       ON target.strand_id = strand_edges.to_strand_id
     WHERE strand_edges.edge_type IN (${placeholders(provenanceEdgeKinds)})
-      AND (
-        strand_edges.edge_type = 'depends-on'
-        OR source.strand_id IS NOT NULL
-        OR target.strand_id IS NOT NULL
-      )
+      AND (source.strand_id IS NOT NULL OR target.strand_id IS NOT NULL)
       AND (
         strand_edges.edge_type <> 'parent-of'
         OR (source.is_card AND (target.is_task OR target.is_card))

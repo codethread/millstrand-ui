@@ -99,8 +99,10 @@ it('runs one selective graph read without note strands or workspace interpolatio
   expect(parameters).toContain('harness/published');
   expect(parameters).toContain('performed');
   expect(parameters).toContain('serves-root');
-  expect(parameters).toContain('depends-on');
+  expect(parameters).not.toContain('depends-on');
   expect(sql).toContain("strand_edges.edge_type = 'depends-on'");
+  expect(sql).toContain(`'$."millstrand-ui/dependency-incoming"'`);
+  expect(sql).toContain(`'$."millstrand-ui/dependency-outgoing"'`);
   expect(parameters).not.toContain('note/text');
   expect(parameters).not.toContain('note/at');
   expect(parameters).not.toContain('note/kind');
@@ -257,6 +259,7 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
   try {
     addStrand('card', { 'kanban/card': 'true' });
     addStrand('task', { 'kanban/task': 'true' });
+    addStrand('dependency', {});
     addStrand('pre-binding-run', {
       'harness/run': 'true',
       'harness/published': 'true',
@@ -275,6 +278,8 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
     addStrand('unrelated', {});
     insertEdge.run('card', 'task', 'parent-of');
     insertEdge.run('card', 'unrelated', 'parent-of');
+    insertEdge.run('card', 'dependency', 'depends-on');
+    insertEdge.run('dependency', 'task', 'depends-on');
     insertEdge.run('pre-binding-run', 'task', 'serves');
 
     const reader = new WorkspaceDatabase(workspace, { discover: async () => path });
@@ -356,7 +361,13 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
     });
     insertEdge.run('child-identity', 'direct-run', 'performed');
 
-    const after = new ProvenanceIndex(await reader.readProvenance());
+    const afterSnapshot = await reader.readProvenance();
+    expect(afterSnapshot).toMatchObject({
+      edges: expect.not.arrayContaining([expect.objectContaining({ edge_type: 'depends-on' })]),
+    });
+    const after = new ProvenanceIndex(afterSnapshot);
+    expect(after.dependencies('card')).toEqual({ incoming: 0, outgoing: 1 });
+    expect(after.dependencies('task')).toEqual({ incoming: 1, outgoing: 0 });
     const projection = after.agents();
     expect(projection.runs.find(({ id }) => id === 'pre-binding-run')).toMatchObject({
       target: 'task',

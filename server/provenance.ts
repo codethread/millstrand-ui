@@ -101,6 +101,14 @@ const claimAttributesSchema = z
     'kanban/run-id': z.string().min(1).optional(),
   })
   .loose();
+const dependencyCountSchema = z.object({
+  incoming: z.int().nonnegative(),
+  outgoing: z.int().nonnegative(),
+});
+export const dependencyCountAttributes = {
+  incoming: 'millstrand-ui/dependency-incoming',
+  outgoing: 'millstrand-ui/dependency-outgoing',
+} as const;
 
 type AgentProjection = { identities: AgentIdentity[]; runs: AgentRun[] };
 type Strand = z.infer<typeof strandSchema>;
@@ -153,6 +161,17 @@ export class ProvenanceIndex {
         .filter((edge) => edge.edge_type === 'depends-on')
         .map((edge) => ({ from: edge.from_strand_id, to: edge.to_strand_id })),
     );
+    for (const strand of snapshot.strands) {
+      const incoming = strand.attributes[dependencyCountAttributes.incoming];
+      const outgoing = strand.attributes[dependencyCountAttributes.outgoing];
+      if (incoming === undefined && outgoing === undefined) continue;
+      const counts = parseSchema(
+        dependencyCountSchema,
+        { incoming, outgoing },
+        `dependency counts for ${strand.id}`,
+      );
+      this.dependencyCounts.set(strand.id, counts);
+    }
     this.identities = snapshot.strands
       .filter((strand) => strand.attributes['identity/session'] === 'true')
       .map((strand) => ({
