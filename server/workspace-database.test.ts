@@ -229,13 +229,20 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
       strand_id TEXT NOT NULL,
       key TEXT NOT NULL,
       value TEXT NOT NULL,
-      archived INTEGER NOT NULL
+      archived INTEGER NOT NULL,
+      PRIMARY KEY (strand_id, key)
     );
+    CREATE INDEX idx_attributes_key_value_hot
+      ON attributes(key, value) WHERE archived = 0;
+    CREATE INDEX idx_attributes_strand_hot
+      ON attributes(strand_id) WHERE archived = 0;
     CREATE TABLE strand_edges (
       from_strand_id TEXT NOT NULL,
       to_strand_id TEXT NOT NULL,
-      edge_type TEXT NOT NULL
+      edge_type TEXT NOT NULL,
+      PRIMARY KEY (from_strand_id, to_strand_id, edge_type)
     );
+    CREATE INDEX idx_strand_edges_to ON strand_edges(to_strand_id, edge_type);
   `);
   const insertStrand = database.prepare(
     'INSERT INTO strands (id, title, state, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
