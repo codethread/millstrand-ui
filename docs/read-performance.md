@@ -1,5 +1,39 @@
 # Dashboard read audit
 
+## 2026-10-02 lazy selected-card detail
+
+Selected the recurring card-detail command for the canonical `millstrand-ui` workspace
+from the current default performance log:
+
+```text
+2026-10-02T19:42:12.562Z perf SLOW 76.60ms strand strand kanban card workspace=millstrand-ui bytes=6094 outcome=ok
+2026-10-02T19:42:12.562Z perf SLOW 77.04ms server GET /api/cards/sendq status=200 bytes=6498
+```
+
+The mounted issue inspector requested the full card resume view every five seconds.
+Nineteen consecutive requests over 92 seconds were all slow (69.81–136.84 ms); the
+paired `strand kanban card` command accounted for nearly the entire route time. The
+full detail carries the body, raw attributes, tasks, readiness, ownership and relations,
+so replacing it with UI-owned SQL would duplicate spool domain semantics. The existing
+five-second board owner already refreshes compact card state, and label/card mutations
+invalidate detail explicitly.
+
+Card detail is now an on-demand Query read with no independent interval. It still loads
+when the inspector mounts and uses the existing stale mount, window-focus, reconnect,
+manual refresh and mutation invalidation behavior. Notes, expanded task notes, graph and
+workspace-wide resource owners retain their existing deliberate intervals. This avoids
+re-running the expensive domain command while somebody simply reads an open issue.
+
+Before the change, a 17-second production-browser capture made four command-backed
+refreshes after opening `m9gbp`, all slow at 68.99–145.21 ms route time. Verification
+against the changed production build kept the real issue detail rendered and made only
+the initial detail request during the same observation window; explicit Query
+invalidation fetched it again. Focused query tests and `pnpm quality` passed. The current
+and rotated UI performance logs and every available Weaver log reported by
+`mill weaver list` were inspected; no relevant Weaver query timing or runtime failure
+was present. No dependency basis or Weaver runtime changed, so no Weaver restart was
+needed.
+
 ## 2026-10-02 compressed agent directory transport
 
 Selected the recurring full agent-directory response for `millhouse.spool` from the
