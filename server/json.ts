@@ -8,26 +8,33 @@ export interface JsonRepresentation {
   contentEncoding: 'gzip' | null;
 }
 
-function acceptsGzip(header: string | string[] | undefined): boolean {
-  if (header === undefined) return false;
-  const encodings = (Array.isArray(header) ? header : [header]).flatMap((value) =>
-    value.split(',').map((part) => part.trim()),
-  );
-  for (const encoding of encodings) {
-    const [name, ...parameters] = encoding.split(';').map((part) => part.trim().toLowerCase());
-    if (name !== 'gzip') continue;
-    const quality = parameters.find((parameter) => parameter.startsWith('q='));
-    return quality === undefined || Number(quality.slice(2)) > 0;
+function acceptedEncodings(header: string | string[] | undefined): Map<string, number> {
+  if (header === undefined) return new Map();
+  const accepted = new Map<string, number>();
+  for (const value of Array.isArray(header) ? header : [header]) {
+    for (const encoding of value.split(',')) {
+      const [name, ...parameters] = encoding.split(';').map((part) => part.trim().toLowerCase());
+      if (name === undefined || name === '') continue;
+      const parameter = parameters.find((candidate) => candidate.startsWith('q='));
+      const quality = parameter === undefined ? 1 : Number(parameter.slice(2));
+      accepted.set(name, Number.isFinite(quality) && quality >= 0 && quality <= 1 ? quality : 0);
+    }
   }
-  return false;
+  return accepted;
 }
 
-/** Serialize once and compress only when the HTTP client explicitly accepts gzip. */
+/** Serialize once and select the best supported HTTP content encoding. */
 export async function encodeJson(
   data: unknown,
   acceptEncoding: string | string[] | undefined,
-): Promise<JsonRepresentation> {
+): Promise<JsonRepresentation | null> {
   const body = Buffer.from(JSON.stringify(data));
-  if (!acceptsGzip(acceptEncoding)) return { body, contentEncoding: null };
-  return { body: await compress(body), contentEncoding: 'gzip' };
+  const accepted = acceptedEncodings(acceptEncoding);
+  const wildcard = accepted.get('*');
+  const gzipQuality = accepted.get('gzip') ?? wildcard ?? 0;
+  const identityQuality = accepted.get('identity') ?? (wildcard === 0 ? 0 : 1);
+  if (gzipQuality > 0 && gzipQuality >= identityQuality)
+    return { body: await compress(body), contentEncoding: 'gzip' };
+  if (identityQuality > 0) return { body, contentEncoding: null };
+  return null;
 }

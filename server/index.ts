@@ -97,6 +97,8 @@ async function compressedJson(
   data: unknown,
 ): Promise<void> {
   const representation = await encodeJson(data, request.headers['accept-encoding']);
+  if (representation === null)
+    throw new HttpError(406, 'No supported JSON content encoding is acceptable.');
   responseBytes.set(response, representation.body.length);
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',

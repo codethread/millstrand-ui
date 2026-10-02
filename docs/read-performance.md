@@ -24,7 +24,7 @@ the cold read, twelve browser polls completed server-side in 16.55–32.69 ms wi
 SLOW sample. The browser rendered all 692 identities and unbound runs, opened a real
 identity with its run history, and retained a usable 390×844 layout without uncaught
 errors. Focused JSON and agent-directory checks passed, and `pnpm quality` passed
-formatting, zero-warning Oxlint, strict TypeScript, 385 tests and the production build.
+formatting, zero-warning Oxlint, strict TypeScript, 387 tests and the production build.
 
 The default current and rotated UI logs and all available live Weaver logs reported by
 `mill weaver list` were inspected. The `agents` entry's reported log path did not exist;
