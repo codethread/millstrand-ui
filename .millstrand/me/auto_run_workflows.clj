@@ -347,9 +347,12 @@
          You are the independent canonical-root clean finisher for card {card}.
          Keep your session at the canonical root and use explicit Git cwd for
          {worktree}. This target is a custody anchor, not the next phase. Require
-         its finisher receipt names YOUR run and its worker receipt names a
-         different run. Drive the ready clean-finisher phases with explicit step
-         IDs. Keep this anchor open until cleanup and card completion are verified.
+         its immutable finisher receipt names your lineage's original run and its
+         worker receipt names a different run. A positively settled failed owner
+         may hand custody only to its accepted native continuation; never rewrite
+         the original receipt or launch an unrelated replacement. Drive the ready
+         clean-finisher phases with explicit step IDs. Keep this anchor open until
+         cleanup and card completion are verified.
        " {:card card :worktree worktree})))
    (workflow/step
     :await-clean-worker "Await exact clean worker settlement" :self
@@ -360,9 +363,12 @@
        "
          Read auto-run/worker-run-id from card {card}'s clean-finisher target.
          Await that exact worker with query agent-run-settled and min-count 1.
-         Require settled=true, substatus=completed and exit-code=0. Also inspect
-         every later accepted run whose cwd is the retained worktree; all must be
-         successfully settled. Timeouts are bounded waits, not success.
+         Require settled=true, substatus=completed and exit-code=0. Other managed
+         runs whose cwd is inside the retained worktree need positive terminal
+         settlement, not successful execution. External/native observations are
+         not managed settlement: do not edit them. Record reconciliation and use
+         the finish operation's live local process and Weaver audit to prove there
+         is no holder. Timeouts are bounded waits, not success.
        " {:card card})))
    (workflow/step
     :finish-clean "Clean resources and finish the clean card" :self
@@ -377,10 +383,13 @@
          retention step, worker and finisher run IDs, branch {branch}, worktree
          {worktree}, retained full expected HEAD, canonical root, handoff note,
          your identity and request ID
-         auto-clean-finish/{card}. The operation independently verifies settlement,
-         canonical custody, all Git cleanliness rules, removes only documented
-         disposable ignored artifacts, removes the branch/worktree, calls
-         mark-clean-finishing!, then the shared finish-card! action.
+         auto-clean-finish/{card}. Always supply the immutable original finisher
+         run ID; the operation resolves an accepted continuation itself. It binds
+         both checkpoint roots to this card's delivery context, rejects initially
+         absent resources, verifies exact worker and local process/Weaver custody,
+         removes compact allowlisted ignored artifacts, uses inspected `wktree`
+         lifecycle for the branch/worktree, calls mark-clean-finishing!, then the
+         shared finish-card! action.
 
          A refusal or cleanup failure is visible operational failure: retain the
          card and evidence and do not assert this step succeeded. Only after the

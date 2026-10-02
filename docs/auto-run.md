@@ -140,36 +140,52 @@ later `complete --context` does not re-render existing instructions.
 New clean runs then use a persistent `clean-finisher` target. The worker freezes the
 exact grunt alias, canonical cwd, target, request ID, complete prompt and worker run
 receipt before launch; it records the accepted finisher run before releasing. The
-finisher waits for successful settlement of the exact worker and checks every
-recorded Harness run whose cwd is the retained worktree. Needs-review and blocked retain
+finisher waits for successful settlement of the exact worker. Other managed runs
+whose cwd is within the retained worktree need positive terminal settlement, but do
+not need successful execution. External/native observations are not managed process
+settlement: never rewrite them to look settled. They require explicit reconciliation
+plus a clean live local process and Weaver audit. Needs-review and blocked retain
 resources and open cards without launching this finisher.
 
 The finisher invokes the canonical-Weaver `clean-inspection-finish` operation. The
 same operation is the supported completion surface for already-retained clean runs:
 a separately assigned canonical-root owner supplies the closed clean disposition
-step, retained step, exact worker and finisher/owner run IDs, branch, worktree,
+step, retained step, exact worker and original finisher run IDs, branch, worktree,
 retained full expected HEAD, canonical root, handoff note, actor, and a stable
-request ID. Read its live help
-before use. It verifies all durable evidence and accepted canonical custody, freezes
-that request, executes `.millstrand/clean-inspection-cleanup.sh`, then records the
-cleanup receipt. Exact replay remains harmless after interrupted cleanup and after
-a successfully completed finisher; conflicting request reuse is refused. A legacy
-retained receipt missing the new branch/worktree/HEAD fields also requires explicit
-`--reconciliation` evidence; this is the bounded existing-run path, not inferred
-backfill. Do not use the operation for needs-review or blocked outcomes, and do not
-mutate the database or call implementation functions from a REPL to imitate completion.
+request ID. Read its live help before use. The operation resolves both checkpoint
+roots and requires their workflow run and card/branch/worktree contexts to match the
+card's actual auto-run delivery. It verifies all durable evidence and accepted
+canonical custody, freezes the original request, executes
+`.millstrand/clean-inspection-cleanup.sh`, then records the cleanup receipt.
+
+A positively settled failed finisher may transfer custody only through its accepted
+native continuation lineage. The original finisher, initiating actor, and request
+remain immutable; the cleanup receipt separately names the continuation that
+performed completion. Exact replay remains harmless after interrupted cleanup and
+after a successfully completed continuation. A first request with both branch and
+worktree already absent is refused rather than treated as successful cleanup. A
+legacy retained receipt missing the branch/worktree/HEAD fields, or stale external
+cwd observations after a clean local audit, requires explicit `--reconciliation`
+evidence. These are bounded existing-run paths, not inferred backfill. Do not use the
+operation for needs-review or blocked outcomes, and do not mutate the database or
+call implementation functions from a REPL to imitate completion.
 
 Cleanup preserves these deletion preconditions:
 
 1. Verify the exact recorded branch is checked out and is not `main`.
 2. Require a clean tracked/untracked tree and no commits ahead of `origin/main`.
-3. Only known disposable artifacts may be discarded: `node_modules`, `dist`,
-   `coverage`, `*.tsbuildinfo` and `.DS_Store`. Require an empty
-   `git status --porcelain --ignored --untracked-files=all` afterward. Unknown
-   ignored files, including `.env`, prevent removal; record and retain them.
-4. Remove the exact worktree and delete the branch only after those checks. Record
-   actual cleanup evidence, not merely the earlier clean inspection result.
-5. Only an accepted **clean** disposition may finish without a PR. After cleanup,
+3. Inspect host processes with cwd inside the worktree and every live Weaver under
+   it. Any live holder prevents deletion. A stale external/native row such as a
+   departed child session is recorded as an observation, never fabricated into
+   managed settlement.
+4. Only known disposable artifacts may be discarded: `node_modules`, `dist`,
+   `coverage`, `*.tsbuildinfo` and `.DS_Store`. Validate compact ignored entries,
+   then remove the allowlisted set with one `git clean -fdX`; do not enumerate and
+   remove every file. Unknown ignored files, including `.env`, prevent removal.
+5. Inspect the exact branch/path through `wktree list --json`, then use
+   `wktree remove --branch ... --json` for worktree lifecycle. Record its exact
+   successful result, not merely the earlier clean inspection result.
+6. Only an accepted **clean** disposition may finish without a PR. After cleanup,
    the operation reserves the still-claimed card through
    `millstrand-ui.auto-run/mark-clean-finishing!`, then calls the shared
    `finish-card!` action. Its immutable in-flight request also prevents a lane race

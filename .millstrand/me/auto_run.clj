@@ -1,12 +1,14 @@
 (ns millstrand-ui.auto-run
   "Activate bounded automatic pickup using this repository's delivery workflows."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.java.shell :as shell]
             [clojure.string :as str]
             [millhouse.auto-run :as auto-run]
             [millhouse.auto-run-reporting :as reporting]
             [millhouse.auto-run-worktree :as auto-run-worktree]
             [millhouse.land.card-actions :as card-actions]
+            [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
             [millstrand.api.lifecycle.alpha :as lifecycle]
@@ -113,12 +115,44 @@
              {:step id :checkpoint checkpoint :outcome outcome}))
     step))
 
-(defn- step-run-id [rt step]
+(defn- canonical-path [path]
+  (.getCanonicalPath (io/file path)))
+
+(defn- path-within? [root candidate]
+  (let [root (canonical-path root)
+        candidate (canonical-path candidate)]
+    (or (= root candidate)
+        (str/starts-with? candidate (str root java.io.File/separator)))))
+
+(defn- step-root! [rt step]
   (let [parents (graph/incoming-edges rt [(:id step)] "parent-of")]
     (when-not (= 1 (count parents))
       (fail! "Workflow evidence step must have one root"
              {:step (:id step) :roots (mapv :from_strand_id parents)}))
-    (attr-get (weaver/show rt (:from_strand_id (first parents))) :workflow/run-id)))
+    (let [root (weaver/show rt (:from_strand_id (first parents)))]
+      (when-not (= "root" (attr-get root :workflow/role))
+        (fail! "Workflow evidence parent is not a root"
+               {:step (:id step) :root (:id root)}))
+      root)))
+
+(defn- require-inspection-root!
+  [card-view root definition {:keys [card branch worktree]}]
+  (let [context (workflow/json->params (attr-get root :workflow/context))
+        expected-run (attr-get card-view :auto-run/workflow-run-id)]
+    (when-not (and (= "auto-inspect" (attr-get card-view :auto-run/effective-workflow))
+                   (= branch (attr-get card-view :auto-run/branch))
+                   (= (canonical-path worktree)
+                      (canonical-path (attr-get card-view :auto-run/worktree)))
+                   (not (str/blank? expected-run))
+                   (= expected-run (attr-get root :workflow/run-id))
+                   (= definition (attr-get root :workflow/definition-name))
+                   (= card (:card context))
+                   (= branch (:branch context))
+                   (= (canonical-path worktree) (canonical-path (:worktree context))))
+      (fail! "Inspection evidence root does not match the card delivery context"
+             {:card card :root (:id root) :definition definition
+              :workflow-run-id expected-run :context context}))
+    expected-run))
 
 (defn- require-successful-worker! [run context]
   (when-not (and (= "true" (attr-get run :harness/run))
@@ -130,6 +164,160 @@
            (assoc context :run (:id run))))
   run)
 
+(defn- accepted-run? [run]
+  (and (= "true" (attr-get run :harness/run))
+       (= "true" (attr-get run :harness/published))
+       (= "committed" (attr-get run :harness/publication-outcome))))
+
+(defn- accepted-resumption [rt run]
+  (let [children (->> (graph/incoming-edges rt [(:id run)] "resumes")
+                      (map :from_strand_id)
+                      (map #(weaver/show rt %))
+                      (filter accepted-run?)
+                      vec)]
+    (when (next children)
+      (fail! "Clean finisher has multiple accepted continuations"
+             {:run (:id run) :continuations (mapv :id children)}))
+    (first children)))
+
+(defn- require-finisher-owner!
+  [rt card-view worker-run-id finisher-run-id canonical-root]
+  (let [original (weaver/show rt finisher-run-id)
+        target (weaver/show rt (attr-get original :harness/target))]
+    (when (= worker-run-id finisher-run-id)
+      (fail! "Clean inspection finisher must be independent from the worker"
+             {:run worker-run-id}))
+    (when-not (and (accepted-run? original)
+                   (= (canonical-path canonical-root)
+                      (canonical-path (attr-get original :harness/cwd)))
+                   (= "clean-finisher" (attr-get target :auto-run/role))
+                   (= (:id card-view) (attr-get target :auto-run/card))
+                   (= worker-run-id (attr-get target :auto-run/worker-run-id))
+                   (= finisher-run-id (attr-get target :auto-run/finisher-run-id)))
+      (fail! "Clean inspection finisher is not the accepted workflow owner"
+             {:run finisher-run-id :target (:id target) :card (:id card-view)}))
+    (loop [predecessor original]
+      (if-let [continuation (accepted-resumption rt predecessor)]
+        (do
+          (when-not (and (= "failed" (attr-get predecessor :harness/status))
+                         (= "true" (attr-get predecessor :harness/settled))
+                         (= (:id predecessor) (attr-get continuation :harness/resumes))
+                         (= (attr-get original :harness/target)
+                            (attr-get continuation :harness/target))
+                         (= (canonical-path (attr-get original :harness/cwd))
+                            (canonical-path (attr-get continuation :harness/cwd)))
+                         (= (attr-get original :harness/logical-id)
+                            (attr-get continuation :harness/logical-id)))
+            (fail! "Clean finisher continuation does not preserve settled custody"
+                   {:predecessor (:id predecessor)
+                    :continuation (:id continuation)}))
+          (recur continuation))
+        (do
+          (when-not
+           (or (and (= "active" (:state card-view))
+                    (contains? #{"ready" "running"}
+                               (attr-get predecessor :harness/status)))
+               (and (= "closed" (:state card-view))
+                    (= "done" (attr-get card-view :kanban/outcome))
+                    (= "stopped" (attr-get predecessor :harness/status))
+                    (= "completed" (attr-get predecessor :harness/substatus))
+                    (= "true" (attr-get predecessor :harness/settled))
+                    (zero? (or (attr-get predecessor :harness/exit-code) -1))))
+            (fail! "Clean inspection finisher lineage has no active accepted owner"
+                   {:original finisher-run-id :owner (:id predecessor)}))
+          predecessor)))))
+
+(def ^:dynamic *cleanup-environment*
+  "Complete subprocess environment override used by disposable cleanup fixtures."
+  nil)
+
+(defn- run-command [argv options]
+  (apply shell/sh
+         (concat argv
+                 (mapcat identity options)
+                 (when *cleanup-environment* [:env *cleanup-environment*]))))
+
+(defn- live-worktree-processes [worktree]
+  (let [result (run-command ["lsof" "-a" "-d" "cwd" "-Fn"] {})]
+    (when-not (contains? #{0 1} (:exit result))
+      (fail! "Cannot inspect local process working directories"
+             {:exit (:exit result) :error (:err result)}))
+    (loop [lines (str/split-lines (:out result))
+           pid nil
+           found []]
+      (if-let [line (first lines)]
+        (cond
+          (str/starts-with? line "p")
+          (recur (rest lines) (subs line 1) found)
+
+          (and pid (str/starts-with? line "n")
+               (path-within? worktree (subs line 1)))
+          (recur (rest lines) pid (conj found {:pid pid :cwd (subs line 1)}))
+
+          :else
+          (recur (rest lines) pid found))
+        found))))
+
+(defn- live-worktree-weavers [worktree]
+  (let [result (run-command ["mill" "weaver" "list"] {})]
+    (when-not (zero? (:exit result))
+      (fail! "Cannot inspect local Weaver processes"
+             {:exit (:exit result) :error (:err result)}))
+    (let [entries (try
+                    (json/read-str (:out result))
+                    (catch Exception error
+                      (fail! "Mill returned malformed Weaver inventory"
+                             {:error (ex-message error)})))]
+      (when-not (vector? entries)
+        (fail! "Mill returned malformed Weaver inventory" {:inventory entries}))
+      (filterv (fn [entry]
+                 (let [config (get entry "config_dir")]
+                   (and (string? config)
+                        (path-within? worktree config)
+                        (not= "stopped" (get entry "state")))))
+               entries))))
+
+(defn- require-settled-holder! [run card]
+  (when-not (and (contains? #{"stopped" "failed"}
+                            (attr-get run :harness/status))
+                 (= "true" (attr-get run :harness/settled)))
+    (fail! "Another managed run still holds the retained worktree"
+           {:card card :run (:id run)
+            :status (attr-get run :harness/status)})))
+
+(defn- require-worktree-custody!
+  [rt card worker-run-id worktree reconciliation]
+  (let [runs (filterv
+              (fn [run]
+                (let [cwd (attr-get run :harness/cwd)]
+                  (and (not (str/blank? cwd))
+                       (path-within? worktree cwd))))
+              (weaver/list rt [:= [:attr "harness/run"] "true"] {}))
+        others (remove #(= worker-run-id (:id %)) runs)
+        external (filterv #(or (= "external" (attr-get % :harness/ownership))
+                               (= "external" (attr-get % :harness/mode)))
+                          others)
+        managed (remove (set external) others)
+        processes (live-worktree-processes worktree)
+        weavers (live-worktree-weavers worktree)]
+    (doseq [run managed]
+      (require-settled-holder! run card))
+    (when (seq processes)
+      (fail! "Live local processes still hold the retained worktree"
+             {:card card :processes processes}))
+    (when (seq weavers)
+      (fail! "Live Weaver processes still hold the retained worktree"
+             {:card card
+              :weavers (mapv #(select-keys % ["config_dir" "pid" "state" "weaver_id"])
+                             weavers)}))
+    (when (and (seq external) (str/blank? reconciliation))
+      (fail! "External run observations require explicit local custody reconciliation"
+             {:card card :runs (mapv :id external)}))
+    {:external-observations (mapv :id external)
+     :settled-managed-holders (mapv :id managed)
+     :local-processes []
+     :live-weavers []}))
+
 (defn- require-clean-finish-evidence!
   [rt {:keys [card disposition-step retention-step worker-run-id finisher-run-id
               branch worktree expected-head canonical-root handoff-note reconciliation]
@@ -137,19 +325,16 @@
   (let [card-view (weaver/show rt card)
         disposition (require-clean-step! rt disposition-step "disposition" "clean")
         retention (require-clean-step! rt retention-step "retain-worktree" "retained")
+        disposition-root (step-root! rt disposition)
+        retention-root (step-root! rt retention)
+        disposition-run (require-inspection-root! card-view disposition-root
+                                                  "auto-inspect" request)
+        retention-run (require-inspection-root! card-view retention-root
+                                                "auto-inspect-clean" request)
         receipt (attr-get retention :workflow/outcome-input)
         note-id (receipt-value receipt :handoff-note)
         note (weaver/show rt note-id)
         worker (weaver/show rt worker-run-id)
-        finisher (weaver/show rt finisher-run-id)
-        worktree-path (.getCanonicalPath (io/file worktree))
-        worktree-runs (filterv
-                       (fn [run]
-                         (let [cwd (attr-get run :harness/cwd)]
-                           (and (not (str/blank? cwd))
-                                (= worktree-path
-                                   (.getCanonicalPath (io/file cwd))))))
-                       (weaver/list rt [:= [:attr "harness/run"] "true"] {}))
         note-ids (set (map :from_strand_id
                            (graph/incoming-edges rt [card] "notes")))]
     (when-not (and (= "true" (attr-get card-view :kanban/card))
@@ -162,7 +347,7 @@
       (fail! "Clean inspection card must be claimed, or done with a finish receipt"
              {:card card :state (:state card-view)
               :lane (attr-get card-view :kanban/lane)}))
-    (when-not (= (step-run-id rt disposition) (step-run-id rt retention))
+    (when-not (= disposition-run retention-run)
       (fail! "Clean disposition and retention belong to different workflow runs"
              {:disposition-step disposition-step :retention-step retention-step}))
     (when-not (and (= worker-run-id (receipt-value receipt :worker-run-id))
@@ -188,7 +373,7 @@
       (fail! "Clean inspection expected HEAD must be a full Git SHA"
              {:card card :expected-head expected-head}))
     (when (.exists (io/file worktree))
-      (let [head (shell/sh "git" "-C" worktree "rev-parse" "HEAD")]
+      (let [head (run-command ["git" "-C" worktree "rev-parse" "HEAD"] {})]
         (when-not (and (zero? (:exit head))
                        (= (str/lower-case expected-head)
                           (str/lower-case (str/trim (:out head)))))
@@ -196,54 +381,51 @@
                  {:card card :expected-head expected-head
                   :actual (str/trim (:out head)) :error (:err head)}))))
     (require-successful-worker! worker {:role :recorded-worker :card card})
-    (when-not (= worktree (attr-get worker :harness/cwd))
+    (when-not (= (canonical-path worktree)
+                 (canonical-path (attr-get worker :harness/cwd)))
       (fail! "Recorded worker cwd does not match retained worktree"
              {:worker worker-run-id :worktree worktree
               :cwd (attr-get worker :harness/cwd)}))
-    (doseq [run worktree-runs]
-      (require-successful-worker! run {:role :worktree-custodian :card card}))
-    (when (= worker-run-id finisher-run-id)
-      (fail! "Clean inspection finisher must be independent from the worker"
-             {:run worker-run-id}))
-    (when-not (and (= "true" (attr-get finisher :harness/run))
-                   (= "true" (attr-get finisher :harness/published))
-                   (= "committed" (attr-get finisher :harness/publication-outcome))
-                   (or (contains? #{"ready" "running"}
-                                  (attr-get finisher :harness/status))
-                       (and (= "closed" (:state card-view))
-                            (= "done" (attr-get card-view :kanban/outcome))
-                            (= "stopped" (attr-get finisher :harness/status))
-                            (= "completed" (attr-get finisher :harness/substatus))
-                            (= "true" (attr-get finisher :harness/settled))
-                            (zero? (or (attr-get finisher :harness/exit-code) -1))))
-                   (= (.getCanonicalPath (io/file canonical-root))
-                      (.getCanonicalPath (io/file (attr-get finisher :harness/cwd)))))
-      (fail! "Clean inspection finisher is not an accepted canonical-root run"
-             {:run finisher-run-id :canonical-root canonical-root}))
-    (when (or (str/blank? branch) (= branch "main"))
-      (fail! "Clean inspection branch must be non-main" {:branch branch}))
-    (when-not (= (.getCanonicalPath (io/file canonical-root ".millstrand"))
-                 (.getCanonicalPath
-                  (io/file (get-in rt [:metadata :config-dir]))))
-      (fail! "Clean inspection finish must run in the canonical Weaver"
-             {:canonical-root canonical-root
-              :workspace (get-in rt [:metadata :config-dir])}))
-    (assoc request :workflow-run-id (step-run-id rt disposition))))
+    (let [owner (require-finisher-owner! rt card-view worker-run-id
+                                         finisher-run-id canonical-root)
+          custody (require-worktree-custody! rt card worker-run-id worktree
+                                             reconciliation)]
+      (when (or (str/blank? branch) (= branch "main"))
+        (fail! "Clean inspection branch must be non-main" {:branch branch}))
+      (when-not (= (canonical-path (io/file canonical-root ".millstrand"))
+                   (canonical-path (get-in rt [:metadata :config-dir])))
+        (fail! "Clean inspection finish must run in the canonical Weaver"
+               {:canonical-root canonical-root
+                :workspace (get-in rt [:metadata :config-dir])}))
+      (assoc request
+             :workflow-run-id disposition-run
+             :disposition-root-id (:id disposition-root)
+             :retention-root-id (:id retention-root)
+             :effective-finisher-run-id (:id owner)
+             :custody-audit custody))))
+
+(defn- branch-present? [canonical-root branch]
+  (zero? (:exit (run-command
+                  ["git" "-C" canonical-root "show-ref"
+                   "--verify" "--quiet" (str "refs/heads/" branch)]
+                  {}))))
+
+(defn- cleanup-resources-present? [canonical-root branch worktree]
+  (and (.exists (io/file worktree))
+       (branch-present? canonical-root branch)))
 
 (defn- cleanup-complete? [canonical-root branch worktree]
   (and (not (.exists (io/file worktree)))
-       (not (zero? (:exit (shell/sh "git" "-C" canonical-root "show-ref"
-                                    "--verify" "--quiet"
-                                    (str "refs/heads/" branch)))))))
+       (not (branch-present? canonical-root branch))))
 
 (defn- run-cleanup! [canonical-root branch worktree expected-head]
   (let [script (io/file canonical-root ".millstrand" "clean-inspection-cleanup.sh")]
     (when-not (.isFile script)
       (fail! "Clean inspection cleanup script is missing"
              {:script (.getAbsolutePath script)}))
-    (let [result (shell/sh "bash" (.getAbsolutePath script)
-                           branch worktree canonical-root expected-head
-                           :dir canonical-root)]
+    (let [result (run-command ["bash" (.getAbsolutePath script)
+                               branch worktree canonical-root expected-head]
+                              {:dir canonical-root})]
       (when-not (zero? (:exit result))
         (fail! "Clean inspection cleanup failed"
                {:branch branch :worktree worktree
@@ -262,25 +444,36 @@
                         rt ::clean-finish-lock {:version 1}
                         (fn [] {:monitor (Object.)})))]
     (locking lock
-      (let [{:keys [card branch worktree canonical-root request-id by-identity]
+      (let [{:keys [card branch worktree canonical-root request-id by-identity
+                    effective-finisher-run-id custody-audit]
              :as verified} (require-clean-finish-evidence! rt request)
             request-receipt (select-keys
                              verified
                              [:card :disposition-step :retention-step
+                              :disposition-root-id :retention-root-id
                               :worker-run-id :finisher-run-id :branch
                               :worktree :expected-head :canonical-root :handoff-note
                               :reconciliation :request-id :by-identity :workflow-run-id])
             card-view (weaver/show rt card)
-            recorded (attr-get card-view :auto-inspect/clean-finish-request)]
-        (when (and recorded (not= recorded request-receipt))
+            recorded (attr-get card-view :auto-inspect/clean-finish-request)
+            complete? (cleanup-complete? canonical-root branch worktree)
+            present? (cleanup-resources-present? canonical-root branch worktree)]
+        ;; The initiating actor stays in the original receipt, while a positively
+        ;; settled failed finisher may transfer execution to its accepted resume.
+        (when (and recorded
+                   (not= (dissoc recorded :by-identity)
+                         (dissoc request-receipt :by-identity)))
           (fail! "Clean inspection finish request conflicts with its durable receipt"
                  {:card card :request-id request-id
                   :recorded recorded :requested request-receipt}))
+        (when (and (nil? recorded) (not present?))
+          (fail! "Clean inspection resources were absent before cleanup reservation"
+                 {:card card :branch branch :worktree worktree}))
         (if (= "closed" (:state card-view))
           (do
             (when-not (and (= "true" (attr-get card-view
                                                 :auto-inspect/clean-finishing))
-                           (cleanup-complete? canonical-root branch worktree))
+                           complete?)
               (fail! "Closed clean inspection is missing completed cleanup evidence"
                      {:card card :branch branch :worktree worktree}))
             {:outcome :finished
@@ -288,6 +481,7 @@
              :request-id request-id
              :worker-run-id (:worker-run-id verified)
              :finisher-run-id (:finisher-run-id verified)
+             :effective-finisher-run-id effective-finisher-run-id
              :branch branch
              :worktree worktree})
           (do
@@ -295,8 +489,9 @@
               (weaver/update! rt card
                               {:attributes {:auto-inspect/clean-finish-request
                                             request-receipt}}))
-            (let [cleanup (if (cleanup-complete? canonical-root branch worktree)
-                            {:out "cleanup already complete" :err "" :exit 0}
+            (let [cleanup (if complete?
+                            {:out "cleanup already complete after durable reservation"
+                             :err "" :exit 0}
                             (run-cleanup! canonical-root branch worktree
                                           (:expected-head verified)))]
               (when-not (cleanup-complete? canonical-root branch worktree)
@@ -308,8 +503,10 @@
                                 {:request-id request-id
                                  :worker-run-id (:worker-run-id verified)
                                  :finisher-run-id (:finisher-run-id verified)
+                                 :effective-finisher-run-id effective-finisher-run-id
                                  :branch branch
                                  :worktree worktree
+                                 :custody-audit custody-audit
                                  :completed-at (str (runtime/now rt))
                                  :output (str/trim (:out cleanup))
                                  :by-identity by-identity}}})
@@ -320,6 +517,7 @@
                :request-id request-id
                :worker-run-id (:worker-run-id verified)
                :finisher-run-id (:finisher-run-id verified)
+               :effective-finisher-run-id effective-finisher-run-id
                :branch branch
                :worktree worktree})))))))
 
@@ -340,7 +538,7 @@
             :canonical-root {:type :string :required? true}
             :handoff-note {:type :string :required? true}
             :reconciliation {:type :string
-                             :doc "Required evidence only for a legacy receipt missing resource fields."}
+                             :doc "Required evidence for legacy resource fields or stale external custody observations."}
             :request-id {:type :string :required? true}
             :by-identity {:type :string :required? true}}}
    :returns {:type :map :extra :json}}
