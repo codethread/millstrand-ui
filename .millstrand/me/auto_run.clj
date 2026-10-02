@@ -66,6 +66,9 @@
       (when-not (= request (attr-get after :auto-inspect/clean-finish-request))
         (fail! "Clean inspection finish request is immutable"
                {:card (:id before)}))
+      (when (and (= "closed" (:state after)) (not finishing?))
+        (fail! "Clean inspection finish request forbids closure before cleanup"
+               {:card (:id before)}))
       (when (and (not= "closed" (:state after))
                  (not= (attr-get before :kanban/lane)
                        (attr-get after :kanban/lane)))
@@ -274,13 +277,19 @@
                  {:card card :request-id request-id
                   :recorded recorded :requested request-receipt}))
         (if (= "closed" (:state card-view))
-          {:outcome :finished
-           :card card
-           :request-id request-id
-           :worker-run-id (:worker-run-id verified)
-           :finisher-run-id (:finisher-run-id verified)
-           :branch branch
-           :worktree worktree}
+          (do
+            (when-not (and (= "true" (attr-get card-view
+                                                :auto-inspect/clean-finishing))
+                           (cleanup-complete? canonical-root branch worktree))
+              (fail! "Closed clean inspection is missing completed cleanup evidence"
+                     {:card card :branch branch :worktree worktree}))
+            {:outcome :finished
+             :card card
+             :request-id request-id
+             :worker-run-id (:worker-run-id verified)
+             :finisher-run-id (:finisher-run-id verified)
+             :branch branch
+             :worktree worktree})
           (do
             (when-not recorded
               (weaver/update! rt card

@@ -348,6 +348,13 @@
                                  (weaver/update! rt (:id card)
                                                  {:attributes
                                                   {:kanban/lane "in_review"}})))
+                    (is (thrown?
+                         clojure.lang.ExceptionInfo
+                         ((requiring-resolve
+                           'millhouse.land.card-actions/finish-card!)
+                          {:card (:id card)})))
+                    (is (= "active" (:state (weaver/show rt (:id card)))))
+                    (is (.exists worktree))
                     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                                           #"conflicts with its durable receipt"
                                           ((requiring-resolve
