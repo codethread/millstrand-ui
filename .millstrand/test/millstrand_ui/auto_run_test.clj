@@ -395,6 +395,66 @@
                   (is (some #(= expected (:title %)) views))
                   (is (not-any? #(= forbidden (:title %)) views)))))))))))
 
+(deftest land-signoff-retires-before-routing
+  (t/with-weaver-world
+    [ctx {:storage :sqlite-memory
+          :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
+          :init-clj (slurp "init.clj")
+          :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
+                                      "me/auto_run_workflows.clj" "me/auto_run.clj"]]
+                            [path (slurp path)]))}]
+    ;; The real Code executor supplies settlement. The continuation is deliberately
+    ;; inert: this fixture must never run GitHub, queue, or cleanup side effects.
+    (t/repl! ctx
+             '(do
+                (millhouse.workflow/defworkflow! signoff-fixture-next
+                  "Inert signoff continuation"
+                  {:entrypoints #{:continue}}
+                  (millhouse.workflow/workflow
+                   "Continued" (millhouse.workflow/step :stop "Stop" :self)))
+                true))
+    (let [rt (:runtime ctx)]
+      (current/with-runtime rt
+        (doseq [[choice input] [["approved" {:pr-number 42 :subject "Subject" :body "Body"}]
+                               ["abort" {:reason "Not landing"}]]]
+          (let [run-id (str "signoff-" choice)
+                next-definition 'user/signoff-fixture-next
+                definition (workflow/workflow
+                            "Signoff fixture"
+                            {:attributes {"land/stage" "ready"}}
+                            (workflow/step :prepare "Prepare" :self)
+                            (workflow/gate :code "Managed no-op" :code
+                                           :depends-on [:prepare]
+                                           :attributes {"code/fn" "millhouse.land.card-actions/rework-card!"
+                                                        "code/params" {}})
+                            (workflow/checkpoint :signoff "Sign off" :depends-on [:code]
+                                                 :choices [{:key :approved :next next-definition}
+                                                           {:key :abort :next next-definition}]))
+                _ (workflow/start! run-id definition {} {:family "land"})
+                root-id (:id (workflow/current-root run-id))
+                invoke (fn [step payload]
+                         (weaver/op! rt 'land-signoff
+                                     [run-id choice "--step" step "--by-identity" "fixture-reviewer"
+                                      "--input" (json/write-str payload)]))]
+            (is (thrown? clojure.lang.ExceptionInfo (invoke "not-ready" input)))
+            (is (nil? (attr-get (weaver/show rt root-id) :execution/freeze)))
+            (workflow/complete! run-id)
+            (let [awaited (workflow/await! run-id {:timeout-secs 10})
+                  step (:id (first (:ready awaited)))]
+              (is (= :checkpoint (:reason awaited)))
+              (is (thrown? clojure.lang.ExceptionInfo
+                           (workflow/choose! run-id choice input {:step step})))
+              (is (thrown? clojure.lang.ExceptionInfo (invoke step {})))
+              (is (nil? (attr-get (weaver/show rt root-id) :execution/freeze)))
+              (is (= ["Stop"] (mapv :title (:ready (invoke step input)))))
+              (is (= choice (attr-get (weaver/show rt step) :workflow/outcome)))
+              (is (= "fixture-reviewer" (attr-get (weaver/show rt step) :identity/by-identity)))
+              (is (some? (attr-get (weaver/show rt root-id) :execution/retirement)))
+              (let [next-root (workflow/current-root run-id)]
+                (is (not= root-id (:id next-root)))
+                (is (thrown? clojure.lang.ExceptionInfo (invoke step input)))
+                (is (= next-root (workflow/current-root run-id)))))))))))
+
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."
   [& _]

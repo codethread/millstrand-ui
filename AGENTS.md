@@ -143,4 +143,10 @@ session alive polling for human approval.
   `strand --workspace "$WORKTREE/.millstrand" prime merge-queue`, then use that
   explicit workspace for every workflow and merge-queue command while driving
   Millstrand UI's repository-owned `land` through quality, one basic review,
-  FIFO squash merge, card completion, and branch/worktree cleanup.
+  FIFO squash merge, card completion, and branch/worktree cleanup. At its signoff,
+  use `land-signoff RUN approved --step SIGNOFF_ID --by-identity ACTOR --input JSON`
+  with that explicit workspace (or choose `abort`), not generic `workflow choose`:
+  the repository operation retires the managed root before
+  routing. Read `help land-signoff` and `workflow choices RUN` first. A
+  `waiting-for-settlement` result leaves the same run frozen; resolve custody
+  before repeating, never force its gates closed.
