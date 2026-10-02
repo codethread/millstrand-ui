@@ -199,6 +199,18 @@ must retain their exact run, attempt, PR and ownership evidence for explicitly
 assigned recovery; do not duplicate the card, force a gate closed, rearm the
 assignment or silently replace its run.
 
+The narrow `land-abort-misplaced` operation exists only for those historical
+foreign-Weaver roots. A separately assigned recovery owner runs it in that same
+foreign workspace with the exact run, pre-signoff root, failed reviewer gate,
+settled failed reviewer run, actor and authorized reason. It refuses canonical,
+progressed or uncertain roots, active shell custody, a visible local card, and
+changed reviewer evidence. On positive retirement it preserves the reviewer
+failure and routes the old root into `land-abort` without touching the canonical
+card. Unknown retirement leaves the root frozen for reconciliation. This is not
+a review bypass or a way to migrate, approve or merge an old run; use it only
+after the tracked operation is deployed and registered, never by direct database
+or REPL mutation.
+
 ## Autonomous landing handoff
 
 This is delivery policy, not a dispatcher teardown feature. The repository-owned
