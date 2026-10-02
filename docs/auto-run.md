@@ -160,6 +160,24 @@ Do not reserve clean completion during retention: that would freeze a card whose
 cleanup has not happened and prevent a legitimate later review decision. No live
 or previously poured workflow is rewritten by these source changes.
 
+## Landing workspace
+
+Run Land, its review, merge queue and signoff in the **canonical checkout's
+`.millstrand` workspace**, alongside the card and automatic delivery run. Resolve
+that checkout with `wktree root` and pass its workspace explicitly to `strand`.
+The `worktree` workflow parameter remains the feature directory: shell checks,
+review and Git operations use it, but it is not the workflow's database.
+Repository Land rejects a start in a different Weaver before publishing a run.
+Its rendered queue/signoff commands continue to target the canonical workspace,
+which survives feature-worktree cleanup and owns one FIFO for the repository.
+
+Previously the local instructions incorrectly directed landing to a worktree
+Weaver. This created a separate database without the canonical card and failed
+at the first card gate. Source refresh fixes **new** runs only. Existing failures
+must retain their exact run, attempt, PR and ownership evidence for explicitly
+assigned recovery; do not duplicate the card, force a gate closed, rearm the
+assignment or silently replace its run.
+
 ## Autonomous landing handoff
 
 This is delivery policy, not a dispatcher teardown feature. The repository-owned

@@ -138,15 +138,20 @@ session alive polling for human approval.
 
 - Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
 - Never edit `main` or push directly to `main`; feature-branch pushes are expected.
-- Set `WORKTREE` to the feature worktree's absolute root. Inspect
-  `strand --workspace "$WORKTREE/.millstrand" workflow show land` and
-  `strand --workspace "$WORKTREE/.millstrand" prime merge-queue`, then use that
+- Set `WORKTREE` to the feature worktree's absolute root and `LAND_WORKSPACE` to
+  the canonical Git checkout's `.millstrand` directory (`wktree root` resolves the
+  checkout). Cards, delivery runs and the repository-wide FIFO belong to that
+  canonical Weaver, **not** a feature-worktree Weaver. Inspect
+  `strand --workspace "$LAND_WORKSPACE" workflow show land` and
+  `strand --workspace "$LAND_WORKSPACE" prime merge-queue`, then use that
   explicit workspace for every workflow and merge-queue command while driving
   Millstrand UI's repository-owned `land` through quality, one basic review,
-  FIFO squash merge, card completion, and branch/worktree cleanup. At its signoff,
-  use `land-signoff RUN approved --step SIGNOFF_ID --by-identity ACTOR --input JSON`
-  with that explicit workspace (or choose `abort`), not generic `workflow choose`:
-  the repository operation retires the managed root before
+  FIFO squash merge, card completion, and branch/worktree cleanup. Pass `WORKTREE`
+  as Land's `worktree` parameter: checks and Git operations still run there.
+  At signoff use `land-signoff RUN approved --step SIGNOFF_ID --by-identity ACTOR
+--input JSON` with the canonical workspace (or choose `abort`), not generic
+  `workflow choose`: the repository operation retires the managed root before
   routing. Read `help land-signoff` and `workflow choices RUN` first. A
   `waiting-for-settlement` result leaves the same run frozen; resolve custody
-  before repeating, never force its gates closed.
+  before repeating, never force its gates closed. Do not start a worktree Weaver
+  merely to land, copy cards into one, or replace an existing failed run.
