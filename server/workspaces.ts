@@ -110,6 +110,7 @@ export class WorkspaceDirectory {
   private readonly run: typeof runWeaver;
   private readonly logger: PerfLogger;
   private readonly clients = new Map<string, WorkspaceClients>();
+  private readonly lifecycleOperations = new Set<string>();
   private snapshot: WorkspaceOption[] | null = null;
   private pending: Promise<WorkspaceOption[]> | null = null;
 
@@ -146,6 +147,10 @@ export class WorkspaceDirectory {
   async operate(id: string, operation: WeaverOperation): Promise<void> {
     const workspace = (await this.list(true)).find((item) => item.id === id);
     if (!workspace) throw new HttpError(404, 'That workspace is not known to the local mill.');
+    if (this.lifecycleOperations.has(id))
+      throw new HttpError(409, `A lifecycle operation is already running for ${workspace.name}.`);
+    this.lifecycleOperations.add(id);
+    this.snapshot = null;
     try {
       await this.run(operation, workspace.path);
     } catch (error) {
@@ -157,6 +162,7 @@ export class WorkspaceDirectory {
     } finally {
       // The lifecycle result is unknown after either success or failure. Make the
       // next discovery or selected-resource request refresh before trusting status.
+      this.lifecycleOperations.delete(id);
       this.snapshot = null;
     }
   }
@@ -170,6 +176,8 @@ export class WorkspaceDirectory {
         throw new HttpError(503, `The ${found.name} weaver is offline.`);
       path = found.path;
     }
+    if (this.lifecycleOperations.has(workspaceId(path)))
+      throw new HttpError(503, 'This weaver has a lifecycle operation in progress.');
     let selected = this.clients.get(path);
     if (selected === undefined) {
       selected = {

@@ -56,17 +56,19 @@ resource. Its five-second lifetime matched those resource poll intervals, so the
 first route in each poll group launched another `mill weaver list`. Selection now
 reuses the last successful registry snapshot. The app-lifetime
 `WorkspaceDiscovery` query remains the explicit 30-second refresh owner, forced
-refresh still replaces the snapshot, and a lifecycle attempt clears it because
-success and failure both require fresh status.
+refresh still replaces the snapshot. A lifecycle attempt clears it before the
+command starts, rejects selected-workspace access until settlement, and clears it
+again because success and failure both require fresh status.
 
 An isolated production server on port 4175 used `/tmp/auto-647i2-perf.log` while
 a browser loaded the real `skein-src` board. The page showed 45 active issues and
 32 active agents. Across 11 board requests, 11 agent requests, and 11 log-activity
 requests, discovery ran only at `05:48:03.372Z` and `05:48:33.397Z`, alongside the
 two expected 30-second `/api/workspaces` polls; no selected-resource poll added a
-discovery call. `pnpm vitest run server/workspaces.test.ts` protects the ownership
-boundary with a virtual clock. No Weaver dependency or runtime changed, so no
-Weaver restart was needed.
+discovery call. `pnpm vitest run server/workspaces.test.ts` passes all eight tests,
+protecting the ownership boundary with a virtual clock and lifecycle concurrency
+with a controlled promise. No Weaver dependency or runtime changed, so no Weaver
+restart was needed.
 
 ## 2026-09-27 request budget audit
 

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseWorkspaces, WorkspaceDirectory, workspaceId } from './workspaces.ts';
 
+function uninitializedSignal(): never {
+  throw new Error('Promise signal was not initialized.');
+}
+
 describe('weaver discovery', () => {
   const defaultPath = '/work/main/.millstrand';
 
@@ -103,6 +107,35 @@ describe('weaver discovery', () => {
     expect(calls).toEqual([]);
     await directory.operate(workspaceId(defaultPath), 'start');
     expect(calls).toEqual([['start', defaultPath]]);
+  });
+
+  it('rejects selected-workspace access while its lifecycle operation is running', async () => {
+    let releaseOperation: () => void = uninitializedSignal;
+    const operationSettled = new Promise<void>((resolve) => {
+      releaseOperation = resolve;
+    });
+    let operationStarted: () => void = uninitializedSignal;
+    const operationRunning = new Promise<void>((resolve) => {
+      operationStarted = resolve;
+    });
+    const directory = new WorkspaceDirectory(defaultPath, {
+      discover: async () =>
+        parseWorkspaces([{ config_dir: defaultPath, state: 'running' }], defaultPath),
+      run: async () => {
+        operationStarted();
+        await operationSettled;
+      },
+    });
+    const id = workspaceId(defaultPath);
+
+    const operation = directory.operate(id, 'restart');
+    await operationRunning;
+    await expect(directory.select(id)).rejects.toMatchObject({ status: 503 });
+    await expect(directory.operate(id, 'stop')).rejects.toMatchObject({ status: 409 });
+
+    releaseOperation();
+    await operation;
+    await expect(directory.select(id)).resolves.toMatchObject({ path: defaultPath });
   });
 
   it('reports command failures without retrying and expires discovery afterwards', async () => {
