@@ -7,6 +7,7 @@
             [millstrand.api.current.alpha :as current]
             [millstrand.api.format.alpha :as format-alpha]
             [millstrand.api.millstrand.alpha :as millstrand]
+            [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.spool.alpha :refer [attr-get fail! require-valid!]]))
 
 (defn- non-blank-string?
@@ -337,22 +338,28 @@
   (require-valid! #{"approved" "abort"} choice "Choose approved or abort")
   (require-valid! (if (= "approved" choice) ::land-merge-input ::land-abort-input)
                   input "Invalid landing choice input")
-  (let [rt (current/runtime)
-        root (workflow/current-root run-id)
-        frontier (workflow/ready run-id)]
-    (when-not (and (= "land" (attr-get root :workflow/family))
-                   (= "ready" (attr-get root :land/stage))
-                   (= 1 (count frontier))
-                   (= step (:id (first frontier)))
-                   (= "signoff" (:checkpoint (first frontier))))
-      (fail! "Expected the sole ready landing signoff; no work was retired"
-             {:run-id run-id :step step}))
-    (let [freeze (execution/quiesce-run! rt run-id "Explicit landing signoff")
-          receipt (execution/retire! rt freeze)]
-      (if (= :settled (:status receipt))
-        (workflow/choose! run-id choice input
-                          {:step step :by-identity by-identity :retirement receipt})
-        {:run-id run-id :status "waiting-for-settlement" :retirement receipt}))))
+  (let [rt (current/runtime)]
+    ;; The public quiesce API resolves a run's current root. Serialize signoffs
+    ;; through validation AND routing so a second caller cannot freeze its successor.
+    ;; Runtime state preserves the monitor across module refreshes.
+    #_{:clj-kondo/ignore [:locking-suspicious-lock]}
+    (locking (:monitor (runtime/spool-state rt ::signoff-lock {:version 1}
+                                            (fn [] {:monitor (Object.)})))
+      (let [root (workflow/current-root run-id)
+            frontier (workflow/ready run-id)]
+        (when-not (and (= "land" (attr-get root :workflow/family))
+                       (= "ready" (attr-get root :land/stage))
+                       (= 1 (count frontier))
+                       (= step (:id (first frontier)))
+                       (= "signoff" (:checkpoint (first frontier))))
+          (fail! "Expected the sole ready landing signoff; no work was retired"
+                 {:run-id run-id :step step}))
+        (let [freeze (execution/quiesce-run! rt run-id "Explicit landing signoff")
+              receipt (execution/retire! rt freeze)]
+          (if (= :settled (:status receipt))
+            (workflow/choose! run-id choice input
+                              {:step step :by-identity by-identity :retirement receipt})
+            {:run-id run-id :status "waiting-for-settlement" :retirement receipt}))))))
 
 (millstrand/defop! land-signoff
   "Retire the ready landing root, then approve or abort through its declared route."
