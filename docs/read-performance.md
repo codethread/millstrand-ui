@@ -1,5 +1,49 @@
 # Dashboard read audit
 
+## 2026-10-02 compact shared dependency counts
+
+Selected the recurring `skein-src` shared provenance read behind the five-second board
+poll from the current default performance logs:
+
+```text
+2026-10-02T19:54:59.482Z perf SLOW 74.84ms sqlite provenance workspace=skein-src rows=26688 discover=0.11ms query=62.19ms decode=12.38ms outcome=ok
+2026-10-02T19:54:59.498Z perf SLOW 91.09ms server GET /api/board status=200 bytes=451154
+```
+
+The persisted snapshot returned every `depends-on` edge even though background board
+and agent projections only need each card or task's incoming and outgoing counts. On
+`skein-src`, that was 16,667 edge records. The SQL now calculates both counts on the
+candidate card and task records and omits raw dependency edges from the shared polling
+snapshot. The separately scoped dependency graph read is unchanged, as are card/task
+membership, dependency direction, unknown-neighbour counts, ownership, agent and log
+projections, cache keys and polling cadence. Malformed or incomplete projected counts
+fail at the existing database boundary rather than silently defaulting.
+
+Paired read-only runs against the live `skein-src` database reduced the snapshot from
+26,688 to 10,021 records (62.5%). In twelve alternating-order runs, total median moved
+from 86.16 to 69.98 ms (18.8%), SQL from 70.49 to 63.08 ms, and decode from 13.73 to
+6.39 ms. The same check was neutral or faster on the other five live registrations;
+`millhouse.spool` moved from 36.86 to 34.24 ms and canonical `millstrand-ui` from 16.41
+to 14.93 ms. Exact board-card, agent-directory and log-binding projections matched
+before and after for all six registrations at comparison time.
+
+An isolated production server on port 4192 wrote `/tmp/pez15-perf.log` from
+20:02:29Z–20:04:05Z. The browser rendered the real `skein-src` board with 44 active and
+620 completed issues and 45 agents, preserved a real card's `depends on 1, required by
+0` badge, opened its Overview and graph, and remained usable at 390×844 with no
+uncaught browser errors. Focused persisted-read, provenance, card-inspection and parser
+checks passed (59 tests), and the production build passed. No Weaver restart was needed
+because this changes only the UI server's read query.
+
+The inspected default logs were
+`~/.local/state/millstrand-ui/perf.log.1` (19:29:57Z–19:52:24Z, 826 SLOW samples) and
+`perf.log` (19:52:24Z–20:04:59Z at final capture, 836 SLOW samples); the running server
+had no `MILLSTRAND_UI_PERF_LOG` override. The `skein-src`, canonical UI and dispatcher
+Weaver logs reported by `mill weaver list` were readable and contained no matching query
+timings. The agents log path was absent and the notes log stale, but neither owns this
+selected `skein-src` read. Concurrent work already owned card-detail polling and open
+PRs #82/#84 owned log-activity changes, so this fix did not duplicate them.
+
 ## 2026-10-02 lazy selected-card detail
 
 Selected the recurring card-detail command for the canonical `millstrand-ui` workspace
