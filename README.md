@@ -22,9 +22,10 @@ pnpm start
 ```
 
 This installs the dependencies, builds the SPA, and serves both the app and API
-on port **4173**, bound to `0.0.0.0`. Open `http://localhost:4173` on the host or
-`http://<host-lan-address>:4173` from another computer. Leave the process running;
-Ctrl-C stops it. Allow the port through the host firewall if necessary.
+on port **4173**, bound to `127.0.0.1` so the unauthenticated server is not
+exposed to the network. Open `http://localhost:4173` on the host, or use the
+[SSH tunnel](#ssh) from another computer. Leave the process running; Ctrl-C stops
+it.
 
 ```sh
 pnpm start --port 4180 --workspace /path/to/project
@@ -33,16 +34,18 @@ pnpm start --port 4180 --workspace /path/to/project
 The default workspace is the canonical Git checkout, shared across linked worktrees. `WORKSPACE` accepts a
 project directory or its `.millstrand` directory. The server also accepts
 `--workspace`, `--host`, and `--port`, or `MILLSTRAND_WORKSPACE`,
-`MILLSTRAND_UI_HOST`, and `MILLSTRAND_UI_PORT` environment variables.
+`MILLSTRAND_UI_HOST`, and `MILLSTRAND_UI_PORT` environment variables. To serve
+directly on a trusted LAN, opt in with `pnpm start --host 0.0.0.0`, open
+`http://<host-lan-address>:4173`, and allow the port through the host firewall.
 
 ## SSH
 
-Run the server in your usual persistent SSH terminal session. To use an SSH
-tunnel instead of a direct LAN connection:
+Run the server in your usual persistent SSH terminal session. `pnpm start` binds
+to `127.0.0.1` by default, so only the tunnel is needed:
 
 ```sh
 # On the remote host
-pnpm start --host 127.0.0.1
+pnpm start
 
 # On your local computer
 ssh -N -L 4173:127.0.0.1:4173 user@host
@@ -53,7 +56,7 @@ reach the server can browse discovered local weavers, move or delete cards, edit
 card labels and saved views, start/stop/restart discovered weavers, and read private
 recorded prompts, commands, and paths.
 That includes the session-log source endpoints when a client knows a provider and
-session ID. Bind to localhost when using a tunnel or when the network is not trusted.
+session ID. Only use `--host 0.0.0.0` when the network is trusted.
 
 ## All-weaver overview
 
