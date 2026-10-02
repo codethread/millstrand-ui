@@ -22,7 +22,7 @@ export function cardQueryOptions(workspace: string | null, id: string) {
   return queryOptions({
     queryKey: ['card', workspace, id],
     queryFn: () => request<CardDetail>(`/cards/${encodeURIComponent(id)}`, workspace),
-    refetchInterval: 5000,
+    refetchInterval: false,
   });
 }
 
