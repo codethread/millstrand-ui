@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useAgentReply } from '../hooks/use-agents';
 import { useBoard } from '../hooks/use-cards';
 import { agentReplyStatusText } from '../lib/agents';
@@ -8,6 +9,21 @@ import { Markdown } from './markdown';
 import { Button } from './ui/button';
 
 export function AgentRunReply({ id }: { id: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      className="mb-5 rounded-lg border border-border"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="cursor-pointer p-3 text-sm font-medium">Prompt and agent reply</summary>
+      {open && <AgentRunReplyContent id={id} />}
+    </details>
+  );
+}
+
+/** Only the expanded disclosure owns the reply poll; Query retains its last snapshot. */
+function AgentRunReplyContent({ id }: { id: string }) {
   const query = useAgentReply(id, true);
   const board = useBoard();
   const workspace = useWorkspaceId();
@@ -16,7 +32,7 @@ export function AgentRunReply({ id }: { id: string }) {
   const targetId = reply?.prompt?.cardId ?? reply?.target ?? null;
   const card = board.data?.cards.find((candidate) => candidate.id === targetId);
   return (
-    <section className="mb-5 space-y-3" aria-label="Prompt and agent reply">
+    <section className="space-y-3 p-3 pt-0" aria-label="Prompt and agent reply">
       {reply?.prompt && reply.prompt.kind !== 'card' ? (
         <Button
           variant="outline"

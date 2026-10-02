@@ -1,5 +1,44 @@
 # Dashboard read audit
 
+## 2026-10-02 lazy run replies
+
+Selected one real slow read from the rotated production perf log:
+
+```text
+2026-10-02T05:22:57.911Z perf SLOW 458.10ms strand strand agent show workspace=millhouse.spool bytes=767 outcome=ok
+2026-10-02T05:22:57.913Z perf SLOW 460.04ms server GET /api/agent-runs/k3btg status=200 bytes=270
+```
+
+Run inspectors previously mounted the prompt/reply query immediately and polled it
+throughout inspection, including when the user only wanted the session log.
+`AgentRunReply` now starts with a collapsed **Prompt and agent reply** disclosure.
+Only its expanded content mounts the existing query; closing it stops that observer
+without clearing cached replies. The server still uses the same `agent show` and
+`show` operations. No new SQL, cache keys, or downstream semantics were introduced.
+Workspace status/log polling and review proposal readers are unchanged. Visible
+terminal replies still poll for late results; requests already in flight may finish.
+
+Browser verification against live `millhouse.spool` run `k3btg`, using the production
+build on port 4174:
+
+- Initial collapsed inspection issued **zero** `/api/agent-runs/` requests while
+  run status, participants and session logs rendered normally.
+- Opening the disclosure loaded the real final reply and continued polling. Eight
+  observed reads took 154–248 ms each; this change avoids unnecessary calls rather
+  than claiming to speed up the command itself.
+- Closing it produced **zero reply requests over 11 seconds**, while the workspace
+  agent directory refreshed twice. Reopening loaded the reply normally.
+- Aborting reply refreshes retained the previous reply with explicit last-successful
+  feedback and Retry. Removing the browser override and retrying recovered it.
+- Enter/Space operated the disclosure and retained keyboard focus. Desktop light
+  (1440×1000) and narrow dark (390×844) layouts remained readable. Board search,
+  label filters, card/Notes navigation and Graph task visibility also passed smoke
+  checks without editing real cards. No uncaught browser errors.
+
+`pnpm quality` passes formatting, zero-warning Oxlint, strict TypeScript, 378 tests
+and production build. Focused checks protect the initially unmounted query surface,
+cache/error retention across closure, and fetching late terminal replies on reopening.
+
 ## 2026-09-27 request budget audit
 
 Measured against live `agents`, `millhouse`, `millstrand-ui`, `notes` and

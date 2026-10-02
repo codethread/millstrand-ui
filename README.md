@@ -212,8 +212,11 @@ handoffs); activity popovers show current ownership, with full claim history in 
 Agent runs are read-only in this dashboard. The Agents page and the issue, review
 and graph inspector links list tracked identities and runs; any run can be opened by
 its exact ID to read its status, reply, historical prompt context, and exact persisted
-session binding. Alias-less external sessions are labelled as direct sessions. Their
-actual model and observed effort come from the native callback; literal `unknown` is
+session binding. Expand **Prompt and agent reply** to load that run’s prompt/reply;
+closing it stops reply polling without clearing the Query cache. Status and session
+logs remain visible independently. Expanded replies continue refreshing even for
+terminal runs, so late results remain observable. Alias-less external sessions are
+labelled as direct sessions. Their actual model and observed effort come from the native callback; literal `unknown` is
 shown as **Unknown**. `harness/model` and `harness/effort` launch values are not used as
 compatibility fallbacks. An explicit external origin means Harnesses has no process
 custody and never implies a seat, target, claim, or working state. Start, stop,
