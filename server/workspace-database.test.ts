@@ -96,6 +96,7 @@ it('runs one selective graph read without note strands or workspace interpolatio
   expect(sql).toContain("attributes.key LIKE 'kanban.label/%'");
   expect(sql).not.toContain(workspace);
   expect(parameters).toContain('kanban/ownership-claim');
+  expect(parameters).toContain('harness/published');
   expect(parameters).toContain('performed');
   expect(parameters).toContain('serves-root');
   expect(parameters).toContain('depends-on');
@@ -265,11 +266,26 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
       'harness/mode': 'headless',
       'harness/session-id': 'session-1',
     });
+    addStrand('unpublished-run', {
+      'harness/run': 'true',
+      'harness/harness': 'pi',
+      'harness/status': 'running',
+      'harness/mode': 'headless',
+    });
+    addStrand('unrelated', {});
     insertEdge.run('card', 'task', 'parent-of');
+    insertEdge.run('card', 'unrelated', 'parent-of');
     insertEdge.run('pre-binding-run', 'task', 'serves');
 
     const reader = new WorkspaceDatabase(workspace, { discover: async () => path });
-    const before = new ProvenanceIndex(await reader.readProvenance());
+    const beforeSnapshot = await reader.readProvenance();
+    expect(beforeSnapshot).toMatchObject({
+      strands: expect.not.arrayContaining([expect.objectContaining({ id: 'unpublished-run' })]),
+      edges: expect.not.arrayContaining([
+        expect.objectContaining({ from_strand_id: 'card', to_strand_id: 'unrelated' }),
+      ]),
+    });
+    const before = new ProvenanceIndex(beforeSnapshot);
     expect(before.agents()).toMatchObject({
       identities: [],
       runs: [{ id: 'pre-binding-run', target: 'task', participants: [] }],

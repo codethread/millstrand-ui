@@ -1,5 +1,30 @@
 # Dashboard read audit
 
+## 2026-10-02 provenance marker projection
+
+Selected the recurring persisted provenance read for `millhouse.spool` from the
+current default performance-log rotation:
+
+```text
+2026-10-02T07:50:28.321Z perf SLOW 130.43ms sqlite provenance workspace=millhouse.spool rows=8620 discover=0.11ms query=125.28ms decode=4.86ms outcome=ok
+2026-10-02T07:50:43.789Z perf SLOW 109.30ms sqlite provenance workspace=millhouse.spool rows=8620 discover=0.09ms query=104.00ms decode=5.06ms outcome=ok
+```
+
+The snapshot SQL repeatedly looked up publication and `parent-of` endpoint markers in
+correlated subqueries. It now aggregates the six candidate marker keys once and joins
+that materialized marker set to both edge endpoints. The selected strands, allowlisted
+attributes, edge rules and limits are unchanged. Sorted raw records matched exactly for
+all five live workspaces (822, 721, 26,523, 3,760 and 8,620 records).
+
+An isolated production server on port 4189 used `/tmp/w08kl-perf.log`. Nine warm real
+`millhouse.spool` polls read the same 8,620 rows with a 28.35–39.79 ms SQL phase
+(29.96 ms median); eight completed below the 50 ms end-to-end budget, and the remaining
+61.36 ms sample included a 15.99 ms registry rediscovery while its SQL phase remained
+39.79 ms. The Agents directory, one run inspector, the board and a 390×844 layout
+rendered from real data without uncaught browser errors. Focused persisted-read tests
+and `pnpm quality` passed (381 tests and production build). This changes only the UI
+server's read query; no Weaver restart was needed.
+
 ## 2026-10-02 lazy unsupported reviews
 
 Selected the recurring unsupported-review probe from the production perf log:
