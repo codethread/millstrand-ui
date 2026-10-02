@@ -1,5 +1,37 @@
 # Dashboard read audit
 
+## 2026-10-02 compressed agent directory transport
+
+Selected the recurring full agent-directory response for `millhouse.spool` from the
+current default performance log:
+
+```text
+2026-10-02T12:40:56.660Z perf SLOW 1937.90ms server GET /api/agents status=200 bytes=657954
+2026-10-02T12:41:05.090Z perf SLOW 2012.75ms server GET /api/agents status=200 bytes=657954
+```
+
+The normalized response still transferred 692 identities and 734 complete run records,
+657,954 uncompressed bytes, every five seconds. Slow samples were concentrated in the
+HTTP route after the shared persisted projection had settled; waiting for a large
+response to finish could hold the measured request open for one to two seconds.
+`/api/agents` now negotiates gzip at the HTTP boundary. Clients without gzip support
+receive the same plain JSON, and the decoded compressed representation is byte-for-byte
+identical. Agent polling, cache keys, directory history and spool semantics are unchanged.
+
+An isolated production server on port 4190 used `/tmp/whecj-perf.log`. The real
+`millhouse.spool` response fell from 657,954 to 90,485 transferred bytes (86.2%). After
+the cold read, twelve browser polls completed server-side in 16.55–32.69 ms with no
+SLOW sample. The browser rendered all 692 identities and unbound runs, opened a real
+identity with its run history, and retained a usable 390×844 layout without uncaught
+errors. Focused JSON and agent-directory checks passed, and `pnpm quality` passed
+formatting, zero-warning Oxlint, strict TypeScript, 385 tests and the production build.
+
+The default current and rotated UI logs and all available live Weaver logs reported by
+`mill weaver list` were inspected. The `agents` entry's reported log path did not exist;
+its shared-JVM `notes` peer and the other five reported logs were readable and contained
+no query timing relevant to this route. This changes only the UI HTTP response, so no
+Weaver dependency or runtime changed and no Weaver restart was needed.
+
 ## 2026-10-02 normalized agent directory transport
 
 Selected the recurring full agent-directory response for `millhouse.spool` from the
