@@ -152,10 +152,13 @@ describe('weaver discovery', () => {
     await staleDiscoveryRunning;
     releaseOperation();
     await operation;
+    const freshSelection = directory.select(id);
+    const freshDiscoveryStarted = discoveries === 3;
     releaseStaleDiscovery(workspaces);
 
+    expect(freshDiscoveryStarted).toBe(true);
     await expect(selection).rejects.toMatchObject({ status: 503 });
-    await expect(directory.select(id)).resolves.toMatchObject({ path: defaultPath });
+    await expect(freshSelection).resolves.toMatchObject({ path: defaultPath });
     expect(discoveries).toBe(3);
   });
 

@@ -113,7 +113,7 @@ export class WorkspaceDirectory {
   private readonly lifecycleOperations = new Set<string>();
   private snapshot: WorkspaceOption[] | null = null;
   private discoveryGeneration = 0;
-  private pending: Promise<WorkspaceOption[]> | null = null;
+  private pending: { generation: number; request: Promise<WorkspaceOption[]> } | null = null;
 
   constructor(
     private readonly defaultPath: string,
@@ -133,17 +133,18 @@ export class WorkspaceDirectory {
     // requests reuse its last successful registry snapshot instead of turning each
     // five-second resource poll into another `mill weaver list` call.
     if (!force && this.snapshot !== null) return this.snapshot;
-    if (this.pending !== null) return this.pending;
     const generation = this.discoveryGeneration;
-    this.pending = this.discover()
+    if (this.pending?.generation === generation) return this.pending.request;
+    const request = this.discover()
       .then((workspaces) => {
         if (generation === this.discoveryGeneration) this.snapshot = workspaces;
         return workspaces;
       })
       .finally(() => {
-        this.pending = null;
+        if (this.pending?.request === request) this.pending = null;
       });
-    return this.pending;
+    this.pending = { generation, request };
+    return request;
   }
 
   private invalidateSnapshot(): void {
