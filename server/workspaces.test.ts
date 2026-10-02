@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseWorkspaces, WorkspaceDirectory, workspaceId } from './workspaces.ts';
 
 describe('weaver discovery', () => {
@@ -41,7 +41,7 @@ describe('weaver discovery', () => {
     ).toThrow('absolute path');
   });
 
-  it('bypasses its recent discovery snapshot when refresh is forced', async () => {
+  it('bypasses its discovery snapshot when refresh is forced', async () => {
     let discoveries = 0;
     const directory = new WorkspaceDirectory(defaultPath, {
       discover: async () => {
@@ -64,6 +64,31 @@ describe('weaver discovery', () => {
     expect((await directory.list(true))[0]?.status).toBe('offline');
     expect(discoveries).toBe(2);
   });
+
+  it('does not rediscover weavers while routing selected-workspace resources', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-02T05:37:00Z'));
+      let discoveries = 0;
+      const directory = new WorkspaceDirectory(defaultPath, {
+        discover: async () => {
+          discoveries += 1;
+          return parseWorkspaces([{ config_dir: defaultPath, state: 'running' }], defaultPath);
+        },
+      });
+
+      await directory.list();
+      vi.advanceTimersByTime(60_000);
+      await directory.select(workspaceId(defaultPath));
+      expect(discoveries).toBe(1);
+
+      await directory.list(true);
+      expect(discoveries).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('resolves lifecycle operations from known IDs, including offline workspaces', async () => {
     const calls: string[][] = [];
     const directory = new WorkspaceDirectory(defaultPath, {

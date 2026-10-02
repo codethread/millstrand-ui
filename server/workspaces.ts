@@ -111,7 +111,6 @@ export class WorkspaceDirectory {
   private readonly logger: PerfLogger;
   private readonly clients = new Map<string, WorkspaceClients>();
   private snapshot: WorkspaceOption[] | null = null;
-  private validUntil = 0;
   private pending: Promise<WorkspaceOption[]> | null = null;
 
   constructor(
@@ -128,12 +127,14 @@ export class WorkspaceDirectory {
   }
 
   async list(force = false): Promise<WorkspaceOption[]> {
-    if (!force && this.snapshot !== null && Date.now() < this.validUntil) return this.snapshot;
+    // WorkspaceDiscovery owns the explicit 30-second refresh. Selected-resource
+    // requests reuse its last successful registry snapshot instead of turning each
+    // five-second resource poll into another `mill weaver list` call.
+    if (!force && this.snapshot !== null) return this.snapshot;
     if (this.pending !== null) return this.pending;
     this.pending = this.discover()
       .then((workspaces) => {
         this.snapshot = workspaces;
-        this.validUntil = Date.now() + 5_000;
         return workspaces;
       })
       .finally(() => {
@@ -154,7 +155,9 @@ export class WorkspaceDirectory {
         `Weaver ${operation} failed or timed out. Refresh status before trying again: ${detail.slice(0, 1500)}`,
       );
     } finally {
-      this.validUntil = 0;
+      // The lifecycle result is unknown after either success or failure. Make the
+      // next discovery or selected-resource request refresh before trusting status.
+      this.snapshot = null;
     }
   }
 
