@@ -15,38 +15,55 @@ Read docs/auto-run.md and drive the exact dispatcher-supplied auto-inspect run. 
 
 A bounded fix follows the admitted on-change=full-land policy: use the workflow's quality, verification, review and canonical-root finisher handoff, not a new delivery run or self-cleanup. Necessary Weaver restarts are authorised via the supported mill lifecycle commands, including dependency-basis changes; record any restart and its verification.")
 
-(defn create-ticket!
-  "Publish at most one complete admission per UTC hour in this Weaver.
+(def ^:private job "hourly-slow-query")
 
-  A persisted source is the receipt, including after closure or a lost response.
-  Repeated delivery never edits, rearms or claims an existing card. The runtime
-  lock serializes the read/add pair; card policy and receipt commit together."
+(defn create-ticket!
+  "Publish one complete admission only when no prior job card remains open.
+
+  A persisted hourly source wins before open-card admission checks, including
+  after closure or a lost response. Repeated delivery never edits, rearms or
+  claims an existing card. The runtime lock serializes both reads with creation;
+  card policy, job identity and source receipt commit together."
   [rt]
   (let [lock (runtime/spool-state rt ::admission-lock (fn [] (Object.)))]
     (locking lock
       (let [hour (str (.truncatedTo ^Instant (runtime/now rt) ChronoUnit/HOURS))
             source (str "cron/hourly-slow-query/" hour)
-            existing (first (weaver/list rt [:= [:attr "kanban/source"] source] {}))
-            card (or existing
-                     (weaver/add!
-                      rt {:title (str "Hourly maintenance: address 1 SLOW query (" hour ")")
-                          ;; Like Millhouse Auto-review, publish the complete card
-                          ;; atomically so dispatch cannot observe partial policy.
-                          ;; A scheduled job has no human/session actor to attribute.
-                          :attributes {:body body
-                                       :kanban/card "true"
-                                       :kanban/type "feature"
-                                       :kanban/priority "p3"
-                                       :kanban/lane "pending"
-                                       :kanban/source source
-                                       :kanban.label/auto-run "true"
-                                       :auto-run/seat "sol"
-                                       :auto-run/effort "high"
-                                       :auto-run/workflow "auto-inspect"
-                                       :auto-run/on-change "full-land"}}))]
-        {:outcome (if existing :reused :created)
-         :card (:id card)
-         :hour hour}))))
+            existing (first (weaver/list rt [:= [:attr "kanban/source"] source] {}))]
+        (if existing
+          {:outcome :reused
+           :card (:id existing)
+           :hour hour}
+          (let [open-cards (weaver/list
+                            rt
+                            [:and [:= :state "active"]
+                             [:= [:attr "maintenance/job"] job]]
+                            {})]
+            (if (seq open-cards)
+              {:outcome :skipped-open
+               :open-cards (mapv :id open-cards)
+               :hour hour}
+              (let [card
+                    (weaver/add!
+                     rt {:title (str "Hourly maintenance: address 1 SLOW query (" hour ")")
+                         ;; Publish complete policy atomically so dispatch cannot
+                         ;; observe a partially configured maintenance card.
+                         ;; A scheduled job has no actor to attribute.
+                         :attributes {:body body
+                                      :kanban/card "true"
+                                      :kanban/type "feature"
+                                      :kanban/priority "p3"
+                                      :kanban/lane "pending"
+                                      :kanban/source source
+                                      :maintenance/job job
+                                      :kanban.label/auto-run "true"
+                                      :auto-run/seat "sol"
+                                      :auto-run/effort "high"
+                                      :auto-run/workflow "auto-inspect"
+                                      :auto-run/on-change "full-land"}})]
+                {:outcome :created
+                 :card (:id card)
+                 :hour hour}))))))))
 
 (cron/defjob! hourly-slow-query
   "Offer one Sol/high SLOW-query inspection to Auto-run every hour."

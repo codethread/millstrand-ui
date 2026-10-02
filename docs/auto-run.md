@@ -43,16 +43,20 @@ The job only creates cards: Auto-run owns capacity, preparation, workflow creati
 and assignment; the worker claims with its own identity. Scheduled cards have no
 fabricated creator, reporter or owner.
 
-The complete policy, opt-in label and UTC-hour source receipt are published in
-one mutation. Duplicate deliveries reuse that hour's card even if it was edited,
-failed or closed; they never rearm it. Cron is a fixed interval from activation,
-not a wall-clock top-of-hour schedule, and does not backfill missed hours.
-Different hours create independent inspections subject to normal dispatcher
-capacity, not completion of the previous inspection.
+The complete policy, opt-in label, `maintenance/job=hourly-slow-query`, and
+UTC-hour source receipt are published in one mutation. Duplicate delivery of that
+hour reuses its card even if it was edited, failed or closed; it never rearms it.
+Before creating a new hour, the same admission lock queries every active card with
+that exact job attribute. Any prior open card suppresses admission regardless of
+lane, blocker, retained custody or dispatcher capacity; the result reports the
+open card IDs. Closed cards from earlier hours do not suppress later work. Cron is
+a fixed interval from activation, not a wall-clock top-of-hour schedule, and does
+not backfill missed hours.
 
-A clean result needs no PR but retains resources under the cleanup contract below.
-A fix follows the existing full-land continuation and finisher handoff. Inspect
-existing hourly findings before selecting work to avoid duplicating a fix.
+A clean result needs no PR and hands its resources to the independent canonical-root
+clean finisher below. A fix follows the existing full-land continuation and landing
+finisher. Inspect existing hourly findings before selecting work to avoid duplicating
+a fix.
 To disable new hourly cards, remove the job module declaration and refresh;
 removing it does not cancel cards or assignments already created.
 
@@ -103,11 +107,11 @@ one structured summary containing the conclusion, evidence, findings, and recomm
 next action before it can select a disposition.
 
 - **clean** — a shell gate verifies the exact recorded non-main branch, an empty
-  `git status --porcelain` and no commits ahead of `origin/main`. Ignored artifacts
-  are retained, not discarded.
-  The worker records a retention receipt and returns without a PR. The workflow
-  finishes its inspection, **not the card or cleanup**; the card remains claimed
-  and open for a separately assigned cleanup owner.
+  `git status --porcelain` and no commits ahead of `origin/main`. The worker records
+  a retention receipt, freezes one immutable canonical-root finisher request, launches
+  that separate target with an idempotent request ID, releases its own custody and
+  returns without a PR. After exact worker settlement, the finisher uses the supported
+  cleanup operation below; only successful cleanup closes the card.
 - **fixed** — bounded worktree changes exist. Quality runs first and the admitted
   `auto-run/on-change` policy controls the ordinary path: `human-review` uses the
   existing PR/verification/review checkpoint; `full-land` uses that same path and
@@ -125,22 +129,37 @@ next action before it can select a disposition.
 
 ### Retained-inspection cleanup contract
 
-All three evidence-only routes retain the worker's branch, worktree, ignored files
-and other owned resources. Their required `retained` choice input records the exact
-current Harnesses worker run ID, canonical root, resource inventory and handoff card
-note ID. The note includes the disposition, structured evidence, workflow run ID,
-branch and worktree. These are durable handoff assertions, not automated proof of
-worker settlement or completed cleanup. Read the recorded choice input and note
-when resuming; later `complete --context` does not re-render existing instructions.
+Every evidence-only route first retains the worker's branch, worktree, ignored files
+and other owned resources. Its required `retained` choice input records the exact
+current Harnesses worker run ID, canonical root, branch, worktree, full HEAD, resource
+inventory and handoff card note ID. The note includes the disposition, structured
+evidence and workflow run ID. These are durable handoff assertions, not proof of
+worker settlement or cleanup. Read the recorded choice input and note when resuming;
+later `complete --context` does not re-render existing instructions.
 
-There is intentionally no automatic inspection finisher in this repository. A
-later explicitly assigned owner must work from the canonical root, read the handoff,
-and verify settlement of the exact recorded worker (not merely terminal status),
-including any subsequently accepted worker that still holds these resources. If
-custody or outcome is uncertain, retain everything and request reconciliation.
-A shell `cd` by the original worker does not release its persistent cwd.
+New clean runs then use a persistent `clean-finisher` target. The worker freezes the
+exact grunt alias, canonical cwd, target, request ID, complete prompt and worker run
+receipt before launch; it records the accepted finisher run before releasing. The
+finisher waits for successful settlement of the exact worker and checks every
+recorded Harness run whose cwd is the retained worktree. Needs-review and blocked retain
+resources and open cards without launching this finisher.
 
-That later cleanup must preserve the existing deletion preconditions:
+The finisher invokes the canonical-Weaver `clean-inspection-finish` operation. The
+same operation is the supported completion surface for already-retained clean runs:
+a separately assigned canonical-root owner supplies the closed clean disposition
+step, retained step, exact worker and finisher/owner run IDs, branch, worktree,
+retained full expected HEAD, canonical root, handoff note, actor, and a stable
+request ID. Read its live help
+before use. It verifies all durable evidence and accepted canonical custody, freezes
+that request, executes `.millstrand/clean-inspection-cleanup.sh`, then records the
+cleanup receipt. Exact replay remains harmless after interrupted cleanup and after
+a successfully completed finisher; conflicting request reuse is refused. A legacy
+retained receipt missing the new branch/worktree/HEAD fields also requires explicit
+`--reconciliation` evidence; this is the bounded existing-run path, not inferred
+backfill. Do not use the operation for needs-review or blocked outcomes, and do not
+mutate the database or call implementation functions from a REPL to imitate completion.
+
+Cleanup preserves these deletion preconditions:
 
 1. Verify the exact recorded branch is checked out and is not `main`.
 2. Require a clean tracked/untracked tree and no commits ahead of `origin/main`.
@@ -151,14 +170,16 @@ That later cleanup must preserve the existing deletion preconditions:
 4. Remove the exact worktree and delete the branch only after those checks. Record
    actual cleanup evidence, not merely the earlier clean inspection result.
 5. Only an accepted **clean** disposition may finish without a PR. After cleanup,
-   reserve the still-claimed card through `millstrand-ui.auto-run/mark-clean-finishing!`
-   before the shared `finish-card!` action. The reservation and lane-race protection
-   remain in force; a review transition must leave the card open. Needs-review and
-   blocked outcomes never authorize card completion.
+   the operation reserves the still-claimed card through
+   `millstrand-ui.auto-run/mark-clean-finishing!`, then calls the shared
+   `finish-card!` action. Its immutable in-flight request also prevents a lane race
+   once cleanup starts. Needs-review and blocked never authorize card completion.
 
-Do not reserve clean completion during retention: that would freeze a card whose
-cleanup has not happened and prevent a legitimate later review decision. No live
-or previously poured workflow is rewritten by these source changes.
+Do not reserve clean completion during initial retention. Source refresh changes new
+pours only. Already-poured clean runs keep their original evidence and use the
+supported operation under explicit ownership; already-poured blocked/needs-review
+runs remain open. Missing or contradictory receipts require manual reconciliation,
+not fabricated attributes, a replacement run or forced workflow closure.
 
 ## Landing workspace
 
@@ -186,39 +207,36 @@ removal, so the handoff must happen **before approval**, not just before cleanup
 A per-command shell `cd` does not move the original agent session's persistent
 cwd.
 
-`auto-full-land` calls Millhouse's optional `auto-run-land/autonomous-land` composition. It
-pours two distinct delivery targets under the feature run:
-
-1. the active `handoff-worker` step, which the assigned worker serves; and
-2. the dependent, initially blocked `finisher` step, which the canonical-root
-   `grunt` serves after the worker successfully settles.
+`auto-full-land` calls Millhouse's pinned `auto-run-land/autonomous-land`
+composition. The assigned worker normally serves the card, not a manufactured
+worker target, and advances four recorded worker phases: review, prepare, accept,
+and release. The delivery graph also contains one persistent `finisher` custody
+target, three finisher phases, and an executor verification gate. The finisher
+target is blocked on worker release; its first phase separately proves worker
+settlement.
 
 The worker drives `land-auto-CARD` through PR resolution and mandatory review,
-adjudicates findings, and stops at sign-off. Before launching a finisher, it
-locates both role-tagged steps in the delivery graph and verifies that its own
-agent target is the worker step, never the finisher step. A previous combined
-single-step run without a separate finisher target requires explicit recovery;
-the worker must not invent or replace a target.
+adjudicates findings, and stops at sign-off. It locates the unique role-tagged
+finisher target and verifies that its own agent target is the card or a worker
+phase, never that finisher. Card `auto-run/run-id` must name the current worker.
+A stale receipt stops before launch and requires scoped `auto-run register-worker`
+reconciliation; old poured workflows are not migrated.
 
-The worker records the exact PR/head, review disposition, land and delivery run
-IDs, **both** handoff step IDs, original worker run ID, canonical root,
-branch/worktree, and owned resource inventory on the card. It records
-`auto-run/worker-run-id` on the finisher step before launch.
+The handoff records the PR/head, review disposition, land and delivery run IDs,
+worker release step, finisher target, current worker run, canonical root,
+branch/worktree and owned resources. On the finisher target it freezes
+`auto-run/worker-run-id`, `auto-run/canonical-root`, and the complete immutable
+`auto-run/finisher-request` before launch.
 
-It then uses headless `strand agent run grunt` in the canonical root, with
-explicit `--workspace` and its own `--by-identity`. The launch uses:
-
-- `--target FINISHER_STEP_ID`, never the handoff-worker step or card;
-- `--request-id auto-land-finisher/FINISHER_STEP_ID`; and
-- the complete rendered finisher instruction as one `--prompt` argument.
-
-Acceptance of the blocked finisher target is intentional: it cannot launch
-until the worker step closes. An uncertain response is inspected with
-`agent show --request` using the same key, rather than a fresh launch key. The
-accepted run ID is recorded as `auto-run/finisher-run-id` on the finisher step
-and in the card handoff note. Only after both receipts are recorded does the
-worker complete the **handoff-worker** step and return; it never completes the
-finisher step or waits for the grunt.
+The worker launches headless `strand agent run grunt` with its own identity,
+`--cwd CANONICAL_ROOT`, `--target FINISHER_TARGET_ID`, request ID
+`auto-land-finisher/FINISHER_TARGET_ID`, and the stored complete prompt. The
+workspace still remains the explicitly selected canonical Weaver for surrounding
+Strand commands; `--cwd` is the agent's process root. An uncertain response is
+looked up with `agent show --request` using the same key and must match exact target,
+cwd and prompt. The accepted run becomes `auto-run/finisher-run-id` on the target
+and in the card note. Only after both receipts and the request read back does the
+worker release and return; it never waits for or acts as the finisher.
 
 The grunt awaits `agent-run-settled` for the recorded worker run, with
 `--min-count 1`. A terminal status alone is insufficient. Before sign-off it
@@ -229,17 +247,21 @@ Only after the card is closed does it complete the **finisher** step.
 
 ### Failure policy
 
-For `auto-full-land`, leave failed delivery open with its resources and merge
-reservation retained. Do not clear a failed gate, spawn a replacement, retry
-landing or withdraw the queue entry without explicit recovery authorization.
-This overrides the local land workflow's ordinary repair advice. An uncertain merge needs reconciliation.
+For `auto-full-land`, the independent finisher owns scoped rebase conflicts and
+defects caused by the candidate. It records and repairs them, obtains focused review
+for material changes, pushes, and retries the **same** settled failed gate under the
+pinned workflow retry rules; no replacement worker or new approval is needed. Keep
+the FIFO reservation. Managed Code gates use `workflow retry` with the exact attempt
+and a fresh request key; never clear their `gate/error` manually.
 
-A recovery worker may serve the card or handoff-worker step, never the finisher
-step; a finisher recovery serves only its existing finisher target and never
-launches another finisher. An accepted blocked finisher is retained rather than
-replaced. The disposable workspace test mechanically verifies that the role-tagged
-worker and finisher steps have distinct IDs and that the finisher is dependent on
-the worker.
+Escalate for uncertain subprocess/merge settlement, mismatched identities or
+receipts, unknown resource ownership, out-of-scope failure, or an exhausted retry
+budget. Retain the exact run and resources; never replace the accepted finisher.
+A recovery worker serves the card or worker phase, while finisher recovery serves
+only the existing persistent finisher target. Crashes between acceptance and receipt
+storage, or during worker release, reconcile the same immutable request and current
+worker lineage. Previously poured runs retain their own graph and evidence; use
+scoped reconciliation rather than pretending the current source was present.
 
 Failure to complete outer delivery bookkeeping never reopens or re-merges landed work.
 
@@ -272,12 +294,13 @@ there is no automatic approval-by-label or lane-triggered rerun in v1.
   in-memory Weaver worlds. It verifies activation, defaults, ordinary worker
   entry steps, executor gates, and the human versus autonomous exit boundaries.
   The hourly admission test disables dispatch before creating opted-in fixture
-  cards; the suite launches no paid agents. Inspection tests drive
-  actual ready boundaries, reject missing evidence/retention input, execute the
-  rendered clean gate against disposable Git trees, and verify that workflow
-  completion retains files and leaves cards open. They check reservation/lane
-  protection and human versus autonomous routing, not guaranteed agent compliance,
-  a live worker settlement, or a live merge.
+  cards; it covers per-hour replay plus open-job suppression across board states.
+  The suite launches no paid agents. Inspection tests drive actual ready boundaries,
+  reject missing evidence/retention input, execute clean gates against disposable
+  Git trees, and verify separate worker/finisher topology. The cleanup fixture uses
+  synthetic Harness receipts to exercise settlement refusal, unknown ignored-file
+  refusal, immutable request replay, safe branch/worktree removal and card completion.
+  It does not claim live provider compliance or perform a live merge.
 - Updating the Codethread dependency pin requires the supported Weaver restart,
   with explicit user approval. Source-only module edits use normal refresh.
   Never bypass the dependency-basis check with runtime or classloader mutation.

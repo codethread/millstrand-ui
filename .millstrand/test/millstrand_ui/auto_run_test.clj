@@ -13,13 +13,15 @@
             [millhouse.workflow :as workflow]
             [millstrand.api.current.alpha :as current]
             [millstrand.api.graph.alpha :as graph]
+            [millstrand.api.runtime.alpha :as runtime]
             [millstrand.api.runtime.help-transform.alpha :as help-transform]
             [millstrand.api.spool.alpha :refer [attr-get]]
             [millstrand.api.weaver.alpha :as weaver]
             [millstrand.test.alpha :as t])
   (:import [java.nio.file Files]
            [java.nio.file.attribute FileAttribute]
-           [java.time Duration Instant]))
+           [java.time Duration Instant]
+           [java.time.temporal ChronoUnit]))
 
 (defn- role-step [strands role]
   (first (filter #(= role (attr-get % :auto-run/role)) strands)))
@@ -198,6 +200,205 @@
     (git! dir "git" "checkout" "--quiet" "-b" "auto/fixture")
     dir))
 
+(defn- temporary-cleanup-fixture! []
+  (let [canonical (.toFile (Files/createTempDirectory (.toPath (io/file "/tmp")) "ui-clean-"
+                                                       (make-array FileAttribute 0)))
+        worktree (io/file canonical "inspection")]
+    (git! canonical "git" "init" "--quiet")
+    (git! canonical "git" "config" "user.email" "fixture@example.test")
+    (git! canonical "git" "config" "user.name" "Fixture")
+    (spit (io/file canonical ".gitignore")
+          ".env\nnode_modules/\ndist/\ncoverage/\n*.tsbuildinfo\n.DS_Store\n")
+    (spit (io/file canonical "evidence.txt") "base\n")
+    (git! canonical "git" "add" ".gitignore" "evidence.txt")
+    (git! canonical "git" "commit" "--quiet" "-m" "base")
+    (git! canonical "git" "branch" "-M" "main")
+    (git! canonical "git" "update-ref" "refs/remotes/origin/main" "HEAD")
+    (git! canonical "git" "worktree" "add" "--quiet" "-b" "auto/clean" (.getPath worktree))
+    {:canonical canonical :worktree worktree}))
+
+(deftest clean-inspection-finish-is-safe-and-replayable
+  (let [{:keys [canonical worktree]} (temporary-cleanup-fixture!)
+        config (io/file canonical ".millstrand")
+        files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
+                                  "me/auto_run_workflows.clj" "me/auto_run.clj"
+                                  "me/hourly_slow_query.clj"
+                                  "clean-inspection-cleanup.sh"]]
+                        [path (slurp path)]))]
+    (try
+      (t/with-weaver-world
+        [ctx {:root (.getPath config)
+              :storage :sqlite-memory
+              :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
+              :init-clj (slurp "init.clj")
+              :files files}]
+        (let [rt (:runtime ctx)
+              canonical-root (.getCanonicalPath canonical)
+              worktree-path (.getCanonicalPath worktree)]
+          (auto-run/stop! rt)
+          (current/with-runtime rt
+            (let [card (weaver/add! rt {:title "Clean retained inspection"
+                                        :attributes {:kanban/card "true"
+                                                     :kanban/type "feature"
+                                                     :kanban/lane "claimed"}})
+                  worker (weaver/add! rt {:title "Inspection worker"
+                                          :attributes {:harness/run "true"
+                                                       :harness/status "running"
+                                                       :harness/settled "false"
+                                                       :harness/cwd worktree-path
+                                                       :harness/published "true"
+                                                       :harness/publication-outcome "committed"}})
+                  finisher (weaver/add! rt {:title "Canonical clean finisher"
+                                            :attributes {:harness/run "true"
+                                                         :harness/status "running"
+                                                         :harness/settled "false"
+                                                         :harness/cwd canonical-root
+                                                         :harness/published "true"
+                                                         :harness/publication-outcome "committed"}})
+                  run-id "clean-finish-fixture"]
+              (workflow/start! run-id :auto-inspect
+                               {:card (:id card) :feature "Clean fixture"
+                                :branch "auto/clean" :worktree worktree-path
+                                :on-change "stop"})
+              (workflow/complete! run-id)
+              (let [disposition-step (:id (first (workflow/ready run-id)))]
+                (workflow/choose! run-id :clean inspection-summary)
+                (let [gate (first (workflow/ready run-id))]
+                  (is (zero? (command-exit worktree
+                                           (attr-get (weaver/show rt (:id gate))
+                                                     :shell/argv))))
+                  (workflow/complete! run-id {:executor "fixture-shell"}))
+                (let [retention-step (:id (first (workflow/ready run-id)))
+                      note (weaver/op! rt 'kanban
+                                       ["note" (:id card) "Clean evidence and custody handoff"
+                                        "--by-identity" "fixture-worker"])
+                      note-id (get-in note [:strand :id])
+                      receipt {:worker-run-id (:id worker)
+                               :canonical-root canonical-root
+                               :resource-inventory "auto/clean and inspection worktree"
+                               :handoff-note note-id
+                               :branch "auto/clean"
+                               :worktree worktree-path
+                               :worktree-head (str/trim
+                                               (:out (git! worktree "git" "rev-parse" "HEAD")))}
+                      request {:card (:id card)
+                               :disposition-step disposition-step
+                               :retention-step retention-step
+                               :worker-run-id (:id worker)
+                               :finisher-run-id (:id finisher)
+                               :branch "auto/clean"
+                               :worktree worktree-path
+                               :expected-head (:worktree-head receipt)
+                               :canonical-root canonical-root
+                               :handoff-note note-id
+                               :reconciliation "Legacy handoff note and live Git identity verified."
+                               :request-id (str "auto-clean-finish/" (:id card))
+                               :by-identity "fixture-finisher"}]
+                  (workflow/choose! run-id :retained receipt)
+                  ;; Model an already-poured receipt from before resource identity
+                  ;; fields became mandatory; the supported op requires an explicit
+                  ;; reconciliation statement for this bounded legacy path.
+                  (weaver/update! rt retention-step
+                                  {:attributes
+                                   {:workflow/outcome-input
+                                    (assoc (select-keys receipt
+                                                        [:worker-run-id :canonical-root
+                                                         :resource-inventory :handoff-note])
+                                           :branch nil :worktree nil
+                                           :worktree-head nil)}})
+                  (testing "legacy receipts require explicit reconciliation"
+                    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                          #"explicit reconciliation"
+                                          ((requiring-resolve
+                                            'millstrand-ui.auto-run/finish-clean-inspection!)
+                                           (dissoc request :reconciliation)))))
+                  (testing "resource identity mismatch refuses cleanup"
+                    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                          #"worktree HEAD"
+                                          ((requiring-resolve
+                                            'millstrand-ui.auto-run/finish-clean-inspection!)
+                                           (assoc request :expected-head
+                                                  "0000000000000000000000000000000000000000")))))
+                  (testing "unsettled worker custody refuses cleanup"
+                    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                          #"not successfully settled"
+                                          ((requiring-resolve
+                                            'millstrand-ui.auto-run/finish-clean-inspection!)
+                                           request))))
+                  (weaver/update! rt (:id worker)
+                                  {:attributes {:harness/status "stopped"
+                                                :harness/substatus "completed"
+                                                :harness/settled "true"
+                                                :harness/exit-code 0}})
+                  (.mkdirs (io/file worktree "node_modules" "fixture"))
+                  (spit (io/file worktree "node_modules" "fixture" "artifact.js") "ignored")
+                  (spit (io/file worktree ".env") "SECRET=unknown")
+                  (testing "unknown ignored files fail visibly and freeze the request"
+                    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                          #"cleanup failed"
+                                          ((requiring-resolve
+                                            'millstrand-ui.auto-run/finish-clean-inspection!)
+                                           request)))
+                    (is (= (:request-id request)
+                           (get (attr-get (weaver/show rt (:id card))
+                                         :auto-inspect/clean-finish-request)
+                                :request-id)))
+                    (is (thrown? clojure.lang.ExceptionInfo
+                                 (weaver/update! rt (:id card)
+                                                 {:attributes
+                                                  {:kanban/lane "in_review"}})))
+                    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                                          #"conflicts with its durable receipt"
+                                          ((requiring-resolve
+                                            'millstrand-ui.auto-run/finish-clean-inspection!)
+                                           (assoc request :request-id "different-request")))))
+                  (io/delete-file (io/file worktree ".env"))
+                  (testing "the supported op discards documented artifacts and completes"
+                    (let [result (weaver/op!
+                                  rt 'clean-inspection-finish
+                                  [(:card request)
+                                   "--disposition-step" (:disposition-step request)
+                                   "--retention-step" (:retention-step request)
+                                   "--worker-run-id" (:worker-run-id request)
+                                   "--finisher-run-id" (:finisher-run-id request)
+                                   "--branch" (:branch request)
+                                   "--worktree" (:worktree request)
+                                   "--expected-head" (:expected-head request)
+                                   "--canonical-root" (:canonical-root request)
+                                   "--handoff-note" (:handoff-note request)
+                                   "--reconciliation" (:reconciliation request)
+                                   "--request-id" (:request-id request)
+                                   "--by-identity" (:by-identity request)])]
+                      (is (= :finished (:outcome result)))
+                      (is (= "clean-inspection-finish" (:operation result))))
+                    (is (not (.exists worktree)))
+                    (is (not (zero? (:exit (shell/sh "git" "-C" canonical-root
+                                                    "show-ref" "--verify" "--quiet"
+                                                    "refs/heads/auto/clean")))))
+                    (let [finished (weaver/show rt (:id card))]
+                      (is (= "closed" (:state finished)))
+                      (is (= "done" (attr-get finished :kanban/outcome)))
+                      (is (= "true" (attr-get finished :auto-inspect/clean-finishing)))
+                      (is (= (:request-id request)
+                             (get (attr-get finished :auto-inspect/cleanup-receipt)
+                                  :request-id))))
+                    (is (= :finished
+                           (:outcome
+                            ((requiring-resolve
+                              'millstrand-ui.auto-run/finish-clean-inspection!)
+                             request))))
+                    (weaver/update! rt (:id finisher)
+                                    {:attributes {:harness/status "stopped"
+                                                  :harness/substatus "completed"
+                                                  :harness/settled "true"
+                                                  :harness/exit-code 0}})
+                    (is (= :finished
+                           (:outcome
+                            ((requiring-resolve
+                              'millstrand-ui.auto-run/finish-clean-inspection!)
+                             request)))))))))))
+      (finally (shell/sh "rm" "-rf" (.getPath canonical))))))
+
 (deftest land-uses-canonical-workspace
   (let [repo (temporary-git-worktree!)
         feature (io/file repo "feature")
@@ -332,6 +533,11 @@
             (is (thrown? clojure.lang.ExceptionInfo
                          ((requiring-resolve 'millstrand-ui.auto-run/mark-clean-finishing!)
                           {:card (:id card)})))
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (weaver/update! rt (:id card)
+                                         {:attributes
+                                          {:auto-inspect/clean-finish-request
+                                           {:request-id "too-late"}}})))
             (is (= "active" (:state (weaver/show rt (:id card)))))))
         (testing "evidence-only routes retain custody and require durable handoff input"
           (doseq [outcome [:clean :needs-review :blocked]]
@@ -390,7 +596,10 @@
                           receipt {:worker-run-id "fixture-worker"
                                    :canonical-root (.getAbsolutePath dir)
                                    :resource-inventory "Branch and worktree retained"
-                                   :handoff-note (get-in note [:strand :id])}]
+                                   :handoff-note (get-in note [:strand :id])
+                                   :branch "auto/fixture"
+                                   :worktree (.getAbsolutePath dir)
+                                   :worktree-head (str/trim (:out (git! dir "git" "rev-parse" "HEAD")))}]
                       (doseq [field (keys receipt)]
                         (is (thrown? clojure.lang.ExceptionInfo
                                      (workflow/choose! run-id :retained (dissoc receipt field)))))
@@ -399,7 +608,23 @@
                                (attr-get (weaver/show rt (:id retention))
                                          :workflow/outcome-input)))
                         (case outcome
-                          :clean (is (:done result))
+                          :clean
+                          (do
+                            (is (= ["Freeze the clean finisher request"]
+                                   (mapv :title (:ready result))))
+                            (let [root (workflow/current-root run-id)
+                                  strands (:strands (graph/subgraph rt [(:id root)]))
+                                  worker (role-step strands "clean-handoff-worker")
+                                  finisher (role-step strands "clean-finisher")
+                                  wait-step (role-step strands "clean-finisher-wait")]
+                              (is (some? worker))
+                              (is (some? finisher))
+                              (is (some? wait-step))
+                              (is (not= (:id worker) (:id finisher)))
+                              (is (= [(:id worker)]
+                                     (mapv :to_strand_id
+                                           (graph/outgoing-edges rt [(:id finisher)]
+                                                                 "depends-on"))))))
                           :needs-review
                           (do
                             (is (= ["Move the finding card into review"]
@@ -527,9 +752,11 @@
                :handler 'millstrand-ui.hourly-slow-query/create-ticket!}]
              (cron/jobs rt)))
       (let [result (create! rt)
-            card (weaver/show rt (:card result))]
+            card-id (:card result)
+            card (weaver/show rt card-id)]
         (is (= :created (:outcome result)))
         (is (= "2020-01-01T12:00:00Z" (:hour result)))
+        (is (= "hourly-slow-query" (attr-get card :maintenance/job)))
         (is (auto-run/eligible? rt card))
         (is (= ["sol" "high" "auto-inspect" "full-land"]
                (mapv #(attr-get card %) [:auto-run/seat :auto-run/effort
@@ -537,31 +764,55 @@
         (is (= {:on-change "full-land"}
                ((requiring-resolve 'millstrand-ui.auto-run/start-params!)
                 rt {:card card :settings {:workflow "auto-inspect"}})))
-        (is (nil? (kanban/current-ownership rt (:id card))))
+        (is (nil? (kanban/current-ownership rt card-id)))
         (doseq [attribute [:identity/by-identity :kanban/reporter :auto-run/status
                            :auto-run/request-id :auto-run/run-id :auto-run/workflow-run-id]]
           (is (nil? (attr-get card attribute))))
         (is (= (assoc result :outcome :reused) (create! rt)))
-        (testing "replays preserve operator edits and closed receipts"
-          (let [closed (weaver/update! rt (:id card)
-                                      {:state "closed"
-                                       :attributes {:kanban/lane "refinement"
-                                                    :kanban.label/auto-run nil
-                                                    :auto-run/status "error"}})]
-            (is (= (assoc result :outcome :reused) (create! rt)))
-            (is (= closed (weaver/show rt (:id card)))))))
-      (testing "the next UTC hour permits a new card; a lost reply never duplicates it"
-        (t/advance! rt (Duration/ofHours 1))
-        (let [add! weaver/add!]
-          (with-redefs [weaver/add! (fn [runtime request & [options]]
-                                     (add! runtime request options)
-                                     (throw (ex-info "Lost response" {})))]
-            (is (thrown-with-msg? Exception #"Lost response" (create! rt)))))
-        (let [result (create! rt)]
-          (is (= :reused (:outcome result)))
-          (is (= "2020-01-01T13:00:00Z" (:hour result)))
-          (is (auto-run/eligible? rt (weaver/show rt (:card result))))
-          (is (= 2 (count (weaver/list rt [:= [:attr "kanban/card"] "true"] {})))))))))
+        (testing "every open maintenance state suppresses later hours"
+          (doseq [[lane attributes]
+                  [["pending" {}]
+                   ["claimed" {}]
+                   ["in_review" {}]
+                   ["claimed" {:kanban.label/agent-blocked "true"}]
+                   ["claimed" {:auto-inspect/retained "true"}]]]
+            (t/advance! rt (Duration/ofHours 1))
+            (weaver/update! rt card-id
+                            {:attributes (merge {:kanban/lane lane} attributes)})
+            (is (= {:outcome :skipped-open
+                    :open-cards [card-id]
+                    :hour (str (.truncatedTo ^Instant (runtime/now rt)
+                                             ChronoUnit/HOURS))}
+                   (create! rt)))))
+        (testing "closing the prior job admits exactly one later-hour receipt"
+          (let [closed (weaver/update! rt card-id
+                                       {:state "closed"
+                                        :attributes {:kanban/lane nil
+                                                     :kanban/outcome "done"
+                                                     :kanban.label/auto-run nil}})
+                add! weaver/add!]
+            (with-redefs [weaver/add! (fn [runtime request & [options]]
+                                       (add! runtime request options)
+                                       (throw (ex-info "Lost response" {})))]
+              (is (thrown-with-msg? Exception #"Lost response" (create! rt))))
+            (let [later (create! rt)]
+              (is (= :reused (:outcome later)))
+              (is (not= card-id (:card later)))
+              (is (= 2 (count (weaver/list rt [:= [:attr "kanban/card"] "true"] {}))))
+              (testing "same-hour closed and edited receipts never rearm"
+                (let [later-card (weaver/show rt (:card later))
+                      edited (weaver/update! rt (:id later-card)
+                                             {:state "closed"
+                                              :attributes {:kanban/lane nil
+                                                           :kanban/outcome "done"
+                                                           :auto-run/status "error"}})
+                      other-open (weaver/add! rt {:title "Backfilled open hourly job"
+                                                  :attributes {:maintenance/job
+                                                               "hourly-slow-query"}})]
+                  (is (= later (create! rt)))
+                  (is (= edited (weaver/show rt (:id later-card))))
+                  (is (= "active" (:state (weaver/show rt (:id other-open)))))))
+              (is (= "closed" (:state closed))))))))))
 
 (defn -main
   "Run disposable workspace tests without touching the repository's live Weaver."
