@@ -1,5 +1,47 @@
 # Dashboard read audit
 
+## 2026-10-02 lazy selected-workspace log activity
+
+Selected the recurring log-summary read while the bare Agents page was open on
+`millhouse.spool` from the current default performance log:
+
+```text
+2026-10-02T12:57:24.749Z perf SLOW 61.86ms sqlite provenance workspace=millhouse.spool rows=8646 discover=12.36ms query=42.39ms decode=6.91ms outcome=ok
+2026-10-02T12:57:24.795Z perf SLOW 107.52ms server GET /api/log-activity status=200 bytes=149777
+```
+
+The selected-workspace poll owner mounted `/api/log-activity` every five seconds in
+all workspace modes. A bare Agents page renders agent-directory status but no log
+hint, compact tail, or activity detail, so it repeatedly paid for shared persisted
+provenance, up to 60 local session snapshots, and a 149,777-byte response that had no
+consumer. The same was true of the bare Reviews page.
+
+`WorkspaceResourcePolls` now disables log activity on bare Graph, Agents, Reviews,
+and Completed pages. Opening an issue or agent detail enables the existing query and
+interval; closing it stops them again. Board and outline retain their normal five-second
+owner for inline log hints, and the all-weaver overview owner is unchanged. Cache keys,
+binding selection, session reads, polling cadence while visible, and spool semantics are
+unchanged.
+
+An isolated production server on port 4191 used `/tmp/1izqe-perf.log` against real
+`millhouse.spool` data. The bare Agents page rendered 692 identities and unbound runs
+with zero `/api/log-activity` requests over 11 seconds. Opening a real agent detail
+started the request immediately and retained the five-second poll; closing it produced
+zero requests over the next 11 seconds. The unsupported Reviews page also made zero log
+requests, while the Board retained its normal log poll and a 390×844 layout remained
+usable. Recovery verification additionally confirmed zero requests on bare Graph and
+Completed pages, with an opened completed-card detail enabling the poll. No uncaught
+browser error occurred.
+
+The running default server had no `MILLSTRAND_UI_PERF_LOG` override. The current and
+single rotated default UI logs were readable and inspected. Of the six live Weaver log
+paths reported by `mill weaver list`, five were readable and contained no relevant
+query timing; the shared-JVM `agents` path was absent while its `notes` peer was
+readable. This client-only poll-ownership change does not alter Weaver dependencies or
+runtime, so no Weaver restart was needed. The focused workspace-polling test passed,
+and `pnpm quality` passed formatting, zero-warning Oxlint, strict TypeScript, 388 tests
+and the production build.
+
 ## 2026-10-02 compact shared dependency counts
 
 Selected the recurring `skein-src` shared provenance read behind the five-second board

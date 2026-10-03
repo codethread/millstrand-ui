@@ -8,8 +8,8 @@ import { logActivityOptions } from '../lib/api/log-activity';
 import { cardLogAgents, cardLogTasks } from '../lib/agent-logs';
 import { useWorkspace } from './use-workspace';
 
-export function useLogActivityPoll() {
-  return useQuery(logActivityOptions(useWorkspace()));
+export function useLogActivityPoll(enabled: boolean) {
+  return useQuery(logActivityOptions(useWorkspace(), enabled));
 }
 export function useLogBinding(workspace: string | null, identityStrandId: string) {
   const select = useCallback(

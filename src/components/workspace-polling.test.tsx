@@ -4,8 +4,10 @@ import { expect, it, vi } from 'vitest';
 import type { WorkspaceOption } from '../../shared/api';
 import { useOverview } from '../hooks/use-overview';
 import { createQueryClient } from '../lib/api/query-client';
+import { logActivityOptions } from '../lib/api/log-activity';
 import type { WorkspacePreferences } from '../lib/workspaces';
 import { OverviewLogPolls } from './overview-log-polls';
+import { needsWorkspaceLogActivity } from './workspace-resource-polls';
 
 const state = vi.hoisted(() => ({ preferences: {} as WorkspacePreferences }));
 vi.mock('../workspace-preference-store', () => ({
@@ -54,4 +56,23 @@ it('creates board, agent and log queries only for visible weavers, and restores 
   for (const key of ['board', 'agents', 'log-activity'])
     expect(client.getQueryCache().find({ queryKey: [key, 'hidden'], exact: true })).toBeDefined();
   client.clear();
+});
+
+it('polls selected-workspace logs only where an activity consumer is visible', () => {
+  const nothingSelected = { issue: null, agent: null, agentRun: null };
+  expect(needsWorkspaceLogActivity('board', nothingSelected)).toBe(true);
+  expect(needsWorkspaceLogActivity('outline', nothingSelected)).toBe(true);
+  expect(needsWorkspaceLogActivity('graph', nothingSelected)).toBe(false);
+  expect(needsWorkspaceLogActivity('completed', nothingSelected)).toBe(false);
+  expect(needsWorkspaceLogActivity('agents', nothingSelected)).toBe(false);
+  expect(needsWorkspaceLogActivity('reviews', nothingSelected)).toBe(false);
+  expect(
+    needsWorkspaceLogActivity('agents', { ...nothingSelected, agent: 'identity-strand' }),
+  ).toBe(true);
+  expect(needsWorkspaceLogActivity('agents', { ...nothingSelected, agentRun: 'run' })).toBe(true);
+  expect(needsWorkspaceLogActivity('graph', { ...nothingSelected, issue: 'card' })).toBe(true);
+  expect(logActivityOptions('workspace', false)).toMatchObject({
+    enabled: false,
+    refetchInterval: false,
+  });
 });
