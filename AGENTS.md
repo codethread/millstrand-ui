@@ -139,7 +139,7 @@ session alive polling for human approval.
 - Run `strand prime kanban`, claim a feature card, and use its recorded worktree.
 - Never edit `main` or push directly to `main`; feature-branch pushes are expected.
 - Set `WORKTREE` to the feature worktree's absolute root and `LAND_WORKSPACE` to
-  the canonical Git checkout's `.millstrand` directory (`wktree root` resolves the
+  the canonical Git checkout's `.millstrand` directory (`honeycomb root` resolves the
   checkout). Cards, delivery runs and the repository-wide FIFO belong to that
   canonical Weaver, **not** a feature-worktree Weaver. Inspect
   `strand --workspace "$LAND_WORKSPACE" workflow show land` and
