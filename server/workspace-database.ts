@@ -193,6 +193,8 @@ const provenanceSql = `
       ON target.strand_id = strand_edges.to_strand_id
     WHERE strand_edges.edge_type IN (${placeholders(provenanceEdgeKinds)})
       AND (source.strand_id IS NOT NULL OR target.strand_id IS NOT NULL)
+      -- Shared provenance resolves claim actors; note attribution has its own scoped read.
+      AND (strand_edges.edge_type <> 'attributed' OR target.is_ownership_claim)
       AND (
         strand_edges.edge_type <> 'parent-of'
         OR (source.is_card AND (target.is_task OR target.is_card))
