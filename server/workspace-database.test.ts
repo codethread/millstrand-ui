@@ -339,11 +339,14 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
         'kanban/ownership-claim': 'true',
         'kanban/owner': 'native-parent',
         'kanban/claimed-at': '2026-09-24T10:01:00Z',
+        'identity/by-identity': 'native-parent',
       },
       'closed',
     );
     insertEdge.run('claim', 'card', 'claims');
     insertEdge.run('parent-identity', 'claim', 'claimed');
+    insertEdge.run('parent-identity', 'claim', 'attributed');
+    insertEdge.run('parent-identity', 'unrelated', 'attributed');
 
     addStrand(
       'resumed-run',
@@ -389,7 +392,23 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
 
     const afterSnapshot = await reader.readProvenance();
     expect(afterSnapshot).toMatchObject({
-      edges: expect.not.arrayContaining([expect.objectContaining({ edge_type: 'depends-on' })]),
+      edges: expect.arrayContaining([
+        expect.objectContaining({
+          from_strand_id: 'parent-identity',
+          to_strand_id: 'claim',
+          edge_type: 'attributed',
+        }),
+      ]),
+    });
+    expect(afterSnapshot).toMatchObject({
+      edges: expect.not.arrayContaining([
+        expect.objectContaining({ edge_type: 'depends-on' }),
+        expect.objectContaining({
+          from_strand_id: 'parent-identity',
+          to_strand_id: 'unrelated',
+          edge_type: 'attributed',
+        }),
+      ]),
     });
     const after = new ProvenanceIndex(afterSnapshot);
     expect(after.dependencies('card')).toEqual({ incoming: 0, outgoing: 1 });
@@ -417,6 +436,7 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
     ).toMatchObject({ parentIdentityStrandIds: ['parent-identity'] });
     expect(after.ownership('card').current).toMatchObject({
       owner: { identity: 'native-parent', identityStrandIds: ['parent-identity'] },
+      actor: { identity: 'native-parent', identityStrandIds: ['parent-identity'] },
     });
   } finally {
     database.close();
