@@ -55,6 +55,7 @@ describe('board content projections', () => {
       fetchedAt: '2026-09-16T12:00:00Z',
       cards,
       labels,
+      summary: { active: 1, inProgress: 0, ready: 1, review: 0, closed: 1, done: 0 },
     };
     const filter = { ...emptyFilter(), query: 'active' };
 

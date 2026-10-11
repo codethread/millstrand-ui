@@ -9,6 +9,7 @@ import { encodeAgentDirectory } from '../shared/agent-directory.ts';
 import {
   HttpError,
   parseDependencyCards,
+  parseIncludeClosed,
   parseLabelChange,
   parseViews,
   requestValue,
@@ -259,7 +260,11 @@ const server = createServer((request, response) => {
     }
     if (path === '/api/board' && method === 'GET') {
       const { strand } = await workspaces.select(url.searchParams.get('workspace'));
-      json(response, 200, await strand.board());
+      json(
+        response,
+        200,
+        await strand.board(parseIncludeClosed(url.searchParams.get('includeClosed'))),
+      );
       return;
     }
     if (path === '/api/dependencies' && method === 'GET') {

@@ -3,6 +3,7 @@ import {
   parseCard as parseCardBoundary,
   parseDependencyCards,
   parseGraph as parseGraphBoundary,
+  parseIncludeClosed,
   parseLabelChange,
   parseRelation,
   parseTask as parseTaskBoundary,
@@ -299,6 +300,14 @@ describe('label writes', () => {
       );
     },
   );
+});
+
+describe('board read scope', () => {
+  it('includes completed cards only for the explicit true query value', () => {
+    expect(parseIncludeClosed(null)).toBe(false);
+    expect(parseIncludeClosed('true')).toBe(true);
+    expect(() => parseIncludeClosed('false')).toThrow('includeClosed must be true');
+  });
 });
 
 describe('dependency read scope', () => {

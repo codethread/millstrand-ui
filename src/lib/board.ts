@@ -215,15 +215,7 @@ export function selectOutline(allCards: Card[], visible: Card[]): OutlineGroup[]
 }
 
 export function boardSummary(board: Board) {
-  const active = board.cards.filter((card) => card.state !== 'closed');
-  return {
-    active: active.length,
-    inProgress: active.filter((card) => card.lane === 'claimed').length,
-    ready: active.filter((card) => card.lane === 'pending').length,
-    review: active.filter((card) => card.lane === 'in_review').length,
-    closed: board.cards.length - active.length,
-    done: board.cards.filter((card) => card.state === 'closed' && card.outcome === 'done').length,
-  };
+  return board.summary;
 }
 
 export function viewDescription(view: SavedView): string {

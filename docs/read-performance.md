@@ -1,5 +1,51 @@
 # Dashboard read audit
 
+## 2026-10-11 active board payload
+
+Selected the recurring `skein-src` shared provenance read and downstream
+`GET /api/board` route. The default logs were readable at
+`~/.local/state/millstrand-ui/perf.log` (2026-10-05T12:47:33Z–2026-10-10T04:39:13Z,
+221 SLOW samples) and `perf.log.1` (2026-10-05T12:06:58Z–12:47:33Z, 123 SLOW
+samples). No UI server or `MILLSTRAND_UI_PERF_LOG` override was running. An isolated
+production server at current `origin/main` captured the still-recurring warm route in
+`/tmp/cjywt-before.log` from 2026-10-11T13:39:14Z–13:43:32Z:
+
+```text
+2026-10-11T13:43:27.200Z perf WARN 49.50ms sqlite provenance workspace=skein-src rows=8655 discover=0.12ms query=42.78ms decode=5.71ms outcome=ok
+2026-10-11T13:43:27.209Z perf SLOW 58.55ms server GET /api/board status=200 bytes=451154
+```
+
+The five-second board poll transferred and fully projected 620 completed cards even
+though the ordinary board displayed only 44 active issues. The server now returns
+active cards plus any closed epic needed as their hierarchy context by default. It
+keeps exact all-card summary and label counts in the response, and completed cards are
+requested explicitly while Completed, **Include completed**, a completed saved view,
+or its editor needs them. This preserves the single selected-workspace poll owner,
+cache invalidation, card detail and graph behavior, and on-demand completed history.
+Persisted metadata is parsed once at the provenance boundary; the active response does
+not rebuild complete ownership and auto-run projections for hidden completed cards.
+
+Comparable browser-driven active-board windows were `/tmp/cjywt-before.log`
+(13:39:33Z–13:43:32Z, 48 warm samples) and `/tmp/cjywt-final.log`
+(13:55:12Z–13:56:18Z, 14 warm samples). The response fell from 451,154 to 24,969
+bytes (94.5%). Route median fell from 61.93 to 54.89 ms and its minimum crossed the
+budget from 52.41 to 48.44 ms; shared provenance median moved from 52.50 to 49.82 ms
+under local SQLite variance. The browser retained 44 active issues, an exact
+**Completed 620** sidebar count, all 620 entries in Completed, and the full board after
+**Include completed**, with no uncaught error.
+
+`mill weaver list` reported relevant readable lifecycle logs at
+`~/.local/state/millstrand/weavers/b6e50cbea0bb294ff7888684b602f0d0/weaver.log`
+(`millstrand-ui`), `439efa9b0cf2bf51bad01d6f970b0bab/weaver.log` (`skein-src`), and
+`df177c7fb1b323efbc714561bee1e350/weaver.log` (`millhouse.spool`); none contained
+query timings. The reported shared-JVM `agents` log was absent, as in previous audits,
+and its readable `notes` peer did not own this route. The preceding hourly fixes
+(PR #90–#92) and all active work were checked; they addressed provenance SQL while no
+other worker owned the residual hidden-card transport/projection cost. Focused board,
+parser, provenance, and card-action checks passed (88 tests); `pnpm quality` passed
+formatting, zero-warning Oxlint, strict TypeScript, 396 tests, and the production build.
+No Weaver dependency or runtime changed, so no Weaver restart was needed.
+
 ## 2026-10-11 bounded task dependency counts
 
 Selected the recurring `skein-src` shared provenance read behind `GET /api/board`.
