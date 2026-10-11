@@ -376,8 +376,8 @@ function openDatabase(path: string): ReadonlyDatabase {
   const database = new DatabaseSync(path, { readOnly: true });
   return {
     // The shared provenance read revisits index pages across thousands of candidates.
-    // Keep those pages for the lifetime of this short-lived connection instead of
-    // repeatedly evicting them from SQLite's 8 MiB default cache.
+    // Keep those pages across the bounded connection window instead of repeatedly
+    // evicting them from SQLite's 8 MiB default cache between polling reads.
     configure: () =>
       database.exec(
         'PRAGMA query_only = ON; PRAGMA busy_timeout = 1000; PRAGMA cache_size = -65536;',
@@ -444,6 +444,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
   private discovered: string | null = null;
   private discoveredUntil = 0;
   private discovery: Promise<string> | null = null;
+  private database: { path: string; value: ReadonlyDatabase; until: number } | null = null;
 
   constructor(
     private readonly workspace: string,
@@ -518,6 +519,28 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     );
   }
 
+  private databaseConnection(path: string): ReadonlyDatabase {
+    if (this.database !== null && this.database.path === path && Date.now() < this.database.until)
+      return this.database.value;
+    this.database?.value.close();
+    this.database = null;
+    const value = this.open(path);
+    try {
+      value.configure();
+      schemaVersionSchema.parse(value.schemaVersion());
+    } catch (error) {
+      value.close();
+      throw error;
+    }
+    this.database = { path, value, until: Date.now() + discoveryLifetime };
+    return value;
+  }
+
+  private discardDatabase(): void {
+    this.database?.value.close();
+    this.database = null;
+  }
+
   /** One `mill weaver list` per workspace window; a failed read rediscovers on the next attempt. */
   private databasePath(): Promise<string> {
     if (this.discovered !== null && Date.now() < this.discoveredUntil)
@@ -549,10 +572,8 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     let decoded = started;
     let outcome = 'ok';
     try {
-      database = this.open(await this.databasePath());
+      database = this.databaseConnection(await this.databasePath());
       discovered = performance.now();
-      database.configure();
-      schemaVersionSchema.parse(database.schemaVersion());
       const result = database.all(sql, parameters);
       rows = result.length;
       queried = performance.now();
@@ -562,10 +583,10 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     } catch (error) {
       outcome = 'failed';
       this.discovered = null;
+      this.discardDatabase();
       const message = error instanceof Error ? error.message : 'Unknown persisted read failure';
       throw new HttpError(502, `Provenance inspection failed: ${message.slice(0, 1500)}`);
     } finally {
-      database?.close();
       this.logger.record({
         scope: 'sqlite',
         target: label,

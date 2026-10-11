@@ -87,7 +87,7 @@ it('runs one selective graph read without note strands or workspace interpolatio
   });
   expect(open).toHaveBeenCalledWith('/state/workspace.sqlite');
   expect(database.configure).toHaveBeenCalledOnce();
-  expect(database.close).toHaveBeenCalledOnce();
+  expect(database.close).not.toHaveBeenCalled();
   const [sql, parameters] = database.all.mock.calls[0]!;
   expect(sql).not.toContain('LIMIT 10001');
   expect(sql).toContain('LIMIT 50001');
@@ -156,6 +156,33 @@ it('captures successful SQL measurements with only in-memory dependencies', asyn
       detail: expect.stringMatching(/^rows=1 .* outcome=ok$/),
     },
   ]);
+});
+
+it('reuses one configured read connection within the database discovery window', async () => {
+  vi.useFakeTimers();
+  try {
+    const first = fakeDatabase();
+    const second = fakeDatabase();
+    const open = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const discover = vi.fn(async () => '/state/workspace.sqlite');
+    const reader = new WorkspaceDatabase(workspace, { discover, open });
+
+    await reader.readProvenance();
+    await vi.advanceTimersByTimeAsync(29_000);
+    await reader.readProvenance();
+    expect(open).toHaveBeenCalledOnce();
+    expect(first.configure).toHaveBeenCalledOnce();
+    expect(first.close).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    await reader.readProvenance();
+    expect(discover).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(first.close).toHaveBeenCalledOnce();
+    expect(second.configure).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('reads note attribution provenance only for requested note IDs', async () => {
@@ -477,7 +504,7 @@ it('reads dependency endpoints with display-only metadata and directed links', a
     dependencies: { incoming: 0, outgoing: 1 },
   });
   expect(graph.edges).toEqual([{ kind: 'depends-on', from: 'strand1', to: 'outside' }]);
-  expect(database.close).toHaveBeenCalledOnce();
+  expect(database.close).not.toHaveBeenCalled();
   const [sql] = database.all.mock.calls[0]!;
   expect(sql).not.toContain('LIMIT 10001');
   expect(sql).toContain('LIMIT 50001');
