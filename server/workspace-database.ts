@@ -368,6 +368,7 @@ interface ReadonlyDatabase {
   all(sql: string, parameters: readonly string[]): unknown[];
   close(): void;
 }
+type CachedDatabase = { path: string; value: ReadonlyDatabase; expiry: NodeJS.Timeout };
 
 type DiscoverDatabase = (workspace: string) => Promise<string>;
 type OpenDatabase = (path: string) => ReadonlyDatabase;
@@ -444,7 +445,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
   private discovered: string | null = null;
   private discoveredUntil = 0;
   private discovery: Promise<string> | null = null;
-  private database: { path: string; value: ReadonlyDatabase; until: number } | null = null;
+  private database: CachedDatabase | null = null;
 
   constructor(
     private readonly workspace: string,
@@ -520,25 +521,25 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
   }
 
   private databaseConnection(path: string): ReadonlyDatabase {
-    if (this.database !== null && this.database.path === path && Date.now() < this.database.until)
+    if (this.database?.path === path && Date.now() < this.discoveredUntil)
       return this.database.value;
-    this.database?.value.close();
-    this.database = null;
+    this.discardDatabase();
     const value = this.open(path);
-    try {
-      value.configure();
-      schemaVersionSchema.parse(value.schemaVersion());
-    } catch (error) {
-      value.close();
-      throw error;
-    }
-    this.database = { path, value, until: Date.now() + discoveryLifetime };
+    const remaining = Math.max(0, this.discoveredUntil - Date.now());
+    const expiry = setTimeout(() => this.discardDatabase(value), remaining);
+    expiry.unref();
+    this.database = { path, value, expiry };
+    value.configure();
+    schemaVersionSchema.parse(value.schemaVersion());
     return value;
   }
 
-  private discardDatabase(): void {
-    this.database?.value.close();
+  private discardDatabase(expected?: ReadonlyDatabase): void {
+    const database = this.database;
+    if (database === null || (expected !== undefined && database.value !== expected)) return;
     this.database = null;
+    clearTimeout(database.expiry);
+    database.value.close();
   }
 
   /** One `mill weaver list` per workspace window; a failed read rediscovers on the next attempt. */
@@ -565,14 +566,13 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     decode: (value: unknown) => T,
   ): Promise<T> {
     const started = performance.now();
-    let database: ReadonlyDatabase | null = null;
     let rows = 0;
     let discovered = started;
     let queried = started;
     let decoded = started;
     let outcome = 'ok';
     try {
-      database = this.databaseConnection(await this.databasePath());
+      const database = this.databaseConnection(await this.databasePath());
       discovered = performance.now();
       const result = database.all(sql, parameters);
       rows = result.length;

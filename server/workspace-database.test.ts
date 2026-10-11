@@ -175,10 +175,12 @@ it('reuses one configured read connection within the database discovery window',
     expect(first.close).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(2_000);
+    expect(first.close).toHaveBeenCalledOnce();
+    expect(open).toHaveBeenCalledOnce();
+
     await reader.readProvenance();
     expect(discover).toHaveBeenCalledTimes(2);
     expect(open).toHaveBeenCalledTimes(2);
-    expect(first.close).toHaveBeenCalledOnce();
     expect(second.configure).toHaveBeenCalledOnce();
   } finally {
     vi.useRealTimers();

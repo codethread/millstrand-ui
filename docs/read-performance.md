@@ -18,10 +18,11 @@ Each poll opened and configured a new read-only SQLite connection, then closed t
 therefore decoded the same index and table pages again on the next five-second poll.
 `WorkspaceDatabase` now reuses one configured read-only connection for the same
 30-second database-discovery window. Each bounded statement still gets a fresh SQLite
-read snapshot and observes later commits. A changed database path or expired window
-closes and replaces the connection; any read or boundary failure discards it and forces
-rediscovery rather than retaining uncertain state. Schema validation remains at every
-connection open.
+read snapshot and observes later commits. An unreferenced expiry timer closes the
+connection after the window even when that workspace becomes idle; a changed database
+path replaces it sooner. Any read or boundary failure discards it and forces rediscovery
+rather than retaining uncertain state. Schema validation remains at every connection
+open.
 
 On the live `skein-src` database, 24 warm direct reads before and after used the same
 8,655-row projection. Total median fell from 44.64 to 36.92 ms (17.3%), and SQL median
