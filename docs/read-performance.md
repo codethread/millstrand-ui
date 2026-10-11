@@ -1,5 +1,52 @@
 # Dashboard read audit
 
+## 2026-10-11 source-driven shared provenance edges
+
+Selected the persistent `skein-src` shared provenance read behind `GET /api/board`.
+The current and rotated default logs were readable from
+`~/.local/state/millstrand-ui/perf.log` (2026-10-05T12:47:33Z–2026-10-10T04:39:13Z,
+221 SLOW samples) and `perf.log.1` (2026-10-05T12:06:58Z–12:47:33Z, 123 SLOW
+samples). No default server or `MILLSTRAND_UI_PERF_LOG` override was running at
+inspection time. One representative pair was:
+
+```text
+2026-10-05T22:35:47.951Z perf SLOW 382.04ms sqlite provenance workspace=skein-src rows=10021 discover=13.37ms query=358.95ms decode=9.59ms outcome=ok
+2026-10-05T22:35:47.970Z perf SLOW 400.98ms server GET /api/board status=200 bytes=451154
+```
+
+The shared query scanned all 62,969 persisted edges and looked up both candidate
+endpoints for every row, although every role edge consumed by the board and agent
+projections starts at a candidate card, claim, identity or published run. The query
+now drives that branch from the materialized candidate markers and uses the existing
+`from_strand_id` covering index. `CROSS JOIN` deliberately fixes this loop order;
+an ordinary join lets SQLite return to the full edge scan. The source scope also
+omits 1,145 legacy or unpublished-run edges on `skein-src` that no loaded provenance
+record could consume. The 50,000-edge overflow guard, marker and attribute selection,
+domain parsing, board and agent response shapes, polling cadence and all mutations
+are unchanged.
+
+Read-only comparisons used one committed snapshot from each of the five live
+file-backed workspaces reported by `mill weaver list`. Board, agent-directory and
+log-binding projections matched exactly in every workspace. Across 25 alternating
+warm `skein-src` samples, query plus boundary decode moved from a 62.06 ms median to
+50.32 ms (18.9% faster), with the raw SQL median moving from 56.44 to 45.04 ms.
+The same candidate was faster on `millstrand-ui` (31.74→29.86 ms) and
+`millhouse.spool` (26.63→25.44 ms). An isolated production server wrote
+`/tmp/ej0d1-perf.log`; 23 warm browser-driven reads returned 8,655 records with a
+57.74 ms total median and 50.71 ms SQL median under live polling. Its real
+`skein-src` board rendered 44 active and 620 completed issues and its narrow Agents
+surface rendered all 45 identities without an uncaught browser error.
+
+The relevant `skein-src`, canonical UI and `millhouse.spool` Weaver logs were
+readable and contained startup/runtime history but no query timings for this read;
+the registered shared-JVM `agents` log path was absent and was not an owner of the
+selected query. Previous hourly findings were checked: the earlier dependency-count
+and attribution-edge changes were already landed, while subsequent clean inspections
+measured only the canonical workspace. No other active card or worker owned this
+residual `skein-src` cost. Focused persisted-read, provenance, board, agent and parser
+checks passed (63 tests), and the production build passed. This changes only the UI
+server's read query, so no Weaver restart was needed.
+
 ## 2026-10-02 lazy selected-workspace log activity
 
 Selected the recurring log-summary read while the bare Agents page was open on
