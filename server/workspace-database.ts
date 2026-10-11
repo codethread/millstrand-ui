@@ -186,13 +186,14 @@ const provenanceSql = `
              'to_strand_id', strand_edges.to_strand_id,
              'edge_type', strand_edges.edge_type
            ) AS record
-    FROM strand_edges
-    LEFT JOIN candidate_markers AS source
-      ON source.strand_id = strand_edges.from_strand_id
+    -- Every consumed role edge starts at a candidate card, claim, identity or published run.
+    -- CROSS JOIN preserves that indexed loop order instead of scanning every persisted edge.
+    FROM candidate_markers AS source
+    CROSS JOIN strand_edges
     LEFT JOIN candidate_markers AS target
       ON target.strand_id = strand_edges.to_strand_id
-    WHERE strand_edges.edge_type IN (${placeholders(provenanceEdgeKinds)})
-      AND (source.strand_id IS NOT NULL OR target.strand_id IS NOT NULL)
+    WHERE strand_edges.from_strand_id = source.strand_id
+      AND strand_edges.edge_type IN (${placeholders(provenanceEdgeKinds)})
       -- Shared provenance resolves claim actors; note attribution has its own scoped read.
       AND (strand_edges.edge_type <> 'attributed' OR target.is_ownership_claim)
       AND (

@@ -100,6 +100,8 @@ it('runs one selective graph read without note strands or workspace interpolatio
   expect(parameters).toContain('performed');
   expect(parameters).toContain('serves-root');
   expect(parameters).not.toContain('depends-on');
+  expect(sql).toContain('FROM candidate_markers AS source\n    CROSS JOIN strand_edges');
+  expect(sql).toContain('strand_edges.from_strand_id = source.strand_id');
   expect(sql).toContain("strand_edges.edge_type = 'depends-on'");
   expect(sql).toContain(`'$."millstrand-ui/dependency-incoming"'`);
   expect(sql).toContain(`'$."millstrand-ui/dependency-outgoing"'`);
@@ -307,6 +309,7 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
     insertEdge.run('card', 'dependency', 'depends-on');
     insertEdge.run('dependency', 'task', 'depends-on');
     insertEdge.run('pre-binding-run', 'task', 'serves');
+    insertEdge.run('unpublished-run', 'card', 'serves');
 
     const reader = new WorkspaceDatabase(workspace, { discover: async () => path });
     const beforeSnapshot = await reader.readProvenance();
@@ -407,6 +410,11 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
           from_strand_id: 'parent-identity',
           to_strand_id: 'unrelated',
           edge_type: 'attributed',
+        }),
+        expect.objectContaining({
+          from_strand_id: 'unpublished-run',
+          to_strand_id: 'card',
+          edge_type: 'serves',
         }),
       ]),
     });
