@@ -1,5 +1,52 @@
 # Dashboard read audit
 
+## 2026-10-11 bounded SQLite connection reuse
+
+Selected the recurring `skein-src` shared provenance read and downstream
+`GET /api/board` route. The required default logs were readable at
+`~/.local/state/millstrand-ui/perf.log` (2026-10-05T12:47:33Z–2026-10-10T04:39:13Z,
+221 SLOW samples) and `perf.log.1` (2026-10-05T12:06:58Z–12:47:33Z, 123 SLOW
+samples). No UI server or `MILLSTRAND_UI_PERF_LOG` override was running. Their newest
+SLOW sample predates the three immediately preceding provenance and board fixes, so
+current-HEAD evidence came from the preceding isolated capture
+`/tmp/cjywt-final.log` (2026-10-11T13:55:06Z–13:58:30Z). Its comparable warm active
+board window contained 12/14 SLOW route samples (48.44–61.58 ms, 54.89 ms median)
+and a 43.17 ms median SQL phase.
+
+Each poll opened and configured a new read-only SQLite connection, then closed the
+64 MiB page cache immediately after the statement. The large provenance query
+therefore decoded the same index and table pages again on the next five-second poll.
+`WorkspaceDatabase` now reuses one configured read-only connection for the same
+30-second database-discovery window. Each bounded statement still gets a fresh SQLite
+read snapshot and observes later commits. An unreferenced expiry timer closes the
+connection after the window even when that workspace becomes idle; a changed database
+path replaces it sooner. Any read or boundary failure discards it and forces rediscovery
+rather than retaining uncertain state. Schema validation remains at every connection
+open.
+
+On the live `skein-src` database, 24 warm direct reads before and after used the same
+8,655-row projection. Total median fell from 44.64 to 36.92 ms (17.3%), and SQL median
+fell from 38.23 to 31.36 ms (18.0%); the post-change range was 33.41–46.16 ms with no
+SLOW sample. Browser-driven verification wrote `/tmp/7hdjg-after-route.log`. Across a
+comparable 14-poll warm window (2026-10-11T16:44:55Z–16:46:02Z), route median fell to
+45.45 ms and SLOW samples to 4/14; SQL median fell to 33.65 ms. Periodic live-database
+writes still invalidated cached pages and produced visible outliers, so this does not
+claim a latency guarantee. The real board retained 44 active issues, the exact
+**Completed 620** count, and a 451,238-byte all-card response after **Include
+completed**.
+
+`mill weaver list` reported readable lifecycle logs at
+`~/.local/state/millstrand/weavers/b6e50cbea0bb294ff7888684b602f0d0/weaver.log`
+(`millstrand-ui`), `439efa9b0cf2bf51bad01d6f970b0bab/weaver.log` (`skein-src`),
+`df177c7fb1b323efbc714561bee1e350/weaver.log` (`millhouse.spool`), and the `notes`
+shared-JVM peer; none contained query timings. The reported `agents` peer path was
+absent. Previous hourly findings, open PRs, branches, worktrees and board ownership were
+checked; no other worker owned this residual connection/page-cache cost. Focused
+workspace database, provenance, parser and inspection checks passed (66 tests), strict
+TypeScript and the production build passed, and the browser reported no functional
+error. This changes only the UI server's read connection lifetime, so no Weaver restart
+was needed.
+
 ## 2026-10-11 active board payload
 
 Selected the recurring `skein-src` shared provenance read and downstream

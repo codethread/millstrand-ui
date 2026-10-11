@@ -368,6 +368,7 @@ interface ReadonlyDatabase {
   all(sql: string, parameters: readonly string[]): unknown[];
   close(): void;
 }
+type CachedDatabase = { path: string; value: ReadonlyDatabase; expiry: NodeJS.Timeout };
 
 type DiscoverDatabase = (workspace: string) => Promise<string>;
 type OpenDatabase = (path: string) => ReadonlyDatabase;
@@ -376,8 +377,8 @@ function openDatabase(path: string): ReadonlyDatabase {
   const database = new DatabaseSync(path, { readOnly: true });
   return {
     // The shared provenance read revisits index pages across thousands of candidates.
-    // Keep those pages for the lifetime of this short-lived connection instead of
-    // repeatedly evicting them from SQLite's 8 MiB default cache.
+    // Keep those pages across the bounded connection window instead of repeatedly
+    // evicting them from SQLite's 8 MiB default cache between polling reads.
     configure: () =>
       database.exec(
         'PRAGMA query_only = ON; PRAGMA busy_timeout = 1000; PRAGMA cache_size = -65536;',
@@ -444,6 +445,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
   private discovered: string | null = null;
   private discoveredUntil = 0;
   private discovery: Promise<string> | null = null;
+  private database: CachedDatabase | null = null;
 
   constructor(
     private readonly workspace: string,
@@ -518,6 +520,28 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     );
   }
 
+  private databaseConnection(path: string): ReadonlyDatabase {
+    if (this.database?.path === path && Date.now() < this.discoveredUntil)
+      return this.database.value;
+    this.discardDatabase();
+    const value = this.open(path);
+    const remaining = Math.max(0, this.discoveredUntil - Date.now());
+    const expiry = setTimeout(() => this.discardDatabase(value), remaining);
+    expiry.unref();
+    this.database = { path, value, expiry };
+    value.configure();
+    schemaVersionSchema.parse(value.schemaVersion());
+    return value;
+  }
+
+  private discardDatabase(expected?: ReadonlyDatabase): void {
+    const database = this.database;
+    if (database === null || (expected !== undefined && database.value !== expected)) return;
+    this.database = null;
+    clearTimeout(database.expiry);
+    database.value.close();
+  }
+
   /** One `mill weaver list` per workspace window; a failed read rediscovers on the next attempt. */
   private databasePath(): Promise<string> {
     if (this.discovered !== null && Date.now() < this.discoveredUntil)
@@ -542,17 +566,14 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     decode: (value: unknown) => T,
   ): Promise<T> {
     const started = performance.now();
-    let database: ReadonlyDatabase | null = null;
     let rows = 0;
     let discovered = started;
     let queried = started;
     let decoded = started;
     let outcome = 'ok';
     try {
-      database = this.open(await this.databasePath());
+      const database = this.databaseConnection(await this.databasePath());
       discovered = performance.now();
-      database.configure();
-      schemaVersionSchema.parse(database.schemaVersion());
       const result = database.all(sql, parameters);
       rows = result.length;
       queried = performance.now();
@@ -562,10 +583,10 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     } catch (error) {
       outcome = 'failed';
       this.discovered = null;
+      this.discardDatabase();
       const message = error instanceof Error ? error.message : 'Unknown persisted read failure';
       throw new HttpError(502, `Provenance inspection failed: ${message.slice(0, 1500)}`);
     } finally {
-      database?.close();
       this.logger.record({
         scope: 'sqlite',
         target: label,

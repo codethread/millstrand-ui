@@ -434,9 +434,12 @@ repopulating cleared caches.
 
 The shared provenance SQL has no arbitrary strand-count cutoff and excludes notes.
 Its database path is discovered once per 30-second window and cached, so a polling
-reader does not spawn `mill weaver list` on every read; a failed read rediscovers
-immediately. The projection is unordered and bounded: consumers sort what they
-render.
+reader does not spawn `mill weaver list` on every read. The configured read-only SQLite
+connection is reused for that same bounded window, preserving its page cache across
+polls while every statement still observes its own committed snapshot. An unreferenced
+timer closes an idle connection at expiry; a later read or changed path replaces it. A
+failed read discards it and rediscovers immediately. The projection is unordered and
+bounded: consumers sort what they render.
 Note and latest-note readers request attribution metadata only for the note IDs they
 actually received; note text/time/kind still comes from the domain command and never
 enters persisted provenance. The role-edge read remains bounded and fails rather
