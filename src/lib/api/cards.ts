@@ -10,10 +10,11 @@ import type {
 import { sorted } from '../../../shared/array';
 import { request } from './transport';
 
-export function boardQueryOptions(workspace: string | null) {
+export function boardQueryOptions(workspace: string | null, includeClosed = false) {
   return queryOptions({
-    queryKey: ['board', workspace],
-    queryFn: () => request<Board>('/board', workspace),
+    queryKey: ['board', workspace, includeClosed ? 'with-closed' : 'active'],
+    queryFn: () =>
+      request<Board>(includeClosed ? '/board?includeClosed=true' : '/board', workspace),
     refetchInterval: 5000,
   });
 }

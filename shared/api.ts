@@ -77,11 +77,21 @@ export interface Card {
   updatedAt: string | null;
 }
 
+export interface BoardSummary {
+  active: number;
+  inProgress: number;
+  ready: number;
+  review: number;
+  closed: number;
+  done: number;
+}
+
 export interface Board {
   workspace: { path: string; name: string };
   fetchedAt: string;
   cards: Card[];
   labels: { label: string; count: number }[];
+  summary: BoardSummary;
 }
 
 export type AgentRunStatus = 'ready' | 'running' | 'stopped' | 'failed' | 'unknown';
@@ -280,7 +290,7 @@ export interface ApiError {
  * GET /api/agents → compact AgentDirectoryPayload; the client restores AgentDirectory
  * GET /api/agent-runs/:id → AgentReply
  * GET /api/dependencies → CardGraph (workspace dependency endpoints and directed edges)
- * GET /api/board → Board
+ * GET /api/board?includeClosed=true → Board (active cards by default; completed cards on demand)
  * GET /api/cards/:id → CardDetail
  * GET /api/cards/:id/graph → CardGraph
  * GET /api/cards/:id/tasks/:taskId/notes → Note[]

@@ -48,13 +48,17 @@ it('creates board, agent and log queries only for visible weavers, and restores 
     );
   expect(render()).toContain('Visible');
   for (const key of ['board', 'agents', 'log-activity']) {
-    expect(client.getQueryCache().find({ queryKey: [key, 'hidden'], exact: true })).toBeUndefined();
-    expect(client.getQueryCache().find({ queryKey: [key, 'visible'], exact: true })).toBeDefined();
+    const hiddenKey = key === 'board' ? [key, 'hidden', 'active'] : [key, 'hidden'];
+    const visibleKey = key === 'board' ? [key, 'visible', 'active'] : [key, 'visible'];
+    expect(client.getQueryCache().find({ queryKey: hiddenKey, exact: true })).toBeUndefined();
+    expect(client.getQueryCache().find({ queryKey: visibleKey, exact: true })).toBeDefined();
   }
   state.preferences = {};
   expect(render()).toContain('Visible,Hidden');
-  for (const key of ['board', 'agents', 'log-activity'])
-    expect(client.getQueryCache().find({ queryKey: [key, 'hidden'], exact: true })).toBeDefined();
+  for (const key of ['board', 'agents', 'log-activity']) {
+    const queryKey = key === 'board' ? [key, 'hidden', 'active'] : [key, 'hidden'];
+    expect(client.getQueryCache().find({ queryKey, exact: true })).toBeDefined();
+  }
   client.clear();
 });
 

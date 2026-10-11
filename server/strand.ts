@@ -317,19 +317,33 @@ export class StrandData {
       : new ProvenanceIndex(await this.database.readNoteProvenance(noteIds));
   }
 
-  board(): Promise<Board> {
-    return this.boards.get('board', async () => {
+  board(includeClosed = true): Promise<Board> {
+    return this.boards.get(includeClosed ? 'with-closed' : 'active', async () => {
       await this.assertKanban();
       const provenance = await this.provenance();
-      const rows = provenance.cardRows();
-      if (rows.length > 10_000) throw new Error('Board exceeds the 10,000 card limit.');
+      const entries = provenance.cardRows();
+      if (entries.length > 10_000) throw new Error('Board exceeds the 10,000 card limit.');
+      const active = entries.filter(({ metadata }) => metadata.state !== 'closed');
+      const parentIds = new Set(
+        active.flatMap(({ metadata }) => {
+          const parentId = provenance.epicId(metadata.id);
+          return parentId === null ? [] : [parentId];
+        }),
+      );
+      const visible = includeClosed
+        ? entries
+        : entries.filter(
+            ({ metadata }) =>
+              metadata.state !== 'closed' ||
+              (metadata.type === 'epic' && parentIds.has(metadata.id)),
+          );
       const cards = sorted(
-        rows.map((row) => parseCard(row, provenance)),
+        visible.map(({ row }) => parseCard(row, provenance)),
         (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
       );
       const counts = new Map<string, number>();
-      for (const card of cards) {
-        for (const label of card.labels) counts.set(label, (counts.get(label) ?? 0) + 1);
+      for (const { metadata } of entries) {
+        for (const label of metadata.labels) counts.set(label, (counts.get(label) ?? 0) + 1);
       }
       return {
         workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
@@ -339,6 +353,16 @@ export class StrandData {
           label,
           count,
         })),
+        summary: {
+          active: active.length,
+          inProgress: active.filter(({ metadata }) => metadata.lane === 'claimed').length,
+          ready: active.filter(({ metadata }) => metadata.lane === 'pending').length,
+          review: active.filter(({ metadata }) => metadata.lane === 'in_review').length,
+          closed: entries.length - active.length,
+          done: entries.filter(
+            ({ metadata }) => metadata.state === 'closed' && metadata.outcome === 'done',
+          ).length,
+        },
       };
     });
   }

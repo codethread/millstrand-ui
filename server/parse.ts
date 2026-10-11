@@ -427,6 +427,12 @@ export function parseLabelChange(value: unknown): LabelChange {
   return { action: row.action, labels };
 }
 
+export function parseIncludeClosed(value: string | null): boolean {
+  if (value === null) return false;
+  if (value === 'true') return true;
+  throw new HttpError(400, 'includeClosed must be true when supplied.');
+}
+
 /** Bounded expanded-card scope for the dependency graph read. */
 export function parseDependencyCards(values: readonly string[]): string[] {
   const cards = [...new Set(values)];

@@ -5,8 +5,10 @@ import type {
   AgentRun,
   AgentWork,
   CardOwnership,
+  CardType,
   DependencyCounts,
   IdentityAttribution,
+  Lane,
   LogContinuation,
   OwnershipClaim,
   TaskOwnership,
@@ -17,6 +19,15 @@ import { providerSchema } from '../shared/session-log.ts';
 import { jsonObjectSchema } from './parse.ts';
 
 const strandStateSchema = z.enum(['active', 'closed', 'replaced']);
+const boardLanes: Lane[] = [
+  'refinement',
+  'pending',
+  'claimed',
+  'in_review',
+  'in_production',
+  'closed',
+  'unknown',
+];
 const strandSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -109,6 +120,18 @@ export const dependencyCountAttributes = {
   incoming: 'millstrand-ui/dependency-incoming',
   outgoing: 'millstrand-ui/dependency-outgoing',
 } as const;
+
+export interface ProvenanceCardRow {
+  row: unknown;
+  metadata: {
+    id: string;
+    state: Strand['state'];
+    lane: Lane;
+    type: CardType;
+    outcome: string | null;
+    labels: string[];
+  };
+}
 
 type AgentProjection = { identities: AgentIdentity[]; runs: AgentRun[] };
 type LogActivityProjection = {
@@ -307,10 +330,38 @@ export class ProvenanceIndex {
     return parents.at(-1) ?? null;
   }
 
-  cardRows(): unknown[] {
-    return [...this.strands.values()].filter(
-      (strand) => strand.attributes['kanban/card'] === 'true',
-    );
+  cardRows(): ProvenanceCardRow[] {
+    return [...this.strands.values()]
+      .filter((strand) => strand.attributes['kanban/card'] === 'true')
+      .map((strand) => {
+        const sourceLane = strand.attributes['kanban/lane'];
+        if (sourceLane !== undefined && sourceLane !== null && typeof sourceLane !== 'string')
+          throw new Error('card.lane must be a string');
+        const sourceType = strand.attributes['kanban/type'] ?? 'feature';
+        if (sourceType !== 'epic' && sourceType !== 'feature')
+          throw new Error('card.type must be one of: epic, feature');
+        const outcome = strand.attributes['kanban/outcome'];
+        if (outcome !== undefined && outcome !== null && typeof outcome !== 'string')
+          throw new Error('card.outcome must be a string');
+        return {
+          row: strand,
+          metadata: {
+            id: strand.id,
+            state: strand.state,
+            lane:
+              strand.state === 'closed'
+                ? 'closed'
+                : (boardLanes.find((lane) => lane === sourceLane) ?? 'unknown'),
+            type: sourceType,
+            outcome: outcome ?? null,
+            labels: sorted(
+              Object.entries(strand.attributes)
+                .filter(([key, flag]) => key.startsWith('kanban.label/') && flag === 'true')
+                .map(([key]) => key.slice('kanban.label/'.length)),
+            ),
+          },
+        };
+      });
   }
 
   reporter(cardId: string): IdentityAttribution | null {

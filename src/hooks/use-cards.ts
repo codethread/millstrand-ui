@@ -25,22 +25,40 @@ import {
   savedViewBoardContent,
 } from '../lib/board';
 import { useWorkspace } from './use-workspace';
+import { useDashboardMode, useIssueFilter } from '../lib/navigation';
 import { useDashboardStore } from '../store';
+import { useSavedViews } from './use-views';
 
 const selectBoardWorkspace = (board: Board) => board.workspace;
 const selectBoardFetchedAt = (board: Board) => board.fetchedAt;
 const selectBoardSnapshot = () => true;
 const selectBoardSidebarContent = (board: Board) => boardSidebarContent(board);
 
+function useBoardOptions() {
+  const workspace = useWorkspace();
+  const mode = useDashboardMode();
+  const filter = useIssueFilter();
+  const draftIncludesClosed = useDashboardStore(
+    (state) => state.overlay.kind === 'view' && state.overlay.filter.includeClosed,
+  );
+  const views = useSavedViews();
+  const includeClosed =
+    mode === 'completed' ||
+    filter.includeClosed ||
+    draftIncludesClosed ||
+    views.data?.some((view) => view.filter.includeClosed) === true;
+  return boardQueryOptions(workspace, includeClosed);
+}
+
 export function useBoardPoll() {
-  return useQuery(boardQueryOptions(useWorkspace()));
+  return useQuery(useBoardOptions());
 }
 
 /** Cache reader for board internals that consume the full response.
  * Shell consumers use the concrete projections below. */
 export function useBoard() {
   return useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
   });
@@ -48,7 +66,7 @@ export function useBoard() {
 
 export function useBoardWorkspace() {
   return useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select: selectBoardWorkspace,
@@ -57,7 +75,7 @@ export function useBoardWorkspace() {
 
 export function useBoardSnapshot() {
   return useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select: selectBoardSnapshot,
@@ -66,7 +84,7 @@ export function useBoardSnapshot() {
 
 export function useBoardStatus() {
   return useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select: selectBoardFetchedAt,
@@ -75,7 +93,7 @@ export function useBoardStatus() {
 
 export function useBoardSidebar() {
   return useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select: selectBoardSidebarContent,
@@ -88,7 +106,7 @@ const selectBoardLabels = (board: Board) => board.labels;
 
 export function useBoardLabels() {
   return useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select: selectBoardLabels,
@@ -97,7 +115,7 @@ export function useBoardLabels() {
 
 export function useIssueBoard(filter: ViewFilter) {
   const query = useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select: selectBoardCards,
@@ -112,7 +130,7 @@ export function useIssueBoard(filter: ViewFilter) {
 
 export function useCompletedHistory(search: string, filter: ViewFilter) {
   const query = useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select: selectBoardCards,
@@ -128,7 +146,7 @@ export function useCompletedHistory(search: string, filter: ViewFilter) {
 export function useFilteredCardCount(filter: ViewFilter) {
   const select = useCallback((board: Board) => filteredCardCount(board, filter), [filter]);
   return useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select,
@@ -138,7 +156,7 @@ export function useFilteredCardCount(filter: ViewFilter) {
 export function useSavedViewBoard(filter: ViewFilter) {
   const select = useCallback((board: Board) => savedViewBoardContent(board, filter), [filter]);
   return useQuery({
-    ...boardQueryOptions(useWorkspace()),
+    ...useBoardOptions(),
     enabled: false,
     refetchInterval: false,
     select,

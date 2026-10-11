@@ -81,6 +81,44 @@ function mockBoard() {
   };
 }
 
+it('keeps completed counts and epic context while omitting other completed cards', async () => {
+  exec.mockResolvedValue({ stdout: 'kanban help' });
+  const closed = {
+    ...card,
+    id: 'closed1',
+    title: 'Closed',
+    state: 'closed',
+    lane: 'closed',
+    outcome: 'done',
+  };
+  const closedEpic = { ...closed, id: 'epic1', title: 'Epic' };
+  const database = {
+    readDependencies: vi.fn(async () => ({ rootId: '', nodes: [], edges: [] })),
+    readNoteProvenance: vi.fn(async () => ({ strands: [], edges: [] })),
+    readLogProvenance: vi.fn(async () => ({ strands: [], edges: [] })),
+    readProvenance: vi.fn(async () => ({
+      strands: [card, closed, closedEpic].map((item) => ({
+        ...item,
+        attributes: {
+          'kanban/card': 'true',
+          'kanban/lane': item.lane,
+          ...(item.id === 'epic1' ? { 'kanban/type': 'epic' } : {}),
+          ...(item.id === 'card1' ? {} : { 'kanban/outcome': 'done' }),
+        },
+      })),
+      edges: [{ edge_type: 'parent-of', from_strand_id: 'epic1', to_strand_id: 'card1' }],
+    })),
+  };
+  const data = new StrandData('/repo/.millstrand', { database });
+
+  expect(await data.board(false)).toMatchObject({
+    cards: [{ id: 'card1', epicId: 'epic1' }, { id: 'epic1' }],
+    summary: { active: 1, ready: 1, closed: 2, done: 2 },
+  });
+  expect((await data.board()).cards.map((item) => item.id)).toEqual(['card1', 'closed1', 'epic1']);
+  expect(database.readProvenance).toHaveBeenCalledTimes(1);
+});
+
 it('deletes only the selected card in its workspace and refreshes a cached board', async () => {
   const { database } = mockBoard();
   const data = new StrandData('/repo/.millstrand', { database });
