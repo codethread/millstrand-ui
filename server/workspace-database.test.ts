@@ -492,7 +492,7 @@ it('scopes dependency edges to expanded cards while keeping workspace-wide count
     schemaVersion: vi.fn(() => ({ user_version: 1 })),
     all: vi.fn((sql: string, parameters: readonly string[]) => {
       calls.push({ sql, parameters });
-      if (sql.includes('json_each(?)'))
+      if (sql.includes('WITH ids(id)'))
         return [{ record: JSON.stringify({ id: 'strand1', incoming: 3, outgoing: 1 }) }];
       return [
         strandRecord,
@@ -519,8 +519,9 @@ it('scopes dependency edges to expanded cards while keeping workspace-wide count
     incoming: 3,
     outgoing: 1,
   });
-  expect(calls[0]?.sql).toContain('from_strand_id IN (?)');
-  expect(calls[0]?.parameters).toEqual(['strand1', 'strand1']);
+  expect(calls[0]?.sql).toContain('requested_ids(id) AS (SELECT value FROM json_each(?))');
+  expect(calls[0]?.sql).toContain('from_strand_id IN (SELECT id FROM requested_ids)');
+  expect(calls[0]?.parameters).toEqual([JSON.stringify(['strand1'])]);
   expect(calls[1]?.sql).toContain('json_each(?)');
   expect(calls[1]?.parameters).toEqual([JSON.stringify(['strand1', 'strand2'])]);
 });

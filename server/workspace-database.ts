@@ -296,14 +296,17 @@ const noteProvenanceSql = `
 // Only dependency endpoints and display metadata; never arbitrary attributes or run payloads.
 function dependencySql(cardIds: readonly string[]): string {
   // Absent cards keep the workspace-wide read; the client always scopes to its expansions.
+  const requestedIds =
+    cardIds.length === 0 ? '' : 'requested_ids(id) AS (SELECT value FROM json_each(?)),\n  ';
   const scope =
     cardIds.length === 0
       ? ''
-      : ` AND (from_strand_id IN (${placeholders(cardIds)}) OR to_strand_id IN (${placeholders(
-          cardIds,
-        )}))`;
+      : ` AND (
+      from_strand_id IN (SELECT id FROM requested_ids)
+      OR to_strand_id IN (SELECT id FROM requested_ids)
+    )`;
   return `
-  WITH dependencies AS (
+  WITH ${requestedIds}dependencies AS (
     SELECT DISTINCT from_strand_id, to_strand_id
     FROM strand_edges WHERE edge_type = 'depends-on'${scope}
     ORDER BY from_strand_id, to_strand_id LIMIT ${edgeLimit + 1}
@@ -459,7 +462,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     const snapshot = await this.readSnapshot(
       'dependencies',
       dependencySql(cardIds),
-      [...cardIds, ...cardIds],
+      cardIds.length === 0 ? [] : [JSON.stringify(cardIds)],
       decodeProvenance,
     );
     const endpointIds = [
