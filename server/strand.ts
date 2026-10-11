@@ -434,11 +434,24 @@ export class StrandData {
   graph(id: string): Promise<CardGraph> {
     return this.graphs.get(id, async () => {
       await this.card(id);
-      const [graph, provenance] = await Promise.all([
+      const [rawGraph, provenance] = await Promise.all([
         this.run(['kanban-export', id]),
         this.provenance(),
       ]);
-      return parseGraph(graph, provenance);
+      const graph = parseGraph(rawGraph, provenance);
+      const dependencyGraph = await this.database.readDependencies(
+        graph.nodes.map((node) => node.id),
+      );
+      const dependencyCounts = new Map(
+        dependencyGraph.nodes.map((node) => [node.id, node.dependencies]),
+      );
+      return {
+        ...graph,
+        nodes: graph.nodes.map((node) => ({
+          ...node,
+          dependencies: dependencyCounts.get(node.id) ?? { incoming: 0, outgoing: 0 },
+        })),
+      };
     });
   }
 

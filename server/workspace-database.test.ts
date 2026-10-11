@@ -103,6 +103,8 @@ it('runs one selective graph read without note strands or workspace interpolatio
   expect(sql).toContain('FROM candidate_markers AS source\n    CROSS JOIN strand_edges');
   expect(sql).toContain('strand_edges.from_strand_id = source.strand_id');
   expect(sql).toContain("strand_edges.edge_type = 'depends-on'");
+  expect(sql).toContain('CASE WHEN candidate_strands.is_card');
+  expect(sql).not.toContain('candidate_strands.is_card OR candidate_strands.is_task');
   expect(sql).toContain(`'$."millstrand-ui/dependency-incoming"'`);
   expect(sql).toContain(`'$."millstrand-ui/dependency-outgoing"'`);
   expect(parameters).not.toContain('note/text');
@@ -420,7 +422,6 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
     });
     const after = new ProvenanceIndex(afterSnapshot);
     expect(after.dependencies('card')).toEqual({ incoming: 0, outgoing: 1 });
-    expect(after.dependencies('task')).toEqual({ incoming: 1, outgoing: 0 });
     const projection = after.agents();
     expect(projection.runs.find(({ id }) => id === 'pre-binding-run')).toMatchObject({
       target: 'task',
@@ -491,7 +492,7 @@ it('scopes dependency edges to expanded cards while keeping workspace-wide count
     schemaVersion: vi.fn(() => ({ user_version: 1 })),
     all: vi.fn((sql: string, parameters: readonly string[]) => {
       calls.push({ sql, parameters });
-      if (sql.includes('json_each(?)'))
+      if (sql.includes('WITH ids(id)'))
         return [{ record: JSON.stringify({ id: 'strand1', incoming: 3, outgoing: 1 }) }];
       return [
         strandRecord,
@@ -518,8 +519,9 @@ it('scopes dependency edges to expanded cards while keeping workspace-wide count
     incoming: 3,
     outgoing: 1,
   });
-  expect(calls[0]?.sql).toContain('from_strand_id IN (?)');
-  expect(calls[0]?.parameters).toEqual(['strand1', 'strand1']);
+  expect(calls[0]?.sql).toContain('requested_ids(id) AS (SELECT value FROM json_each(?))');
+  expect(calls[0]?.sql).toContain('from_strand_id IN (SELECT id FROM requested_ids)');
+  expect(calls[0]?.parameters).toEqual([JSON.stringify(['strand1'])]);
   expect(calls[1]?.sql).toContain('json_each(?)');
   expect(calls[1]?.parameters).toEqual([JSON.stringify(['strand1', 'strand2'])]);
 });

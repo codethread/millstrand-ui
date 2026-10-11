@@ -156,7 +156,9 @@ const provenanceSql = `
              'created_at', candidate_strands.created_at,
              'updated_at', candidate_strands.updated_at,
              'attributes', json(
-               CASE WHEN candidate_strands.is_card OR candidate_strands.is_task
+               -- Board and agent polls need dependency badges only for cards. Task
+               -- counts are loaded with the graph that actually renders them.
+               CASE WHEN candidate_strands.is_card
                  THEN json_set(
                    candidate_strands.projected_attributes,
                    '$."${dependencyCountAttributes.incoming}"',
@@ -294,14 +296,17 @@ const noteProvenanceSql = `
 // Only dependency endpoints and display metadata; never arbitrary attributes or run payloads.
 function dependencySql(cardIds: readonly string[]): string {
   // Absent cards keep the workspace-wide read; the client always scopes to its expansions.
+  const requestedIds =
+    cardIds.length === 0 ? '' : 'requested_ids(id) AS (SELECT value FROM json_each(?)),\n  ';
   const scope =
     cardIds.length === 0
       ? ''
-      : ` AND (from_strand_id IN (${placeholders(cardIds)}) OR to_strand_id IN (${placeholders(
-          cardIds,
-        )}))`;
+      : ` AND (
+      from_strand_id IN (SELECT id FROM requested_ids)
+      OR to_strand_id IN (SELECT id FROM requested_ids)
+    )`;
   return `
-  WITH dependencies AS (
+  WITH ${requestedIds}dependencies AS (
     SELECT DISTINCT from_strand_id, to_strand_id
     FROM strand_edges WHERE edge_type = 'depends-on'${scope}
     ORDER BY from_strand_id, to_strand_id LIMIT ${edgeLimit + 1}
@@ -370,7 +375,13 @@ type OpenDatabase = (path: string) => ReadonlyDatabase;
 function openDatabase(path: string): ReadonlyDatabase {
   const database = new DatabaseSync(path, { readOnly: true });
   return {
-    configure: () => database.exec('PRAGMA query_only = ON; PRAGMA busy_timeout = 1000;'),
+    // The shared provenance read revisits index pages across thousands of candidates.
+    // Keep those pages for the lifetime of this short-lived connection instead of
+    // repeatedly evicting them from SQLite's 8 MiB default cache.
+    configure: () =>
+      database.exec(
+        'PRAGMA query_only = ON; PRAGMA busy_timeout = 1000; PRAGMA cache_size = -65536;',
+      ),
     schemaVersion: () => database.prepare('PRAGMA user_version').get(),
     all: (sql, parameters) => database.prepare(sql).all(...parameters),
     close: () => database.close(),
@@ -451,7 +462,7 @@ export class WorkspaceDatabase implements PersistedWorkspaceReads {
     const snapshot = await this.readSnapshot(
       'dependencies',
       dependencySql(cardIds),
-      [...cardIds, ...cardIds],
+      cardIds.length === 0 ? [] : [JSON.stringify(cardIds)],
       decodeProvenance,
     );
     const endpointIds = [
