@@ -156,7 +156,9 @@ const provenanceSql = `
              'created_at', candidate_strands.created_at,
              'updated_at', candidate_strands.updated_at,
              'attributes', json(
-               CASE WHEN candidate_strands.is_card OR candidate_strands.is_task
+               -- Board and agent polls need dependency badges only for cards. Task
+               -- counts are loaded with the graph that actually renders them.
+               CASE WHEN candidate_strands.is_card
                  THEN json_set(
                    candidate_strands.projected_attributes,
                    '$."${dependencyCountAttributes.incoming}"',
@@ -370,7 +372,13 @@ type OpenDatabase = (path: string) => ReadonlyDatabase;
 function openDatabase(path: string): ReadonlyDatabase {
   const database = new DatabaseSync(path, { readOnly: true });
   return {
-    configure: () => database.exec('PRAGMA query_only = ON; PRAGMA busy_timeout = 1000;'),
+    // The shared provenance read revisits index pages across thousands of candidates.
+    // Keep those pages for the lifetime of this short-lived connection instead of
+    // repeatedly evicting them from SQLite's 8 MiB default cache.
+    configure: () =>
+      database.exec(
+        'PRAGMA query_only = ON; PRAGMA busy_timeout = 1000; PRAGMA cache_size = -65536;',
+      ),
     schemaVersion: () => database.prepare('PRAGMA user_version').get(),
     all: (sql, parameters) => database.prepare(sql).all(...parameters),
     close: () => database.close(),

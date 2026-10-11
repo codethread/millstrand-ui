@@ -1,5 +1,55 @@
 # Dashboard read audit
 
+## 2026-10-11 bounded task dependency counts
+
+Selected the recurring `skein-src` shared provenance read behind `GET /api/board`.
+The default logs were readable at `~/.local/state/millstrand-ui/perf.log`
+(2026-10-05T12:47:33Z–2026-10-10T04:39:13Z, 221 SLOW samples) and
+`perf.log.1` (2026-10-05T12:06:58Z–12:47:33Z, 123 SLOW samples). They contained
+no sample after the immediately preceding provenance fixes, so an isolated server
+at current HEAD captured the still-recurring warm read in `/tmp/di2zu-before.log`:
+
+```text
+2026-10-11T12:40:38.681Z perf SLOW 108.46ms sqlite provenance workspace=skein-src rows=8655 discover=0.12ms query=102.08ms decode=6.14ms outcome=ok
+2026-10-11T12:40:38.695Z perf SLOW 122.08ms server GET /api/board status=200 bytes=451154
+```
+
+The polling snapshot calculated two indexed dependency counts for every candidate
+card **and task**. The board renders dependency badges only for cards, and the Agents
+projection does not consume dependency counts at all, so 2,063 `skein-src` tasks paid
+4,126 correlated count probes every five seconds solely for the on-demand graph.
+The graph now obtains workspace-wide counts for its bounded node IDs through the
+existing scoped dependency read. Cards retain their background counts, graph tasks
+retain exact counts, and graph edges, ownership, response shapes, polling, overflow
+checks and all mutation paths are unchanged. The short-lived read connection also
+uses a 64 MiB maximum SQLite page cache instead of the 8 MiB default so its thousands
+of candidate index probes do not repeatedly evict pages; the connection still closes
+after each stable committed snapshot.
+
+The comparable browser-driven windows were `/tmp/di2zu-before.log`
+(12:40:23Z–12:41:19Z) and `/tmp/di2zu-final.log` (12:45:51Z–12:46:52Z).
+Across warm reads, total provenance median moved from 54.24 to 50.16 ms, the SQL
+phase from 47.89 to 41.60 ms (13.1% faster), SQL samples above 50 ms fell from 5/11
+to 2/12, and the prior 103.92 ms warm SQL maximum fell to 52.74 ms. A separate
+12-run alternating direct comparison moved the SQL median from 40.39 ms with task
+counts to 36.83 ms with card-only counts; the 64 MiB cache moved an earlier 8-run
+median from 44.64 to 39.58 ms. The real board rendered 44 active and 620 completed
+issues, Agents retained 45 active identities, and focused graph `jxjwf` loaded exact
+scoped dependency metadata in 3.13–4.08 ms without an uncaught browser error.
+
+The relevant live Weaver logs reported by `mill weaver list` were readable at
+`~/.local/state/millstrand/weavers/b6e50cbea0bb294ff7888684b602f0d0/weaver.log`
+(`millstrand-ui`), `439efa9b0cf2bf51bad01d6f970b0bab/weaver.log` (`skein-src`), and
+`df177c7fb1b323efbc714561bee1e350/weaver.log` (`millhouse.spool`); they contained
+lifecycle history but no query timing for this read. The reported shared-JVM `agents`
+log path was absent, as in prior audits, while its `notes` peer was readable; neither
+owns the selected `skein-src` query. The previous 24 hourly findings and active work
+were checked: the immediately preceding source-edge fixes were already landed and no
+other worker owned this residual task-count cost. Focused persisted-read, provenance
+and card-inspection tests passed (30 tests), strict TypeScript passed, and the
+production browser exercised board and graph data. This changes only the UI server's
+read path, so no Weaver restart was needed.
+
 ## 2026-10-11 source-driven shared provenance edges
 
 Selected the persistent `skein-src` shared provenance read behind `GET /api/board`.

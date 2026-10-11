@@ -103,6 +103,8 @@ it('runs one selective graph read without note strands or workspace interpolatio
   expect(sql).toContain('FROM candidate_markers AS source\n    CROSS JOIN strand_edges');
   expect(sql).toContain('strand_edges.from_strand_id = source.strand_id');
   expect(sql).toContain("strand_edges.edge_type = 'depends-on'");
+  expect(sql).toContain('CASE WHEN candidate_strands.is_card');
+  expect(sql).not.toContain('candidate_strands.is_card OR candidate_strands.is_task');
   expect(sql).toContain(`'$."millstrand-ui/dependency-incoming"'`);
   expect(sql).toContain(`'$."millstrand-ui/dependency-outgoing"'`);
   expect(parameters).not.toContain('note/text');
@@ -420,7 +422,6 @@ it('projects native lifecycle transitions from a persisted SQLite fixture', asyn
     });
     const after = new ProvenanceIndex(afterSnapshot);
     expect(after.dependencies('card')).toEqual({ incoming: 0, outgoing: 1 });
-    expect(after.dependencies('task')).toEqual({ incoming: 1, outgoing: 0 });
     const projection = after.agents();
     expect(projection.runs.find(({ id }) => id === 'pre-binding-run')).toMatchObject({
       target: 'task',

@@ -174,6 +174,58 @@ it('does not cache dependency failures as empty success', async () => {
   expect(database.readDependencies).toHaveBeenCalledTimes(2);
 });
 
+it('loads task dependency counts with an inspected graph instead of the polling snapshot', async () => {
+  readProvenance.mockResolvedValue({
+    strands: [
+      { ...card, attributes: { 'kanban/card': 'true' } },
+      { ...card, id: 'task1', title: 'Task', attributes: { 'kanban/task': 'true' } },
+    ],
+    edges: [{ from_strand_id: 'card1', to_strand_id: 'task1', edge_type: 'parent-of' }],
+  });
+  database.readDependencies.mockResolvedValue({
+    rootId: '',
+    nodes: [
+      {
+        id: 'task1',
+        title: 'Task',
+        state: 'active',
+        attributes: { 'kanban/task': 'true' },
+        createdAt: null,
+        updatedAt: null,
+        kind: 'task',
+        owner: null,
+        dependencies: { incoming: 3, outgoing: 1 },
+      },
+    ],
+    edges: [],
+  });
+  exec.mockImplementation((_file, argv) => {
+    const op = Array.isArray(argv) ? argv.slice(2) : [];
+    if (op[0] === 'help') return Promise.resolve({ stdout: 'kanban — help text' });
+    if (op[0] === 'kanban-export')
+      return Promise.resolve({
+        stdout: JSON.stringify({
+          'root-id': 'card1',
+          strands: [
+            { ...card, attributes: { 'kanban/card': 'true' } },
+            { ...card, id: 'task1', title: 'Task', attributes: { 'kanban/task': 'true' } },
+          ],
+          'parent-of-edges': [{ from_strand_id: 'card1', to_strand_id: 'task1' }],
+          'depends-on-edges': [],
+        }),
+      });
+    throw new Error(`Unexpected command ${JSON.stringify(op)}`);
+  });
+
+  const graph = await new StrandData('/repo/.millstrand', { database }).graph('card1');
+
+  expect(graph.nodes.find((node) => node.id === 'task1')?.dependencies).toEqual({
+    incoming: 3,
+    outgoing: 1,
+  });
+  expect(database.readDependencies).toHaveBeenCalledWith(['card1', 'task1']);
+});
+
 it('shares one parsed persisted snapshot across board, agents and log consumers', async () => {
   readProvenance.mockResolvedValue({
     strands: [{ ...card, attributes: { 'kanban/card': 'true' } }],
