@@ -22,7 +22,7 @@ export function IssueSurface() {
     );
   if (cards.length === 0) return <EmptyBoard />;
   return mode === 'board' ? (
-    <BoardView columns={board.data?.columns ?? []} />
+    <BoardView columns={board.data?.columns ?? []} swimlanes={board.data?.swimlanes ?? []} />
   ) : (
     <OutlineView groups={board.data?.outline ?? []} />
   );

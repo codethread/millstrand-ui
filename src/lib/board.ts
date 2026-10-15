@@ -153,31 +153,33 @@ export interface IssueBoardContent {
   cards: Card[];
   columns: BoardColumn[];
   outline: OutlineGroup[];
-}
-
-export interface BoardCard {
-  card: Card;
-  parent: Card | null;
+  swimlanes: BoardSwimlane[];
 }
 
 export interface BoardColumn {
   lane: (typeof lanes)[number];
-  items: BoardCard[];
+  count: number;
+}
+
+export interface BoardSwimlane extends OutlineGroup {
+  columns: { lane: (typeof lanes)[number]; cards: Card[] }[];
 }
 
 export function issueSurfaceContent(allCards: Card[], filter: ViewFilter): IssueBoardContent {
   const cards = selectCards(allCards, filter);
-  const parents = new Map(allCards.map((card) => [card.id, card]));
+  const outline = selectOutline(allCards, cards);
   const columns = selectBoardLanes(cards).map((lane) => ({
     lane,
-    items: cards
-      .filter((card) => card.lane === lane.id)
-      .map((card) => ({
-        card,
-        parent: card.epicId === null ? null : (parents.get(card.epicId) ?? null),
-      })),
+    count: cards.filter((card) => card.type === 'feature' && card.lane === lane.id).length,
   }));
-  return { allCards, cards, columns, outline: selectOutline(allCards, cards) };
+  const swimlanes = outline.map((group) => ({
+    ...group,
+    columns: columns.map(({ lane }) => ({
+      lane,
+      cards: group.cards.filter((card) => card.lane === lane.id),
+    })),
+  }));
+  return { allCards, cards, columns, outline, swimlanes };
 }
 
 export interface SavedViewBoardContent {
