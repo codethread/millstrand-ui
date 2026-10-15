@@ -47,7 +47,11 @@ function render(cards: Card[], outline: boolean, failed = false) {
   const html = renderToStaticMarkup(
     <QueryClientProvider client={client}>
       <TooltipProvider>
-        {outline ? <OutlineView groups={model.outline} /> : <BoardView columns={model.columns} />}
+        {outline ? (
+          <OutlineView groups={model.outline} />
+        ) : (
+          <BoardView columns={model.columns} swimlanes={model.swimlanes} />
+        )}
       </TooltipProvider>
     </QueryClientProvider>,
   );

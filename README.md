@@ -276,15 +276,22 @@ Use the fullscreen button at the top right of the content to hide the sidebar an
 header. Click it again or press Escape to restore them. Your filters and layout
 stay intact; the search shortcut also restores the header and focuses search.
 
-Use **Board** for Compact lanes, **Outline** for Dense Outline epic/feature rows,
+Use **Board** for epic swimlanes, **Outline** for Dense Outline epic/feature rows,
 and **Graph** for relationships. Both compact layouts keep every label readable;
 click a label to toggle the existing URL filter, or a title to open the real issue
 drawer. Board shows occupied lanes only, in attention order: In review, In production,
 In progress, Ready, Refinement, then Completed and Other when present. Narrow
-layouts stack lanes and row metadata rather than clipping labels or scrolling sideways.
+Board layouts scroll horizontally within the board, keeping the same status columns across
+every epic. Status headings stay visible while scrolling vertically; epic headers remain
+readable while scrolling sideways. Outline row metadata stacks on narrow screens.
 The optional **In production** column appears after **In review** when matching
 cards use the spool's `in_production` lane. It supports filters and saved views
 and keeps production observation work available in workspace views.
+Each Board swimlane groups an epic’s matching features; features without an available
+epic appear under **Standalone work**. Epic headers retain their actions and status.
+A filtered-out epic is labelled as parent context, and matching epics with no matching
+features remain visible. Column counts count matching features; epics appear once, in
+their headers. Tasks remain in card details and Graph.
 Choose a graph focus to load a card’s epic hierarchy or standalone task subtree. Solid arrows
 point from parent to child; dashed arrows point from a dependent to its prerequisite.
 Click a graph card’s **↑ / ↓** count badge to show or hide its direct dependencies;

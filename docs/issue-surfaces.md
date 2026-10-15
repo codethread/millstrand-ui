@@ -10,13 +10,14 @@
   disabled reader of the existing workspace poll owner, not another poller.
 - `src/lib/board.ts`: `issueSurfaceContent(allCards, filter): IssueBoardContent`
   returns `cards` (sorted visible membership), `allCards` (unfiltered context),
-  `columns` (`BoardColumn[]`, each containing `{ card, parent }` rows), and
-  `outline` (`OutlineGroup[]`). No timestamps or query result wrappers are inputs.
+  `columns` (`BoardColumn[]`, status headings and matching feature counts),
+  `outline` (`OutlineGroup[]`), and `swimlanes` (`BoardSwimlane[]`, the same epic
+  groups with feature cells aligned to every visible status). No timestamps or query result wrappers are inputs.
   Graph keeps its `{ cards, allCards }` props unchanged; its source, layout and
   canvas lifecycle are documented in [graph ownership](graph.md). Overview can use
   the pure projections without importing issue components or starting another cache.
-- `BoardView({ columns })` and `OutlineView({ groups })` render explicit models;
-  individual cards receive only their card and nullable parent. Parent context can
+- `BoardView({ columns, swimlanes })` and `OutlineView({ groups })` render explicit models;
+  individual cards receive only their card. Parent context can
   remain visible even when the parent does not match; unmatched children stay hidden.
   All columns appear only with matching cards; completed remains opt-in.
   `selectBoardLanes` orders review, production observation, progress, ready, refinement,
@@ -62,8 +63,9 @@ inspector is bundled into the app.
 
 - `board-view.tsx` renders compact cards and dense two-column rows using Tailwind
   container queries. All labels wrap and toggle the existing URL filter. Narrow
-  lanes/rows stack; occupied lanes use available width without a horizontal scroller.
-- A shared title button opens `IssueDetail`; the small epic link opens its parent.
+  Outline rows stack. Board uses one horizontal/vertical scroll region with a global
+  sticky status row and matching status widths in every epic swimlane.
+- A shared title button opens `IssueDetail`; the epic swimlane heading opens its parent.
   Epic headers retain explicit “Parent context” when they do not match filters.
 - `CardContextMenu` / `CardMenuButton` remain the single action set for cards,
   feature rows and now epic headers. Redundant inline Explore graph is removed:

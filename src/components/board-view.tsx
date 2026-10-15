@@ -1,6 +1,6 @@
 import { Inbox, Layers } from 'lucide-react';
 import type { Card } from '../../shared/api';
-import type { BoardCard, BoardColumn, OutlineGroup } from '../lib/board';
+import type { BoardColumn, BoardSwimlane, OutlineGroup } from '../lib/board';
 import { labelColor } from '../lib/board';
 import { useDashboardActions, useIssueFilter } from '../lib/navigation';
 import { cn } from '../lib/utils';
@@ -9,7 +9,6 @@ import { CardSignals } from './card-signals';
 import { StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { CardContextMenu, CardMenuButton } from './card-actions';
-import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
 function BoardLabels({ labels }: { labels: string[] }) {
   const { toggleLabel } = useDashboardActions();
@@ -69,8 +68,7 @@ function CardMetadata({ card, outline }: { card: Card; outline: boolean }) {
   );
 }
 
-function IssueCard({ card, parent, outline = false }: BoardCard & { outline?: boolean }) {
-  const { openCard } = useDashboardActions();
+function IssueCard({ card, outline = false }: { card: Card; outline?: boolean }) {
   return (
     <CardContextMenu card={card}>
       <article
@@ -91,20 +89,6 @@ function IssueCard({ card, parent, outline = false }: BoardCard & { outline?: bo
         <div className={cn(!outline && 'mt-2')}>
           <CardMetadata card={card} outline={outline} />
         </div>
-        {parent && !outline && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="mt-1 min-h-6 text-left text-[11px] text-muted-foreground hover:text-primary"
-                aria-label={`Open epic ${parent.title}`}
-                onClick={() => openCard(parent.id)}
-              >
-                ↳ Epic {parent.id}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{parent.title}</TooltipContent>
-          </Tooltip>
-        )}
       </article>
     </CardContextMenu>
   );
@@ -113,28 +97,79 @@ function IssueCard({ card, parent, outline = false }: BoardCard & { outline?: bo
 const canvasClass =
   '@container flex-1 min-h-0 overflow-auto border-t border-border bg-muted/30 px-3 pb-6 pt-12 sm:px-5';
 
-export function BoardView({ columns }: { columns: BoardColumn[] }) {
+export function BoardView({
+  columns,
+  swimlanes,
+}: {
+  columns: BoardColumn[];
+  swimlanes: BoardSwimlane[];
+}) {
+  const gridStyle = { gridTemplateColumns: `repeat(${columns.length}, minmax(230px, 1fr))` };
   return (
-    <div className={canvasClass}>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,230px),1fr))] items-start gap-3">
-        {columns.map(({ lane, items }) => (
-          <section className="min-w-0" key={lane.id} aria-label={lane.title}>
-            <div className="mb-3 flex items-center gap-2 px-1">
+    <section
+      className={cn(canvasClass, 'relative focus-visible:outline-primary')}
+      aria-label="Board by epic, scroll to see more statuses"
+      // Keyboard users need to focus the scroll region to pan across statuses.
+      // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+      tabIndex={0}
+    >
+      <div style={{ minWidth: columns.length * 230 + (columns.length - 1) * 12 }}>
+        <div
+          className="sticky top-0 z-1 grid gap-3 border-b border-border bg-background py-3 shadow-sm before:absolute before:inset-x-0 before:bottom-full before:h-12 before:bg-background"
+          style={gridStyle}
+          aria-label="Status columns"
+        >
+          {columns.map(({ lane, count }) => (
+            <div key={lane.id} className="flex min-w-0 items-center gap-2 px-2">
               <StatusIcon status={lane.id} />
               <h2 className="text-xs font-semibold">{lane.title}</h2>
               <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                {items.length}
+                {count}
+                <span className="sr-only"> matching features</span>
               </span>
             </div>
-            <div className="space-y-2">
-              {items.map(({ card, parent }) => (
-                <IssueCard key={card.id} card={card} parent={parent} />
-              ))}
+          ))}
+        </div>
+        {swimlanes.map((group) => (
+          <section
+            key={group.parent?.id ?? 'standalone'}
+            aria-label={group.parent?.title ?? 'Standalone work'}
+            className="border-b border-border pb-4 last:border-b-0"
+          >
+            <div className="sticky left-0 my-3 w-[100cqw] max-w-full rounded-lg border border-border bg-card">
+              {group.parent ? (
+                <EpicHeading
+                  card={group.parent}
+                  count={group.cards.length}
+                  context={group.context}
+                />
+              ) : (
+                <h2 className="flex items-center gap-2 px-3 py-2 text-xs font-semibold">
+                  <Layers className="size-4 text-primary" />
+                  Standalone work
+                  <span className="font-normal text-muted-foreground">{group.cards.length}</span>
+                </h2>
+              )}
             </div>
+            {group.cards.length === 0 ? (
+              <p className="sticky left-0 w-fit px-3 py-3 text-sm text-muted-foreground">
+                No matching features in this epic.
+              </p>
+            ) : (
+              <div className="grid items-start gap-3" style={gridStyle}>
+                {group.columns.map(({ lane, cards }) => (
+                  <section key={lane.id} aria-label={lane.title} className="min-w-0 space-y-2">
+                    {cards.map((card) => (
+                      <IssueCard key={card.id} card={card} />
+                    ))}
+                  </section>
+                ))}
+              </div>
+            )}
           </section>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -183,7 +218,7 @@ export function OutlineView({ groups }: { groups: OutlineGroup[] }) {
             </h2>
           )}
           {group.cards.map((card) => (
-            <IssueCard key={card.id} card={card} parent={null} outline />
+            <IssueCard key={card.id} card={card} outline />
           ))}
           {group.cards.length === 0 && (
             <p className="px-3 py-5 text-sm text-muted-foreground">

@@ -130,7 +130,7 @@ export function DashboardHeader() {
             {selectedView?.name ?? (filter.includeClosed ? 'All activity' : 'Active work')}
             {mode === 'board' && (
               <>
-                <span className="context-dot">·</span>Grouped by status
+                <span className="context-dot">·</span>Grouped by epic and status
               </>
             )}
           </span>

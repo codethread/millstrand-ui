@@ -253,6 +253,62 @@ describe('compact board lanes', () => {
   });
 });
 
+describe('epic swimlanes', () => {
+  const epic: Card = { ...card('epic'), type: 'epic', lane: 'refinement' };
+  const second: Card = { ...card('second'), type: 'epic', lane: 'pending' };
+  const review: Card = { ...card('review', ['web']), epicId: epic.id, lane: 'in_review' };
+  const ready: Card = { ...card('ready'), epicId: second.id };
+  const loose = card('loose');
+  const orphan: Card = { ...card('orphan'), epicId: 'missing-epic', lane: 'unknown' };
+  const all = [epic, second, review, ready, loose, orphan];
+
+  it('aligns every epic and standalone group to the same statuses without duplicating features', () => {
+    const model = issueSurfaceContent(all, emptyFilter());
+    const statuses = model.columns.map(({ lane }) => lane.id);
+    expect(statuses).toEqual(['in_review', 'pending', 'refinement', 'unknown']);
+    expect(model.columns.map(({ count }) => count)).toEqual([1, 2, 0, 1]);
+    expect(model.swimlanes.map(({ parent }) => parent?.id ?? null)).toEqual([
+      'epic',
+      'second',
+      null,
+    ]);
+    for (const group of model.swimlanes) {
+      expect(group.columns.map(({ lane }) => lane.id)).toEqual(statuses);
+      expect(group.columns.flatMap(({ cards }) => cards)).toHaveLength(group.cards.length);
+      for (const column of group.columns) {
+        expect(column.cards.every((item) => item.lane === column.lane.id)).toBe(true);
+      }
+    }
+    expect(
+      model.swimlanes
+        .flatMap(({ columns }) => columns.flatMap(({ cards }) => cards))
+        .map(({ id }) => id),
+    ).toEqual(['review', 'ready', 'loose', 'orphan']);
+  });
+
+  it('retains parent context for filtered children and matching empty epics without exposing hidden work', () => {
+    const filtered = issueSurfaceContent(all, { ...emptyFilter(), terms: { web: 'include' } });
+    expect(filtered.swimlanes).toMatchObject([
+      {
+        parent: epic,
+        context: true,
+        cards: [review],
+        columns: [{ lane: { id: 'in_review' }, cards: [review] }],
+      },
+    ]);
+    const epicsOnly = issueSurfaceContent(all, { ...emptyFilter(), types: ['epic'] });
+    expect(
+      epicsOnly.swimlanes.map(({ parent, cards, context }) => ({ parent, cards, context })),
+    ).toEqual([
+      { parent: epic, cards: [], context: false },
+      { parent: second, cards: [], context: false },
+    ]);
+    expect(issueSurfaceContent(all, { ...emptyFilter(), query: 'no matches' }).swimlanes).toEqual(
+      [],
+    );
+  });
+});
+
 it('hides absent and opted-out auto signals but preserves dispatcher failures', () => {
   const auto = {
     optedIn: false,
@@ -316,12 +372,16 @@ it('shares filtered membership across columns, outline and graph while retaining
   const model = issueSurfaceContent(all, filter);
   expect(model.allCards).toBe(all);
   expect(model.cards).toEqual([production]);
-  expect(model.columns.flatMap((column) => column.items)).toEqual([{ card: production, parent }]);
+  expect(
+    model.swimlanes.flatMap((group) => group.columns.flatMap((column) => column.cards)),
+  ).toEqual([production]);
   expect(model.outline).toEqual([{ parent, cards: [production], context: true }]);
   const withClosed = issueSurfaceContent(all, { ...filter, includeClosed: true });
-  expect(withClosed.columns.find(({ lane }) => lane.id === 'closed')?.items).toEqual([
-    { card: completed, parent: null },
-  ]);
+  expect(
+    withClosed.swimlanes
+      .find((group) => group.parent === null)
+      ?.columns.find(({ lane }) => lane.id === 'closed')?.cards,
+  ).toEqual([completed]);
   const moved = issueSurfaceContent([parent, { ...production, lane: 'pending' }, completed], {
     ...filter,
     lanes: ['in_production'],
