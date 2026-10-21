@@ -72,6 +72,7 @@ it('renders a pre-binding targeted run without inventing an identity', () => {
     createdAt: '2026-09-24',
     startedAt: null,
     finishedAt: null,
+    activity: { kind: 'lifecycle' },
   };
   const pending: CardLogAgent = {
     kind: 'run',

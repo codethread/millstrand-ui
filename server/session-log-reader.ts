@@ -187,6 +187,21 @@ export class SessionLogReader {
     return value;
   }
 
+  /**
+   * Last write to the dialogue log, or null when this session has none. Composite keys such
+   * as Codex child sessions are not file stems and never have their own log.
+   */
+  async lastWrittenAt(provider: LogProvider, stem: string): Promise<Date | null> {
+    if (!sessionStem.test(stem)) return null;
+    const session = this.allowed(provider, stem);
+    try {
+      return (await lstat(this.path(session))).mtime;
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+      throw sourceError(error);
+    }
+  }
+
   async sourceModifiedAt(provider: LogProvider, stem: string): Promise<string> {
     const session = this.allowed(provider, stem);
     const info = await lstat(this.path(session));

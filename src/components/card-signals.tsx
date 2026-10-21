@@ -87,7 +87,8 @@ function ActivitySignal({ card }: { card: Card }) {
       <p className="font-semibold">Recorded agent activity</p>
       <p className="text-muted-foreground">
         Working requires an explicit run target. Session running only describes the owner’s session,
-        not work on this card.
+        not work on this card. Session idle means a direct session has had no recorded activity for
+        an hour; new activity marks it running again.
       </p>
       {health.error && (
         <p role="alert" className="text-destructive">

@@ -468,6 +468,7 @@ export class ProvenanceIndex {
       createdAt: run.strand.created_at,
       startedAt: attrs['harness/started-at'] ?? null,
       finishedAt: attrs['harness/finished-at'] ?? null,
+      activity: { kind: 'lifecycle' },
     };
   }
 

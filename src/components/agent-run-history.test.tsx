@@ -32,6 +32,7 @@ const run: AgentRun = {
   createdAt: '2026-09-01T12:00:00Z',
   startedAt: null,
   finishedAt: '2026-09-01T13:00:00Z',
+  activity: { kind: 'lifecycle' },
 };
 
 function identity(runs: AgentRun[]): AgentIdentity {

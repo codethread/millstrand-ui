@@ -1,6 +1,6 @@
 import { useRelevantAgentActivity, useAgentStatus } from '../hooks/use-agents';
 import { useDashboardActions } from '../lib/navigation';
-import { runDisplayName } from '../lib/agents';
+import { runDisplayName, runTone } from '../lib/agents';
 import { cn } from '../lib/utils';
 import { Avatar } from './issue-parts';
 import { useWorkspace } from '../hooks/use-workspace';
@@ -39,10 +39,7 @@ export function IssueAgents({ owner, target }: { owner: string | null; target: s
             title={`${actor} · ${name}. ${health.error ? 'Activity refresh failed; last known status. ' : ''}${item.relation === 'owner-session' ? 'Owner’s session is running; work on this issue is not confirmed.' : item.label}`}
           >
             <span
-              className={cn(
-                'agent-status',
-                !health.error && `agent-status-${item.run?.status ?? 'unknown'}`,
-              )}
+              className={cn('agent-status', !health.error && `agent-status-${runTone(item.run)}`)}
             >
               <span className="agent-dot" />
               <strong className="truncate">{name}</strong>
