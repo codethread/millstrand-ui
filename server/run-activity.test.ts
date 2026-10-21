@@ -157,4 +157,36 @@ describe('observeRunActivity', () => {
     await writeAt(log, record('file', '2026-10-21T05:59:30Z', 'c1'), '2026-10-21T05:59:30Z');
     expect(await activity(root, [child])).toEqual(['recent']);
   });
+
+  it('ends a managed run only from its own top-level end recorded after it was registered', async () => {
+    const root = await dialogueRoot();
+    await mkdir(join(root, 'pi-dialogue'));
+    const session = { provider: 'pi', session: '852523a8-ae2e-4097-a1f3-8bb18204b520' } as const;
+    const managed = (change: Partial<AgentRun>) =>
+      run({ harness: 'pi', mode: 'interactive', ownership: null, session, ...change });
+    const live = managed({ id: 's62rjb', createdAt: '2026-08-28 15:17:19' });
+    const stopped = managed({ id: 'hzjft', status: 'stopped', createdAt: '2026-08-28 15:03:06' });
+    const log = join(root, 'pi-dialogue', `${session.session}.jsonl`);
+    // Live managed run with no captured log: the lifecycle stands.
+    expect(await activity(root, [live, stopped])).toEqual(['lifecycle', 'lifecycle']);
+
+    await writeAt(log, record('prompt', '2026-08-28T15:20:00Z'), '2026-08-28T15:20:00Z');
+    await writeAt(
+      log,
+      record('session_end', '2026-08-28T15:50:04.474Z', 'child'),
+      '2026-08-28T15:50:04Z',
+    );
+    // Months of silence and a child's end leave a managed run live.
+    expect(await activity(root, [live])).toEqual(['lifecycle']);
+
+    await writeAt(log, record('session_end', '2026-08-28T15:50:04.474Z'), '2026-08-28T15:50:04Z');
+    expect(await activity(root, [live, stopped])).toEqual(['quiet', 'lifecycle']);
+    // A newer run on the same native session is not ended by the earlier end.
+    expect(
+      await activity(root, [managed({ id: 'newer', createdAt: '2026-10-21 05:00:00' })]),
+    ).toEqual(['lifecycle']);
+
+    await writeAt(log, record('prompt', '2026-10-21T05:58:00Z'), '2026-10-21T05:58:00Z');
+    expect(await activity(root, [live])).toEqual(['lifecycle']);
+  });
 });

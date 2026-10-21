@@ -34,8 +34,20 @@ narrow layouts use a selector, and the task popover provides the related context
 ## External session activity
 
 Harnesses manages the lifecycle of runs it launches, so those **managed** runs keep
-their recorded status. They are never aged out by the heuristic below; a managed run
-reported as running stays running until Harnesses settles it.
+their recorded status. They are never aged out by silence, with one exception: a
+running managed run is shown as idle, and leaves current lists and active counts, when
+the latest record in its own session's dialogue log is a top-level session-end written
+at or after the run's registration/start. Its recorded Harnesses status is not
+changed, and the run stays in the agent's history.
+
+- A newer run registered on the same native session after that end is not affected.
+- Any later captured record (a resumed or continued session) restores the run on the
+  next agents poll.
+- A child's tagged end never ends a run, and Codex child runs are never ended by
+  their parent's end.
+- A managed run with no capture, or whose latest record is not an end, keeps its
+  lifecycle status. The dashboard cannot detect a managed process that exited
+  without a captured end.
 
 An **external** session (started directly in Claude, Codex, or Pi and registered at
 startup) is recorded as running and is never settled or heartbeated by Harnesses. The

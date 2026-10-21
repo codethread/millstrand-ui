@@ -187,10 +187,11 @@ participants come only from `performed`; the superseded scalar run `identity/id`
 participant fallback. Work targeting comes from `serves` and `serves-root`. **Working**
 requires a running run on one of those explicit targets.
 **Session running** means an owner’s tracked session is running, not that it is
-working on every owned issue. For a managed session this comes solely from the
-lifecycle Harnesses records; for an external session it also requires recent activity
-evidence. **Session idle** marks an
-external (directly started) session that Harnesses still records as running but that
+working on every owned issue. For a managed session this comes from the
+lifecycle Harnesses records, unless its own session log last recorded an explicit end; for an external session it also requires recent activity
+evidence. **Session idle** marks a
+session that Harnesses still records as running but that has explicitly ended, or an
+external (directly started) one that
 has shown no recent evidence; see
 [external session activity](docs/session-logs.md#external-session-activity) for the
 inference and its limits. Queued, stopping, completed, failed, and

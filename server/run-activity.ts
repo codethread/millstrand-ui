@@ -75,11 +75,37 @@ async function sessionEvidence(
   };
 }
 
-function observed(run: AgentRun): boolean {
-  return run.ownership === 'external' && run.status === 'running';
+/**
+ * A managed run keeps its lifecycle unless its own top-level session log last recorded an
+ * explicit end after this run was registered. A resumed session or a newer run on the same
+ * native session writes past the end and keeps the run live; silence alone never ages a
+ * managed run out, and child sessions are not ended by their parent's end.
+ */
+async function managedRunActivity(run: AgentRun, logs: SessionLogReader): Promise<RunActivity> {
+  const lifecycle: RunActivity = { kind: 'lifecycle' };
+  if (run.session === null) return lifecycle;
+  if (run.session.provider === 'codex' && codexChildSession(run.session.session) !== null)
+    return lifecycle;
+  const { provider, session } = run.session;
+  if ((await logs.lastWrittenAt(provider, session)) === null) return lifecycle;
+  const { latest } = await logs.summary(provider, session);
+  if (latest?.record.event !== 'session_end' || latest.record.agent_id) return lifecycle;
+  const endedAt = Date.parse(latest.record.ts);
+  const registered = Math.max(
+    ...[run.createdAt, run.startedAt].flatMap((value) => (value === null ? [] : [instant(value)])),
+  );
+  return Number.isNaN(endedAt) || endedAt < registered
+    ? lifecycle
+    : { kind: 'quiet', lastActivityAt: new Date(endedAt).toISOString() };
 }
 
-/** Adds dialogue evidence to unsettled external runs; managed lifecycles are untouched. */
+async function runActivity(run: AgentRun, logs: SessionLogReader, now: Date) {
+  return run.ownership === 'external'
+    ? externalRunActivity(run, await sessionEvidence(run, logs, now), now)
+    : managedRunActivity(run, logs);
+}
+
+/** Adds dialogue evidence to unsettled runs; see the external and managed rules above. */
 export async function observeRunActivity(
   directory: AgentDirectory,
   logs: SessionLogReader,
@@ -87,10 +113,12 @@ export async function observeRunActivity(
 ): Promise<AgentDirectory> {
   const updated = new Map<string, AgentRun>();
   await Promise.all(
-    directory.runs.filter(observed).map(async (run) => {
-      const activity = externalRunActivity(run, await sessionEvidence(run, logs, now), now);
-      updated.set(run.id, { ...run, activity });
-    }),
+    directory.runs
+      .filter((run) => run.status === 'running')
+      .map(async (run) => {
+        const activity = await runActivity(run, logs, now);
+        if (activity.kind !== 'lifecycle') updated.set(run.id, { ...run, activity });
+      }),
   );
   if (updated.size === 0) return directory;
   const replace = (run: AgentRun): AgentRun => updated.get(run.id) ?? run;
