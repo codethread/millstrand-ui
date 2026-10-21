@@ -1,10 +1,14 @@
-import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentDirectory, AgentRun } from '../shared/api.ts';
-import { externalRunActivity, observeRunActivity } from './run-activity.ts';
+import { codexChildSession, externalRunActivity, observeRunActivity } from './run-activity.ts';
 import { SessionLogReader } from './session-log-reader.ts';
+
+function encode(value: string): string {
+  return Buffer.from(value).toString('base64');
+}
 
 const now = new Date('2026-10-21T06:00:00Z');
 const roots: string[] = [];
@@ -27,7 +31,7 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     target: null,
     rootTargets: [],
     participants: [],
-    session: { provider: 'codex', session: 'session1' },
+    session: { provider: 'codex', session: 'parent1' },
     continuation: null,
     createdAt: '2026-10-09 12:14:16',
     startedAt: null,
@@ -37,61 +41,120 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
   };
 }
 
+function directory(runs: AgentRun[]): AgentDirectory {
+  return {
+    workspace: { path: '/w', name: 'w' },
+    fetchedAt: now.toISOString(),
+    identities: [
+      {
+        id: 'sunny-smart-eagle',
+        strandId: 'iaia4',
+        harness: 'codex',
+        model: null,
+        effort: null,
+        parentIdentityStrandIds: [],
+        createdAt: '2026-10-09 12:14:16',
+        runs,
+        work: [],
+      },
+    ],
+    runs,
+  };
+}
+
+function record(event: string, ts: string, agentId: string | null = null): string {
+  return `${JSON.stringify({ v: 1, event, ts, session_id: 'parent1', agent_id: agentId })}\n`;
+}
+
+async function dialogueRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'run-activity-'));
+  roots.push(root);
+  await mkdir(join(root, 'codex-dialogue'));
+  await mkdir(join(root, 'claude-dialogue'));
+  return root;
+}
+
+async function writeAt(path: string, content: string, at: string): Promise<void> {
+  await appendFile(path, content);
+  await utimes(path, new Date(at), new Date(at));
+}
+
+async function activity(root: string, runs: AgentRun[]) {
+  const observed = await observeRunActivity(
+    directory(runs),
+    new SessionLogReader({ stateRoot: root }),
+    now,
+  );
+  return observed.runs.map((item) => item.activity.kind);
+}
+
 describe('externalRunActivity', () => {
-  it('uses the latest of registration and dialogue writes', () => {
-    expect(externalRunActivity(run(), new Date('2026-10-09T14:07:43Z'), now)).toEqual({
-      kind: 'quiet',
-      lastActivityAt: '2026-10-09T14:07:43.000Z',
-    });
-    expect(externalRunActivity(run(), new Date('2026-10-21T05:30:00Z'), now)).toEqual({
-      kind: 'recent',
-      lastActivityAt: '2026-10-21T05:30:00.000Z',
-    });
+  it.each([
+    ['old dialogue write', { at: new Date('2026-10-09T14:07:43Z'), ended: false }, 'quiet'],
+    ['recent dialogue write', { at: new Date('2026-10-21T05:30:00Z'), ended: false }, 'recent'],
+    ['recent explicit session end', { at: new Date('2026-10-21T05:59:00Z'), ended: true }, 'quiet'],
+    ['no evidence beyond old registration', null, 'quiet'],
+  ] as const)('%s', (_name, evidence, kind) => {
+    expect(externalRunActivity(run(), evidence, now).kind).toBe(kind);
+  });
+
+  it('treats a fresh registration as recent until an hour passes', () => {
     expect(externalRunActivity(run({ createdAt: '2026-10-21 05:59:00' }), null, now).kind).toBe(
       'recent',
     );
   });
 });
 
-describe('observeRunActivity', () => {
-  it('marks stale external sessions quiet, revives them on a new write and leaves managed runs', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'run-activity-'));
-    roots.push(root);
-    await mkdir(join(root, 'codex-dialogue'));
-    const log = join(root, 'codex-dialogue', 'session1.jsonl');
-    await writeFile(log, '');
-    await utimes(log, new Date('2026-10-09T14:07:43Z'), new Date('2026-10-09T14:07:43Z'));
-    const external = run();
-    const managed = run({ id: 'managed', ownership: null, mode: 'headless', session: null });
-    const directory: AgentDirectory = {
-      workspace: { path: '/w', name: 'w' },
-      fetchedAt: now.toISOString(),
-      identities: [
-        {
-          id: 'sunny-smart-eagle',
-          strandId: 'iaia4',
-          harness: 'codex',
-          model: null,
-          effort: null,
-          parentIdentityStrandIds: [],
-          createdAt: external.createdAt,
-          runs: [external],
-          work: [],
-        },
-      ],
-      runs: [external, managed],
-    };
-    const logs = new SessionLogReader({ stateRoot: root });
-
-    const stale = await observeRunActivity(directory, logs, now);
-    expect(stale.identities[0]!.runs[0]!.activity.kind).toBe('quiet');
-    expect(stale.runs[1]!.activity).toEqual({ kind: 'lifecycle' });
-
-    await utimes(log, new Date('2026-10-21T05:59:00Z'), new Date('2026-10-21T05:59:00Z'));
-    const resumed = await observeRunActivity(directory, logs, now);
-    expect(resumed.identities[0]!.runs[0]!.activity).toEqual({
-      kind: 'recent',
-      lastActivityAt: '2026-10-21T05:59:00.000Z',
+describe('codexChildSession', () => {
+  it('decodes the parent and child native sessions', () => {
+    expect(codexChildSession(`codex-child:v1:${encode('parent1')}:${encode('child1')}`)).toEqual({
+      parent: 'parent1',
+      child: 'child1',
     });
+    expect(codexChildSession('parent1')).toBeNull();
+  });
+});
+
+describe('observeRunActivity', () => {
+  it('revives a quiet direct session on its next dialogue write and leaves managed runs', async () => {
+    const root = await dialogueRoot();
+    const log = join(root, 'codex-dialogue', 'parent1.jsonl');
+    await writeAt(log, record('reply', '2026-10-09T14:07:43Z'), '2026-10-09T14:07:43Z');
+    const managed = run({ id: 'managed', ownership: null, mode: 'headless', session: null });
+    expect(await activity(root, [run(), managed])).toEqual(['quiet', 'lifecycle']);
+
+    await writeAt(log, record('file', '2026-10-21T05:59:00Z'), '2026-10-21T05:59:00Z');
+    expect(await activity(root, [run(), managed])).toEqual(['recent', 'lifecycle']);
+  });
+
+  it('marks a session quiet once its latest record ends it, until it is resumed', async () => {
+    const root = await dialogueRoot();
+    const claude = run({ harness: 'claude', session: { provider: 'claude', session: 'c1' } });
+    const log = join(root, 'claude-dialogue', 'c1.jsonl');
+    expect(await activity(root, [claude])).toEqual(['quiet']);
+
+    await writeAt(log, record('prompt', '2026-10-21T05:50:00Z'), '2026-10-21T05:50:00Z');
+    expect(await activity(root, [claude])).toEqual(['recent']);
+    await writeAt(log, record('session_end', '2026-10-21T05:55:00Z'), '2026-10-21T05:55:00Z');
+    expect(await activity(root, [claude])).toEqual(['quiet']);
+    await writeAt(log, record('prompt', '2026-10-21T05:58:00Z'), '2026-10-21T05:58:00Z');
+    expect(await activity(root, [claude])).toEqual(['recent']);
+  });
+
+  it('revives a Codex child only from its own events in the parent log', async () => {
+    const root = await dialogueRoot();
+    const child = run({
+      id: 'child',
+      session: {
+        provider: 'codex',
+        session: `codex-child:v1:${encode('parent1')}:${encode('c1')}`,
+      },
+    });
+    const log = join(root, 'codex-dialogue', 'parent1.jsonl');
+    await writeAt(log, record('file', '2026-10-21T05:59:00Z'), '2026-10-21T05:59:00Z');
+    expect(await activity(root, [child])).toEqual(['quiet']);
+
+    await writeAt(log, record('file', '2026-10-21T05:59:30Z', 'c1'), '2026-10-21T05:59:30Z');
+    expect(await activity(root, [child])).toEqual(['recent']);
   });
 });

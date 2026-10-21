@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentIdentity, AgentRun } from '../../shared/api';
 import {
+  activeAgentIdentities,
   agentActivitySignal,
   agentIsActive,
   agentReplyStatusText,
@@ -105,6 +106,7 @@ describe('agent activity and issue attribution', () => {
     ]);
     expect(issueAgentActivity(quiet, 'card1')).toBe('Session idle');
     expect(agentIsActive(quiet)).toBe(false);
+    expect(activeAgentIdentities([quiet])).toEqual([]);
     expect(runLabel(currentRun(quiet))).toBe('Idle');
     expect(
       agentActivitySignal(relevantAgentActivity([quiet], [], quiet.id, 'card1')),
@@ -115,6 +117,7 @@ describe('agent activity and issue attribution', () => {
     ]);
     expect(issueAgentActivity(resumed, 'card1')).toBe('Session running');
     expect(agentIsActive(resumed)).toBe(true);
+    expect(activeAgentIdentities([quiet, resumed])).toEqual([resumed]);
   });
 
   it('prefers a live run over a quiet external session on the same identity', () => {
