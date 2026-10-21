@@ -54,11 +54,17 @@ timestamps and its locally readable dialogue log:
 
 Idle is an inference, not an observation of the process. It cannot tell whether the
 session is still executing remotely, whether its process has exited, or whether it
-can be resumed. If no dialogue capture is readable for a session (no log, or one this
-server cannot read), there is no ongoing activity evidence: the session goes idle an
-hour after registration and is not restored by renewed activity until a capture is
-written and readable. This limitation is accepted; the dashboard does not probe
+can be resumed.
+
+If a session has no dialogue capture (no log file, or for a Codex child no readable
+child-tagged record), there is no ongoing activity evidence. The one-hour window then
+runs from registration/start alone, and renewed activity cannot restore the session
+until a capture is written. This limitation is accepted; the dashboard does not probe
 processes or providers to work around it.
+
+A capture that exists but cannot be read (for example a permission or I/O error) is
+not treated as missing and does not silently produce idle. The agents refresh fails
+visibly and the dashboard keeps last-known data until the read succeeds.
 
 The overview's **Running, but quiet** grouping (no recorded event for five minutes)
 is a separate, shorter hint and does not change a session's idle state.

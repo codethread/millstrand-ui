@@ -186,8 +186,10 @@ an unresolved newest claim still outranks an older resolved claim. Published-run
 participants come only from `performed`; the superseded scalar run `identity/id` is not a
 participant fallback. Work targeting comes from `serves` and `serves-root`. **Working**
 requires a running run on one of those explicit targets.
-**Session running** only means an owner’s tracked session has recent activity
-evidence, not that it is working on every owned issue. **Session idle** marks an
+**Session running** means an owner’s tracked session is running, not that it is
+working on every owned issue. For a managed session this comes solely from the
+lifecycle Harnesses records; for an external session it also requires recent activity
+evidence. **Session idle** marks an
 external (directly started) session that Harnesses still records as running but that
 has shown no recent evidence; see
 [external session activity](docs/session-logs.md#external-session-activity) for the
