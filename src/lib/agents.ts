@@ -76,7 +76,7 @@ export type SelectedAgentActivity =
     }
   | { kind: 'run'; run: AgentRun };
 
-/** An unsettled external session without recent evidence is not treated as executing. */
+/** An unsettled session without recent evidence, or whose own end was captured, is not executing. */
 export function runIsQuiet(run: AgentRun): boolean {
   return run.status === 'running' && run.activity.kind === 'quiet';
 }
@@ -103,7 +103,7 @@ export function runIsActive(run: AgentRun): boolean {
   return (run.status === 'running' && !runIsQuiet(run)) || run.status === 'ready';
 }
 
-/** Status styling key; quiet external sessions must not borrow the running pulse. */
+/** Status styling key; quiet sessions must not borrow the running pulse. */
 export function runTone(run: AgentRun | null): string {
   if (run === null) return 'unknown';
   return runIsQuiet(run) ? 'idle' : run.status;
