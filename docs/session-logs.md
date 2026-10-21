@@ -31,6 +31,38 @@ directly/root-targeted running work appear first; completed task owners and term
 linked runs remain available in **Past work**. Desktop layouts select a shared row,
 narrow layouts use a selector, and the task popover provides the related context.
 
+## External session activity
+
+Harnesses manages the lifecycle of runs it launches, so those **managed** runs keep
+their recorded status. They are never aged out by the heuristic below; a managed run
+reported as running stays running until Harnesses settles it.
+
+An **external** session (started directly in Claude, Codex, or Pi and registered at
+startup) is recorded as running and is never settled or heartbeated by Harnesses. The
+dashboard therefore infers whether it is still active from its registration/start
+timestamps and its locally readable dialogue log:
+
+- It shows as idle (**Session idle**, **Idle**) once more than an hour has passed
+  since the latest of registration, start, or captured dialogue evidence.
+- If the latest captured record is that session's own session-end, it is idle
+  immediately rather than after an hour.
+- Newly captured activity restores it to recent/active on the next agents poll,
+  roughly every five seconds.
+- Codex child-agent activity is captured in the parent's dialogue log tagged with the
+  child's ID. Only events tagged for a child count as that child's evidence; parent
+  events do not revive a child, and child events do not end the parent.
+
+Idle is an inference, not an observation of the process. It cannot tell whether the
+session is still executing remotely, whether its process has exited, or whether it
+can be resumed. If no dialogue capture is readable for a session (no log, or one this
+server cannot read), there is no ongoing activity evidence: the session goes idle an
+hour after registration and is not restored by renewed activity until a capture is
+written and readable. This limitation is accepted; the dashboard does not probe
+processes or providers to work around it.
+
+The overview's **Running, but quiet** grouping (no recorded event for five minutes)
+is a separate, shorter hint and does not change a session's idle state.
+
 ## Data, polling, and bounds
 
 The server reads dialogue JSONL files from
