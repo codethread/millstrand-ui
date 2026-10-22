@@ -288,12 +288,12 @@ stay intact; the search shortcut also restores the header and focuses search.
 Use **Board** for epic swimlanes, **Outline** for Dense Outline epic/feature rows,
 and **Graph** for relationships. Both compact layouts keep every label readable;
 click a label to toggle the existing URL filter, or a title to open the real issue
-drawer. Board shows occupied lanes only, in attention order: In review, In production,
+drawer. Board shows occupied lanes only, in attention order: In production, In review,
 In progress, Ready, Refinement, then Completed and Other when present. Narrow
 Board layouts scroll horizontally within the board, keeping the same status columns across
 every epic. Status headings stay visible while scrolling vertically; epic headers remain
 readable while scrolling sideways. Outline row metadata stacks on narrow screens.
-The optional **In production** column appears after **In review** when matching
+The optional **In production** column appears at the far left when matching
 cards use the spool's `in_production` lane. It supports filters and saved views
 and keeps production observation work available in workspace views.
 Each Board swimlane groups an epic’s matching features; features without an available

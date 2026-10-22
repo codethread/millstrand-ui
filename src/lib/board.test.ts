@@ -225,10 +225,10 @@ describe('compact board lanes', () => {
     { ...card('other'), lane: 'unknown' },
   ];
 
-  it('prioritizes review and production observation, then active work, with history last', () => {
+  it('prioritizes production observation, then review and active work, with history last', () => {
     expect(selectBoardLanes(cards).map((lane) => lane.id)).toEqual([
-      'in_review',
       'in_production',
+      'in_review',
       'claimed',
       'pending',
       'refinement',

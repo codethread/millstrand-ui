@@ -19,8 +19,8 @@ export const lanes: { id: Lane; title: string; description: string }[] = [
  * Empty lanes consume no space. Menus/filters retain the full delivery order above. */
 export function selectBoardLanes(cards: Card[]) {
   const order: Lane[] = [
-    'in_review',
     'in_production',
+    'in_review',
     'claimed',
     'pending',
     'refinement',
