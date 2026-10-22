@@ -112,14 +112,15 @@ export async function observeRunActivity(
   now = new Date(),
 ): Promise<AgentDirectory> {
   const updated = new Map<string, AgentRun>();
-  await Promise.all(
-    directory.runs
-      .filter((run) => run.status === 'running')
-      .map(async (run) => {
-        const activity = await runActivity(run, logs, now);
-        if (activity.kind !== 'lifecycle') updated.set(run.id, { ...run, activity });
-      }),
-  );
+  const pending = directory.runs.filter((run) => run.status === 'running').values();
+  // Historical external runs remain running in storage; never fan out I/O by history size.
+  async function observeNext(): Promise<void> {
+    for (const run of pending) {
+      const activity = await runActivity(run, logs, now);
+      if (activity.kind !== 'lifecycle') updated.set(run.id, { ...run, activity });
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, observeNext));
   if (updated.size === 0) return directory;
   const replace = (run: AgentRun): AgentRun => updated.get(run.id) ?? run;
   return {

@@ -263,7 +263,7 @@
                        300 retry-instruction)
    (workflow/gate :release-turn "Release the merge turn before housekeeping" :merge-release
                   :depends-on [:pull-main]
-                  "Release is automatic. On failure, repair the cause and clear gate/error to retry.")
+                  "Release is scanner-owned, not a managed execution gate. On failure, repair the cause and clear gate/error so the FIFO scanner can retry.")
    (workflow/gate :remove-branch-worktree "Remove the landed branch and worktree" :shell
                   :depends-on [:release-turn]
                   :attributes {"shell/argv"

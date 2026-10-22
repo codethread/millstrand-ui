@@ -223,7 +223,7 @@ export function issueAgents(
 
 export function issueRun(agent: AgentIdentity, id: string): AgentRun | null {
   return (
-    agent.runs.find((run) => run.status === 'running' && runTargets(run, id)) ??
+    agent.runs.find((run) => run.status === 'running' && !runIsQuiet(run) && runTargets(run, id)) ??
     agent.runs.find((run) => run.status === 'ready' && runTargets(run, id)) ??
     currentRun(agent)
   );
@@ -233,7 +233,9 @@ export function issueAgentActivity(
   agent: AgentIdentity,
   id: string,
 ): RelevantAgentActivity['label'] {
-  const running = agent.runs.find((run) => run.status === 'running' && runTargets(run, id));
+  const running = agent.runs.find(
+    (run) => run.status === 'running' && !runIsQuiet(run) && runTargets(run, id),
+  );
   if (running) return running.substatus === 'requested' ? 'Stopping' : 'Working';
   const queued = agent.runs.find((run) => run.status === 'ready' && runTargets(run, id));
   if (queued) return 'Queued';

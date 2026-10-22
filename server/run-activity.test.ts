@@ -1,7 +1,7 @@
 import { appendFile, mkdir, mkdtemp, rm, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentDirectory, AgentRun } from '../shared/api.ts';
 import { codexChildSession, externalRunActivity, observeRunActivity } from './run-activity.ts';
 import { SessionLogReader } from './session-log-reader.ts';
@@ -116,6 +116,26 @@ describe('codexChildSession', () => {
 });
 
 describe('observeRunActivity', () => {
+  it('bounds log observations while retaining every historical run', async () => {
+    const root = await dialogueRoot();
+    const logs = new SessionLogReader({ stateRoot: root });
+    let active = 0;
+    let maximum = 0;
+    const writes = vi.spyOn(logs, 'lastWrittenAt').mockImplementation(async () => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      await Promise.resolve();
+      active -= 1;
+      return null;
+    });
+    const runs = Array.from({ length: 20 }, (_, index) => run({ id: `run${index}` }));
+    const observed = await observeRunActivity(directory(runs), logs, now);
+    expect(maximum).toBeLessThanOrEqual(4);
+    expect(writes).toHaveBeenCalledTimes(20);
+    expect(observed.runs).toHaveLength(20);
+    expect(observed.runs.every((item) => item.activity.kind === 'quiet')).toBe(true);
+  });
+
   it('revives a quiet direct session on its next dialogue write and leaves managed runs', async () => {
     const root = await dialogueRoot();
     const log = join(root, 'codex-dialogue', 'parent1.jsonl');

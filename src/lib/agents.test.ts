@@ -120,6 +120,29 @@ describe('agent activity and issue attribution', () => {
     expect(activeAgentIdentities([quiet, resumed])).toEqual([resumed]);
   });
 
+  it.each(['direct', 'root'] as const)(
+    'does not call a quiet %s-targeted owner working',
+    (target) => {
+      const quiet = run({
+        id: 'quiet',
+        ...(target === 'direct' ? { target: 'card1' } : { rootTargets: ['card1'] }),
+        activity: { kind: 'quiet', lastActivityAt: '2026-10-09T14:07:43Z' },
+      });
+      const owner = identity([quiet]);
+      expect(issueAgentActivity(owner, 'card1')).toBe('Session idle');
+      expect(
+        agentActivitySignal(relevantAgentActivity([owner], [], owner.id, 'card1')),
+      ).toMatchObject({
+        label: 'Session idle',
+        active: false,
+      });
+      const queued = run({ id: 'queued', target: 'card1', status: 'ready' });
+      const withQueued = identity([quiet, queued]);
+      expect(issueRun(withQueued, 'card1')).toBe(queued);
+      expect(issueAgentActivity(withQueued, 'card1')).toBe('Queued');
+    },
+  );
+
   it('prefers a live run over a quiet external session on the same identity', () => {
     const live = run({ id: 'live', createdAt: '2026-09-12 10:00:00' });
     const quiet = run({

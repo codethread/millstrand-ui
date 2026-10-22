@@ -48,6 +48,7 @@ export class SessionLogReader {
   readonly stateRoot: string;
   private readonly logger: PerfLogger;
   private readonly summaries = new Map<string, CachedSummary>();
+  private readonly pendingSummaries = new Map<string, Promise<SessionLogSummary>>();
 
   constructor(options: SessionLogReaderOptions = {}) {
     this.stateRoot = resolve(options.stateRoot ?? resolve(homedir(), '.local/state'));
@@ -163,7 +164,18 @@ export class SessionLogReader {
     };
   }
 
-  async summary(provider: LogProvider, stem: string): Promise<SessionLogSummary> {
+  summary(provider: LogProvider, stem: string): Promise<SessionLogSummary> {
+    const key = `${provider}/${stem}`;
+    const pending = this.pendingSummaries.get(key);
+    if (pending !== undefined) return pending;
+    const request = this.readSummary(provider, stem).finally(() => {
+      this.pendingSummaries.delete(key);
+    });
+    this.pendingSummaries.set(key, request);
+    return request;
+  }
+
+  private async readSummary(provider: LogProvider, stem: string): Promise<SessionLogSummary> {
     const fingerprint = await this.sourceModifiedAt(provider, stem);
     const key = `${provider}/${stem}`;
     const cached = this.summaries.get(key);
