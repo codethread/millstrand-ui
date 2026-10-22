@@ -27,16 +27,32 @@
 (defn- role-step [strands role]
   (first (filter #(= role (attr-get % :auto-run/role)) strands)))
 
+(defn- routing-options
+  "Keep real Code actions, but leave Shell gates externally driven in routing tests.
+
+  These tests inspect/run rendered commands separately; their fixture receipts
+  are not managed execution evidence or proof that CI/quality ran. Production
+  activation is exercised by the other worlds using the unchanged init.clj."
+  [options]
+  (-> options
+      (update :init-clj str/replace ":ns 'millhouse.workflow.spool"
+              ":file \"routing-providers.clj\"")
+      (update :files assoc "routing-providers.clj"
+              "(ns millstrand-ui.routing-providers
+                 (:require [millhouse.executors.code :as code]
+                           [millstrand.api.lifecycle.alpha :as lifecycle]))
+               (lifecycle/use-resource! code/code-engine)")))
+
 (deftest repository-activation-and-delivery-contracts
   (t/with-weaver-world
-    [ctx {:storage :sqlite-memory
+    [ctx (routing-options {:storage :sqlite-memory
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                       "me/auto_run_workflows.clj" "me/auto_run.clj"
                                       "me/admission_authority.clj"
                                       "me/hourly_slow_query.clj"]]
-                            [path (slurp path)]))}]
+                            [path (slurp path)]))})]
     (let [rt (:runtime ctx)
           open! (requiring-resolve 'millstrand-ui.auto-run/open!)
           create! (requiring-resolve
@@ -342,11 +358,11 @@
                         [path (slurp path)]))]
     (try
       (t/with-weaver-world
-        [ctx {:root (.getPath config)
+        [ctx (routing-options {:root (.getPath config)
               :storage :sqlite-memory
               :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
               :init-clj (slurp "init.clj")
-              :files files}]
+              :files files})]
         (let [rt (:runtime ctx)
               canonical-root (.getCanonicalPath canonical)
               worktree-path (.getCanonicalPath worktree)
@@ -719,14 +735,14 @@
 
 (deftest auto-inspect-contract-routes-evidence-and-changed-work
   (t/with-weaver-world
-    [ctx {:storage :sqlite-memory
+    [ctx (routing-options {:storage :sqlite-memory
           :deps-edn (pr-str (select-keys (edn/read-string (slurp "deps.edn")) [:deps]))
           :init-clj (slurp "init.clj")
           :files (into {} (for [path ["me/help.clj" "me/reviewers.clj" "me/land.clj"
                                       "me/auto_run_workflows.clj" "me/auto_run.clj"
                                       "me/admission_authority.clj"
                                       "me/hourly_slow_query.clj"]]
-                            [path (slurp path)]))}]
+                            [path (slurp path)]))})]
     (let [rt (:runtime ctx)]
       (current/with-runtime rt
         (testing "the dispatcher admits only declared on-change policies"

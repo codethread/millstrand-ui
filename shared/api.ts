@@ -124,7 +124,19 @@ export interface AgentRun {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  activity: RunActivity;
 }
+
+/**
+ * External sessions have no settlement or heartbeat writer, so their persisted `running`
+ * status only means "registered, never settled". `lifecycle` runs trust their status; the
+ * others are judged from the latest observed evidence (registration or dialogue-log write).
+ * A managed run whose latest captured record is its own session-end is also `quiet`.
+ */
+export type RunActivity =
+  | { kind: 'lifecycle' }
+  | { kind: 'recent'; lastActivityAt: string }
+  | { kind: 'quiet'; lastActivityAt: string };
 
 export interface AgentWork {
   id: string;

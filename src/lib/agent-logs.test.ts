@@ -44,6 +44,7 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     createdAt: '2026-09-18',
     startedAt: null,
     finishedAt: null,
+    activity: { kind: 'lifecycle' },
     ...change,
   };
 }

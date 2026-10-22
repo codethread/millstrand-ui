@@ -73,8 +73,10 @@ to `human-attention`, `auto-run-failure`, and `factory-escalated`. An empty list
 disables attention matches; review cards still appear under **Ready for a look**.
 No workspace labels are edited. Matching review cards are not shown twice.
 
-Quiet means no recorded session event for five minutes while the process is running,
-not proof of a stuck agent. Missing/stale logs do not establish quietness. Failed
+**Running, but quiet** means a running run's linked dialogue log has recorded no event
+for five minutes; it is not proof of a stuck agent, and missing/stale logs do not
+establish quietness. This grouping is separate from the one-hour **Session idle**
+rule for external sessions described under agents and identities. Failed
 sources retain last-known data with visible errors; missing Kanban does not suppress
 agents. Activity polls every five seconds, discovery every thirty seconds.
 **Refresh all** refreshes discovery and running board/agent sources.
@@ -184,8 +186,15 @@ an unresolved newest claim still outranks an older resolved claim. Published-run
 participants come only from `performed`; the superseded scalar run `identity/id` is not a
 participant fallback. Work targeting comes from `serves` and `serves-root`. **Working**
 requires a running run on one of those explicit targets.
-**Session running** only proves that an owner’s tracked session is running, not that
-it is working on every owned issue. Queued, stopping, completed, failed, and
+**Session running** means an owner’s tracked session is running, not that it is
+working on every owned issue. For a managed session this comes from the
+lifecycle Harnesses records, unless its own session log last recorded an explicit end; for an external session it also requires recent activity
+evidence. **Session idle** marks a
+session that Harnesses still records as running but that has explicitly ended, or an
+external (directly started) one that
+has shown no recent evidence; see
+[external session activity](docs/session-logs.md#external-session-activity) for the
+inference and its limits. Queued, stopping, completed, failed, and
 untracked sessions remain distinct. The card Agents tab groups current and past
 participation, retains completed task workers and terminal linked runs, and opens an
 existing exact-run inspector when available. That inspector shows published

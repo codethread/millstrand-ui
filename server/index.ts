@@ -20,6 +20,7 @@ import { parseWeaverOperation, WorkspaceDirectory } from './workspaces.ts';
 import { parseCardLane } from './card-actions.ts';
 import { encodeJson } from './json.ts';
 import { readLogActivity } from './log-activity.ts';
+import { observeRunActivity } from './run-activity.ts';
 import { SessionLogReader } from './session-log-reader.ts';
 import { parseSessionLogSource, SessionLogStreams } from './session-logs.ts';
 
@@ -316,8 +317,9 @@ const server = createServer((request, response) => {
       return;
     }
     if (path === '/api/agents' && method === 'GET') {
-      const { strand } = await workspaces.select(url.searchParams.get('workspace'));
-      await compressedJson(request, response, 200, encodeAgentDirectory(await strand.agents()));
+      const { strand, logs } = await workspaces.select(url.searchParams.get('workspace'));
+      const directory = await observeRunActivity(await strand.agents(), logs);
+      await compressedJson(request, response, 200, encodeAgentDirectory(directory));
       return;
     }
     if (path === '/api/log-activity' && method === 'GET') {

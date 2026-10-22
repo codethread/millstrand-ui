@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentIdentity, AgentRun } from '../../shared/api';
 import {
+  activeAgentIdentities,
   agentActivitySignal,
   agentIsActive,
   agentReplyStatusText,
@@ -39,6 +40,7 @@ function run(change: Partial<AgentRun> = {}): AgentRun {
     createdAt: '2026-09-13 10:00:00',
     startedAt: null,
     finishedAt: null,
+    activity: { kind: 'lifecycle' },
     ...change,
   };
 }
@@ -90,6 +92,64 @@ describe('agent activity and issue attribution', () => {
     expect(issueAgents([owner], owner.id, 'card1')).toEqual([owner]);
     expect(issueAgentActivity(owner, 'card1')).toBe('Session running');
     expect(issueAgents([owner], null, 'card1')).toEqual([]);
+  });
+
+  it('stops calling a quiet external session running until new activity arrives', () => {
+    const external = {
+      alias: null,
+      mode: 'external' as const,
+      ownership: 'external' as const,
+      harness: 'codex',
+    };
+    const quiet = identity([
+      run({ ...external, activity: { kind: 'quiet', lastActivityAt: '2026-10-09T14:07:43Z' } }),
+    ]);
+    expect(issueAgentActivity(quiet, 'card1')).toBe('Session idle');
+    expect(agentIsActive(quiet)).toBe(false);
+    expect(activeAgentIdentities([quiet])).toEqual([]);
+    expect(runLabel(currentRun(quiet))).toBe('Idle');
+    expect(
+      agentActivitySignal(relevantAgentActivity([quiet], [], quiet.id, 'card1')),
+    ).toMatchObject({ label: 'Session idle', active: false });
+
+    const resumed = identity([
+      run({ ...external, activity: { kind: 'recent', lastActivityAt: '2026-10-21T06:00:00Z' } }),
+    ]);
+    expect(issueAgentActivity(resumed, 'card1')).toBe('Session running');
+    expect(agentIsActive(resumed)).toBe(true);
+    expect(activeAgentIdentities([quiet, resumed])).toEqual([resumed]);
+  });
+
+  it.each(['direct', 'root'] as const)(
+    'does not call a quiet %s-targeted owner working',
+    (target) => {
+      const quiet = run({
+        id: 'quiet',
+        ...(target === 'direct' ? { target: 'card1' } : { rootTargets: ['card1'] }),
+        activity: { kind: 'quiet', lastActivityAt: '2026-10-09T14:07:43Z' },
+      });
+      const owner = identity([quiet]);
+      expect(issueAgentActivity(owner, 'card1')).toBe('Session idle');
+      expect(
+        agentActivitySignal(relevantAgentActivity([owner], [], owner.id, 'card1')),
+      ).toMatchObject({
+        label: 'Session idle',
+        active: false,
+      });
+      const queued = run({ id: 'queued', target: 'card1', status: 'ready' });
+      const withQueued = identity([quiet, queued]);
+      expect(issueRun(withQueued, 'card1')).toBe(queued);
+      expect(issueAgentActivity(withQueued, 'card1')).toBe('Queued');
+    },
+  );
+
+  it('prefers a live run over a quiet external session on the same identity', () => {
+    const live = run({ id: 'live', createdAt: '2026-09-12 10:00:00' });
+    const quiet = run({
+      id: 'quiet',
+      activity: { kind: 'quiet', lastActivityAt: '2026-09-13T10:00:00Z' },
+    });
+    expect(currentRun(identity([quiet, live]))).toBe(live);
   });
 
   it('does not select an ambiguous friendly identity as owner or exact-run participant', () => {

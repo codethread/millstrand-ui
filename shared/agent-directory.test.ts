@@ -23,6 +23,7 @@ const run: AgentRun = {
   createdAt: '2026-10-02 08:00:00',
   startedAt: '2026-10-02T08:00:01Z',
   finishedAt: null,
+  activity: { kind: 'lifecycle' },
 };
 
 const directory: AgentDirectory = {

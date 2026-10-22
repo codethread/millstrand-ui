@@ -77,9 +77,11 @@ describe('SessionLogReader snapshots', () => {
     const first = record('prompt', 'First prompt');
     const reader = await fixture('pi', 'summary', `${first}\n`, logger);
 
-    await expect(reader.summary('pi', 'summary')).resolves.toMatchObject({
-      latest: { record: { text: 'First prompt' } },
-    });
+    const concurrent = await Promise.all(
+      Array.from({ length: 8 }, () => reader.summary('pi', 'summary')),
+    );
+    expect(concurrent).toHaveLength(8);
+    expect(concurrent.every((value) => value.latest?.record.text === 'First prompt')).toBe(true);
     await expect(reader.summary('pi', 'summary')).resolves.toMatchObject({
       latest: { record: { text: 'First prompt' } },
     });

@@ -1,7 +1,7 @@
 import type { AgentIdentity, AgentRun, CardGraph } from '../../shared/api';
 import type { LogEvent } from '../../shared/session-log';
 import { sorted } from '../../shared/array';
-import { currentRun, runLabel, runTargets } from './agents';
+import { currentRun, runIsQuiet, runLabel, runTargets } from './agents';
 import { eventLabel, eventText } from './session-log';
 
 export interface CardLogTask {
@@ -173,7 +173,8 @@ export function cardLogAgentContext(agent: CardLogAgent): string {
 
 export function cardLogAgentStatus(agent: CardLogAgent): string {
   if (agent.relation !== 'target') {
-    if (agent.run?.status === 'running') return 'Session running';
+    if (agent.run?.status === 'running')
+      return runIsQuiet(agent.run) ? 'Session idle' : 'Session running';
     if (agent.run?.status === 'ready') return 'Session queued';
   }
   return runLabel(agent.run);

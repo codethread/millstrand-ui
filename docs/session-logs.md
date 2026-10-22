@@ -31,6 +31,56 @@ directly/root-targeted running work appear first; completed task owners and term
 linked runs remain available in **Past work**. Desktop layouts select a shared row,
 narrow layouts use a selector, and the task popover provides the related context.
 
+## External session activity
+
+Harnesses manages the lifecycle of runs it launches, so those **managed** runs keep
+their recorded status. They are never aged out by silence, with one exception: a
+running managed run is shown as idle, and leaves current lists and active counts, when
+the latest record in its own session's dialogue log is a top-level session-end written
+at or after the run's registration/start. Its recorded Harnesses status is not
+changed, and the run stays in the agent's history.
+
+- A newer run registered on the same native session after that end is not affected.
+- Any later captured record (a resumed or continued session) restores the run on the
+  next agents poll.
+- A child's tagged end never ends a run, and Codex child runs are never ended by
+  their parent's end.
+- A managed run with no capture, or whose latest record is not an end, keeps its
+  lifecycle status. The dashboard cannot detect a managed process that exited
+  without a captured end.
+
+An **external** session (started directly in Claude, Codex, or Pi and registered at
+startup) is recorded as running and is never settled or heartbeated by Harnesses. The
+dashboard therefore infers whether it is still active from its registration/start
+timestamps and its locally readable dialogue log:
+
+- It shows as idle (**Session idle**, **Idle**) once more than an hour has passed
+  since the latest of registration, start, or captured dialogue evidence.
+- If the latest captured record is that session's own session-end, it is idle
+  immediately rather than after an hour.
+- Newly captured activity restores it to recent/active on the next agents poll,
+  roughly every five seconds.
+- Codex child-agent activity is captured in the parent's dialogue log tagged with the
+  child's ID. Only events tagged for a child count as that child's evidence; parent
+  events do not revive a child, and child events do not end the parent.
+
+Idle is an inference, not an observation of the process. It cannot tell whether the
+session is still executing remotely, whether its process has exited, or whether it
+can be resumed.
+
+If a session has no dialogue capture (no log file, or for a Codex child no readable
+child-tagged record), there is no ongoing activity evidence. The one-hour window then
+runs from registration/start alone, and renewed activity cannot restore the session
+until a capture is written. This limitation is accepted; the dashboard does not probe
+processes or providers to work around it.
+
+A capture that exists but cannot be read (for example a permission or I/O error) is
+not treated as missing and does not silently produce idle. The agents refresh fails
+visibly and the dashboard keeps last-known data until the read succeeds.
+
+The overview's **Running, but quiet** grouping (no recorded event for five minutes)
+is a separate, shorter hint and does not change a session's idle state.
+
 ## Data, polling, and bounds
 
 The server reads dialogue JSONL files from

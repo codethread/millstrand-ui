@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { ArrowUpRight, Bot, GitBranch } from 'lucide-react';
 import type { WorkspaceOption } from '../../shared/api';
-import { currentRun, runDisplayName, runLabel } from '../lib/agents';
+import { currentRun, runDisplayName, runLabel, runTone } from '../lib/agents';
 import { workspaceActivityDestination } from '../lib/dashboard-search';
 import type { WorkspaceActivityModel } from '../lib/overview';
 import { cn } from '../lib/utils';
@@ -206,7 +206,7 @@ export function WorkspaceActivity({
                     <span
                       className={cn(
                         'agent-status ml-auto',
-                        !staleAgents && `agent-status-${run?.status ?? 'unknown'}`,
+                        !staleAgents && `agent-status-${runTone(run)}`,
                       )}
                     >
                       <span className="agent-dot" />

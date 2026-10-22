@@ -8,7 +8,15 @@ import type {
 import { sorted } from '../../shared/array';
 
 export type AgentRunLabel =
-  'Untracked' | 'Unknown' | 'Queued' | 'Stopping' | 'Running' | 'Failed' | 'Completed' | 'Stopped';
+  | 'Untracked'
+  | 'Unknown'
+  | 'Queued'
+  | 'Stopping'
+  | 'Running'
+  | 'Idle'
+  | 'Failed'
+  | 'Completed'
+  | 'Stopped';
 
 export interface AgentDirectorySummary {
   total: number;
@@ -20,7 +28,7 @@ export type RelevantAgentActivity =
       kind: 'identity';
       identity: AgentIdentity;
       run: AgentRun | null;
-      label: AgentRunLabel | 'Working' | 'Session running';
+      label: AgentRunLabel | 'Working' | 'Session running' | 'Session idle';
       relation: 'working' | 'queued' | 'owner-session' | 'owner';
     }
   | {
@@ -40,6 +48,8 @@ export function agentActivitySignal(activity: RelevantAgentActivity[]) {
     'Queued',
     'Session running',
     'Unknown',
+    'Session idle',
+    'Idle',
     'Untracked',
     'Completed',
     'Stopped',
@@ -66,9 +76,14 @@ export type SelectedAgentActivity =
     }
   | { kind: 'run'; run: AgentRun };
 
+/** An unsettled session without recent evidence, or whose own end was captured, is not executing. */
+export function runIsQuiet(run: AgentRun): boolean {
+  return run.status === 'running' && run.activity.kind === 'quiet';
+}
+
 export function currentRun(agent: AgentIdentity): AgentRun | null {
   return (
-    agent.runs.find((run) => run.status === 'running') ??
+    agent.runs.find((run) => run.status === 'running' && !runIsQuiet(run)) ??
     agent.runs.find((run) => run.status === 'ready') ??
     agent.runs[0] ??
     null
@@ -80,17 +95,25 @@ export function agentStatus(agent: AgentIdentity): AgentRunStatus {
 }
 
 export function agentIsActive(agent: AgentIdentity): boolean {
-  return agentStatus(agent) === 'running' || agentStatus(agent) === 'ready';
+  const run = currentRun(agent);
+  return run !== null && runIsActive(run);
 }
 
 export function runIsActive(run: AgentRun): boolean {
-  return run.status === 'running' || run.status === 'ready';
+  return (run.status === 'running' && !runIsQuiet(run)) || run.status === 'ready';
+}
+
+/** Status styling key; quiet sessions must not borrow the running pulse. */
+export function runTone(run: AgentRun | null): string {
+  if (run === null) return 'unknown';
+  return runIsQuiet(run) ? 'idle' : run.status;
 }
 
 export function runLabel(run: AgentRun | null): AgentRunLabel {
   if (!run) return 'Untracked';
   if (run.status === 'unknown') return 'Unknown';
   if (run.status === 'ready') return 'Queued';
+  if (runIsQuiet(run)) return 'Idle';
   if (run.status === 'running') return run.substatus === 'requested' ? 'Stopping' : 'Running';
   if (run.status === 'failed') return 'Failed';
   return run.substatus === 'completed' ? 'Completed' : 'Stopped';
@@ -121,15 +144,21 @@ function matchesRun(run: AgentRun, words: string[]): boolean {
   );
 }
 
+function agentOrder(agent: AgentIdentity): AgentRunStatus | 'idle' {
+  const run = currentRun(agent);
+  return run !== null && runIsQuiet(run) ? 'idle' : agentStatus(agent);
+}
+
 export function selectAgents(
   agents: AgentIdentity[],
   query: string,
   activeOnly: boolean,
 ): AgentIdentity[] {
   const words = query.trim().toLowerCase().split(/\s+/);
-  const order: Record<AgentRunStatus, number> = {
+  const order: Record<AgentRunStatus | 'idle', number> = {
     running: 0,
     ready: 1,
+    idle: 2,
     failed: 2,
     stopped: 3,
     unknown: 4,
@@ -146,7 +175,7 @@ export function selectAgents(
         .toLowerCase();
       return (!activeOnly || agentIsActive(agent)) && words.every((word) => text.includes(word));
     }),
-    (a, b) => order[agentStatus(a)] - order[agentStatus(b)] || a.id.localeCompare(b.id),
+    (a, b) => order[agentOrder(a)] - order[agentOrder(b)] || a.id.localeCompare(b.id),
   );
 }
 
@@ -194,7 +223,7 @@ export function issueAgents(
 
 export function issueRun(agent: AgentIdentity, id: string): AgentRun | null {
   return (
-    agent.runs.find((run) => run.status === 'running' && runTargets(run, id)) ??
+    agent.runs.find((run) => run.status === 'running' && !runIsQuiet(run) && runTargets(run, id)) ??
     agent.runs.find((run) => run.status === 'ready' && runTargets(run, id)) ??
     currentRun(agent)
   );
@@ -204,12 +233,15 @@ export function issueAgentActivity(
   agent: AgentIdentity,
   id: string,
 ): RelevantAgentActivity['label'] {
-  const running = agent.runs.find((run) => run.status === 'running' && runTargets(run, id));
+  const running = agent.runs.find(
+    (run) => run.status === 'running' && !runIsQuiet(run) && runTargets(run, id),
+  );
   if (running) return running.substatus === 'requested' ? 'Stopping' : 'Working';
   const queued = agent.runs.find((run) => run.status === 'ready' && runTargets(run, id));
   if (queued) return 'Queued';
   const run = currentRun(agent);
-  return run?.status === 'running' ? 'Session running' : runLabel(run);
+  if (run?.status !== 'running') return runLabel(run);
+  return runIsQuiet(run) ? 'Session idle' : 'Session running';
 }
 
 export function relevantAgentActivity(

@@ -307,8 +307,10 @@ For `auto-full-land`, the independent finisher owns scoped rebase conflicts and
 defects caused by the candidate. It records and repairs them, obtains focused review
 for material changes, pushes, and retries the **same** settled failed gate under the
 pinned workflow retry rules; no replacement worker or new approval is needed. Keep
-the FIFO reservation. Managed Code gates use `workflow retry` with the exact attempt
-and a fresh request key; never clear their `gate/error` manually.
+the FIFO reservation. Managed Code and Shell gates use `workflow execution` to inspect
+the failure, then `workflow retry` with the exact settled failed attempt, a fresh
+request key, reason and actor. Recipe-marked gates also require
+`--expected-revision`. Never clear their `gate/error` manually.
 
 Escalate for uncertain subprocess/merge settlement, mismatched identities or
 receipts, unknown resource ownership, out-of-scope failure, or an exhausted retry

@@ -90,8 +90,12 @@
 (def ^:private retry-instruction
   (format-alpha/prose
    "
-     Inspect the failed gate's output, repair the cause, then clear `gate/error`
-     to retry. Keep the FIFO turn and merge lock; do not requeue at the back.
+     Inspect the exact failed attempt with `workflow execution RUN --step GATE`
+     and repair the cause. After positive settlement, use `workflow retry RUN
+     --step GATE --expected-attempt TOKEN --request-id KEY --reason TEXT
+     --by-identity ACTOR`. Recipe-marked gates also require `--expected-revision
+     REVISION`. Use a fresh request key; never clear `gate/error` or manually
+     complete a managed gate. Keep the FIFO turn and merge lock; do not requeue.
      Obtain focused review for material repairs. Request a user decision only
      when repair changes the authorized scope or ownership. Before a merge has
      been submitted, withdraw safely if that decision requires changing the plan.
@@ -139,7 +143,7 @@
     (fn [{:keys [branch]}]
       (support/sh-gate support/land-quality-gate-script "review-quality" branch))
     5400
-    "Commit and push the clean branch. Fix failed checks, then clear gate/error to retry.")
+    retry-instruction)
    (workflow/gate
     :review-agent "Run the one-seat code review" :agent
     :depends-on [:review-quality]
@@ -259,7 +263,7 @@
                        300 retry-instruction)
    (workflow/gate :release-turn "Release the merge turn before housekeeping" :merge-release
                   :depends-on [:pull-main]
-                  "Release is automatic. On failure, repair the cause and clear gate/error to retry.")
+                  "Release is scanner-owned, not a managed execution gate. On failure, repair the cause and clear gate/error so the FIFO scanner can retry.")
    (workflow/gate :remove-branch-worktree "Remove the landed branch and worktree" :shell
                   :depends-on [:release-turn]
                   :attributes {"shell/argv"
@@ -271,7 +275,10 @@
                   (format-alpha/prose
                    "
                      Cleanup is automatic and repeatable after worktree removal.
-                     On failure, repair the cause and clear `gate/error` to retry.
+                     On failure, inspect `workflow execution RUN --step GATE`,
+                     repair the cause, then use `workflow retry` with the exact
+                     settled failed attempt, a fresh request key, reason and actor.
+                     Never clear `gate/error` or manually complete this managed gate.
                      The next landing may be running; leave its resources alone.
                    " {}))
    (support/card-gate :finish-card "Finish the optional kanban card" [:remove-branch-worktree]
