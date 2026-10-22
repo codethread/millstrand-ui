@@ -39,9 +39,12 @@
     (fn [{:keys [card]}] (autonomous/failure-policy card))
     (format/prose
      "
-       Await this executor-owned gate. Inspect failures, repair the cause, then
-       explicitly clear gate/error to retry. Never manually assert a passing
-       result.
+       Await this executor-owned gate. Inspect failures with `workflow execution
+       RUN --step GATE`, repair the cause, then use `workflow retry RUN --step GATE
+       --expected-attempt TOKEN --request-id KEY --reason TEXT --by-identity ACTOR`
+       after positive settlement. Recipe-marked gates also require
+       `--expected-revision REVISION`. Use a fresh request key. Never clear
+       gate/error or manually assert a passing result.
      " {})))
 
 (defn- review-delivery
