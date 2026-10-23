@@ -159,13 +159,13 @@ describe('external reference projections', () => {
   const withRefs = (refs: unknown) =>
     parseCard({ ...row, attributes: { 'kanban/card': 'true', 'kanban/external-refs': refs } });
 
-  it('reads the native array in order, keeping optional labels', () => {
+  it('reads the native array in order, keeping only non-blank labels', () => {
     expect(parseCard(row).externalRefs).toEqual([]);
     expect(
       withRefs([
         { url: 'https://acme.atlassian.net/browse/DL-1', label: 'DL-1', added: 'by spool' },
         { url: 'https://acme.atlassian.net/browse/DL-2' },
-        { url: 'https://git.example.io/team/app/-/merge_requests/7' },
+        { url: 'https://git.example.io/team/app/-/merge_requests/7', label: '  ' },
       ]).externalRefs,
     ).toEqual([
       { url: 'https://acme.atlassian.net/browse/DL-1', label: 'DL-1' },

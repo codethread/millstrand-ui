@@ -158,7 +158,12 @@ const externalRefsSchema = z.array(
   z
     .object({
       url: z.url({ protocol: /^https?$/ }),
-      label: z.string().optional(),
+      // A blank label names nothing, so the provider and path name the link instead.
+      label: z
+        .string()
+        .trim()
+        .optional()
+        .transform((text) => text || null),
     })
     .loose(),
 );
@@ -330,7 +335,7 @@ export function parseCard(value: unknown, provenance: AttributionProjection): Ca
       compiledExternalRefsSchema,
       attrs['kanban/external-refs'] ?? [],
       'kanban/external-refs',
-    ).map((ref) => ({ url: ref.url, label: ref.label ?? null })),
+    ).map((ref) => ({ url: ref.url, label: ref.label })),
     autoRun: parseAutoRun(attrs, labels),
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,

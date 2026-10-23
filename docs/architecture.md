@@ -99,8 +99,9 @@ limitation and done-only outcome semantics.
 `server/parse.ts`; it is not an agent lifecycle. Opt-in comes from the spool's
 `kanban.label/auto-run` string flag, and all `auto-run/*` values are read-only.
 `Card.externalRefs` parses the spool's native `kanban/external-refs` array of
-`{url, label?}` objects (http(s) URLs only; other keys are ignored, and malformed
-data fails the read). `src/lib/external-refs.ts` infers Jira, GitLab, GitHub or a
+`{url, label?}` objects, allowlisted for the persisted board read. URLs must be
+http(s), blank labels count as absent, other keys are ignored, and a malformed entry
+deliberately fails the whole read with an error naming the key. `src/lib/external-refs.ts` infers Jira, GitLab, GitHub or a
 generic link from the URL; cards and the detail header render one new-tab icon link each.
 The board projection is built directly from the persisted snapshot: strands marked
 `kanban/card = "true"` supply membership, `kanban/lane`, `kanban/type`,
