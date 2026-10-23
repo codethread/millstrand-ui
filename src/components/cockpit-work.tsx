@@ -60,12 +60,17 @@ function Section({
 }
 
 function CardRow({ item }: { item: CockpitCard }) {
-  const { inspectOverviewCard } = useDashboardActions();
+  const { inspectOverviewCard, openLinkedCard } = useDashboardActions();
   const reason = item.reason;
+  const link = item.card.link;
   return (
     <article className="border-b border-border last:border-b-0">
       <button
-        onClick={() => inspectOverviewCard(item.workspace.id, item.card.id)}
+        onClick={() =>
+          link?.status === 'live'
+            ? openLinkedCard(link.target)
+            : inspectOverviewCard(item.workspace.id, item.card.id)
+        }
         disabled={item.workspace.status !== 'running'}
         className="block w-full px-4 pt-4 pb-2 text-left transition-colors hover:bg-accent/40 disabled:opacity-60"
       >

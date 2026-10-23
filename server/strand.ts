@@ -104,7 +104,8 @@ function unresolvedLinks(workspace: string): Promise<LinkedSource> {
   return Promise.resolve({
     kind: 'unavailable',
     workspaceId: workspace,
-    workspaceName: basename(dirname(workspace)),
+    workspaceName:
+      basename(workspace) === '.millstrand' ? basename(dirname(workspace)) : basename(workspace),
     reason: 'Linked workspaces are not resolved here.',
   });
 }
