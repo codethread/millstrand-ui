@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ArrowUpRight, Check, Clock3, Copy, GitBranch, Layers, Network } from 'lucide-react';
 import { Markdown } from './markdown';
 import type { CardDetail } from '../../shared/api';
-import { useCard, useCardNotes } from '../hooks/use-cards';
+import { useBoardWorkspace, useCard, useCardNotes } from '../hooks/use-cards';
 import { formatDate } from '../lib/board';
 import { useDashboardActions, useDetailTab } from '../lib/navigation';
 import type { DetailTab } from '../lib/dashboard-search';
@@ -148,6 +148,8 @@ function CopyLink() {
 
 export function IssueDetail({ id }: { id: string }) {
   const query = useCard(id);
+  // Same-looking IDs exist on many boards; always name the board this detail belongs to.
+  const workspaceName = useBoardWorkspace().data?.name ?? null;
   const tab = useDetailTab();
   const notes = useCardNotes(id, tab === 'notes');
   const { closeCard, openCard, exploreGraph, setDetailTab: setTab } = useDashboardActions();
@@ -168,6 +170,12 @@ export function IssueDetail({ id }: { id: string }) {
       <SheetContent className="issue-sheet sm:max-w-[710px]">
         <div className="detail-topline">
           <span className="flex items-center gap-2">
+            {workspaceName !== null && (
+              <>
+                <span className="font-medium text-foreground">{workspaceName}</span>
+                <span className="text-muted-foreground">/</span>
+              </>
+            )}
             {detail && <TypeIcon type={detail.card.type} />}
             <span className="issue-id">{id}</span>
             {detail?.card.epicId && (

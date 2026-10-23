@@ -78,7 +78,7 @@ export function LinkedCardNotice({ link }: { link: CardLink }) {
     <aside
       aria-label="Linked card"
       className={cn(
-        'mx-5 mt-3 space-y-2 rounded-lg border p-3 text-xs',
+        'mx-5 mt-3 mb-2 space-y-2 rounded-lg border p-3 text-xs',
         link.status === 'live'
           ? 'border-primary/30 bg-accent/40'
           : 'border-amber-500/50 bg-amber-50/60 dark:bg-amber-950/30',
