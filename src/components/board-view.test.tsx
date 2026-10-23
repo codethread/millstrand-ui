@@ -10,7 +10,7 @@ import { BoardView, OutlineView } from './board-view';
 import { TooltipProvider } from './ui/tooltip';
 
 vi.mock('../lib/navigation', () => ({
-  useDashboardActions: () => ({ openCard: vi.fn(), toggleLabel: vi.fn() }),
+  useDashboardActions: () => ({ openCard: vi.fn(), openLinkedCard: vi.fn(), toggleLabel: vi.fn() }),
   useIssueFilter: () => emptyFilter(),
 }));
 vi.mock('../hooks/use-workspace', () => ({ useWorkspace: () => null }));
@@ -87,4 +87,31 @@ it.each([false, true])(
 
 it('does not hide unavailable activity as an empty successful signal', () => {
   expect(render([card('card')], false, true)).toContain('Activity unavailable details');
+});
+
+it('marks linked cards with their destination and keeps unavailable mirrors visibly stale', () => {
+  const target = {
+    workspace: '/repo/.millstrand',
+    workspaceId: 'repo',
+    workspaceName: 'repo',
+    card: 'd1',
+  };
+  const html = render(
+    [
+      card('local'),
+      { ...card('live'), link: { status: 'live', target } },
+      {
+        ...card('stale'),
+        link: { status: 'unavailable', target, reason: 'Offline.', observedAt: null },
+      },
+    ],
+    false,
+  );
+  expect(html).toContain('aria-label="Open Title local"');
+  expect(html).toContain('aria-label="Open Title live on repo"');
+  expect(html).toContain('aria-label="Linked to d1 on repo"');
+  // An unavailable mirror opens its local notice rather than routing to an unreadable board.
+  expect(html).toContain('aria-label="Open Title stale"');
+  expect(html).toContain('aria-label="Linked to d1 on repo, unavailable"');
+  expect(html).toContain('· stale');
 });

@@ -337,6 +337,8 @@ export function parseCard(value: unknown, provenance: AttributionProjection): Ca
       'kanban/external-refs',
     ).map((ref) => ({ url: ref.url, label: ref.label })),
     autoRun: parseAutoRun(attrs, labels),
+    // Only the board read can resolve the downstream source; see `overlayLinkedCard`.
+    link: null,
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,
   };

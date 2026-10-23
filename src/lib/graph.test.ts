@@ -44,6 +44,7 @@ function card(id: string, epicId: string | null = null): Card {
     labels: [],
     externalRefs: [],
     autoRun: null,
+    link: null,
     createdAt: '2026-09-18',
     updatedAt: null,
   };

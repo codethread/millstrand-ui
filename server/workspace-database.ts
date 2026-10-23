@@ -140,7 +140,7 @@ const provenanceSql = `
                  AND attributes.archived = 0
                  AND (
                    attributes.key IN (${placeholders(provenanceAttributeKeys)})
-                   OR attributes.key LIKE 'kanban.label/%'
+                   OR attributes.key LIKE 'kanban.label/%' OR attributes.key IN ('kanban/link', 'kanban/link-snapshot')
                  )
              ),
              '{}'

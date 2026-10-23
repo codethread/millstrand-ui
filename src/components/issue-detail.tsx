@@ -1,3 +1,4 @@
+import { LinkedCardBadge, LinkedCardNotice } from './linked-card';
 import { CardDependencyCounts } from './dependency-counts';
 import { useState } from 'react';
 import { ArrowUpRight, Check, Clock3, Copy, GitBranch, Layers, Network } from 'lucide-react';
@@ -190,6 +191,7 @@ export function IssueDetail({ id }: { id: string }) {
               </SheetDescription>
               <div className="detail-meta">
                 <StatusBadge status={detail.card.lane} />
+                {detail.card.link !== null && <LinkedCardBadge link={detail.card.link} />}
                 <CardDependencyCounts counts={detail.card.dependencies} />
                 <span className="detail-meta-separator" />
                 <IssueAgents owner={detail.card.owner} target={detail.card.id} />
@@ -200,6 +202,7 @@ export function IssueDetail({ id }: { id: string }) {
                 <ExternalRefs refs={detail.card.externalRefs} />
               </div>
             </div>
+            {detail.card.link !== null && <LinkedCardNotice link={detail.card.link} />}
             <Tabs
               value={tab}
               className="detail-tabs-root"

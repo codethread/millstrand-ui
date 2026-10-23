@@ -1,3 +1,4 @@
+import { LinkedCardBadge } from './linked-card';
 import { CardDependencyCounts } from './dependency-counts';
 import type { ReactNode } from 'react';
 import { ArrowUpRight, Bell, Bot, Clock3, Inbox } from 'lucide-react';
@@ -97,6 +98,7 @@ function CardRow({ item }: { item: CockpitCard }) {
       <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
         <CardDependencyCounts counts={item.card.dependencies} />
         <ExternalRefs refs={item.card.externalRefs} />
+        {item.card.link !== null && <LinkedCardBadge link={item.card.link} />}
       </div>
     </article>
   );

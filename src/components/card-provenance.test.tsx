@@ -65,6 +65,7 @@ const card: Card = {
   labels: [],
   externalRefs: [],
   autoRun: null,
+  link: null,
   createdAt: '2026-09-01T12:00:00Z',
   updatedAt: null,
 };

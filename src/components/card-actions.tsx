@@ -50,13 +50,17 @@ function CardMenuItems({ card, context }: { card: Card; context: boolean }) {
       <Item onSelect={() => viewCardDependencies(card.id)}>View dependencies</Item>
       <Separator />
       <Label>Move to lane</Label>
-      {lanes.map(({ id, title }) =>
-        id === 'unknown' ? null : (
-          <Item key={id} disabled={pending || card.lane === id} onSelect={() => move(id)}>
-            <span className="size-4">{card.lane === id && <Check />}</span>
-            {title}
-          </Item>
-        ),
+      {card.link !== null ? (
+        <Item disabled>Lane follows {card.link.target.workspaceName}</Item>
+      ) : (
+        lanes.map(({ id, title }) =>
+          id === 'unknown' ? null : (
+            <Item key={id} disabled={pending || card.lane === id} onSelect={() => move(id)}>
+              <span className="size-4">{card.lane === id && <Check />}</span>
+              {title}
+            </Item>
+          ),
+        )
       )}
       <Separator />
       <Item
