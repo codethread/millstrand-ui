@@ -7,6 +7,7 @@ import { useDashboardActions } from '../lib/navigation';
 import type { AgentPulse, CockpitAgent, CockpitCard } from '../lib/overview';
 import { cn } from '../lib/utils';
 import { AttentionSettings } from './attention-settings';
+import { ExternalRefs } from './external-refs';
 import { AgentLogHint, AgentLogButton } from './agent-log-hint';
 
 function Pulse({ pulse }: { pulse: AgentPulse }) {
@@ -93,8 +94,9 @@ function CardRow({ item }: { item: CockpitCard }) {
           {item.stale && <span className="text-destructive">Last-known card</span>}
         </div>
       </button>
-      <div className="px-3 pb-2">
+      <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
         <CardDependencyCounts counts={item.card.dependencies} />
+        <ExternalRefs refs={item.card.externalRefs} />
       </div>
     </article>
   );

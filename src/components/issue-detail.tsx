@@ -18,6 +18,7 @@ import { AutoRunDetails } from './auto-run';
 import { Notes, TaskRow } from './issue-tasks';
 import { LabelsEditor } from './issue-labels';
 import { IssueProperties } from './issue-properties';
+import { ExternalRefs } from './external-refs';
 import { CardAgentLog } from './card-agent-log';
 import { CardProvenance } from './card-provenance';
 
@@ -196,6 +197,7 @@ export function IssueDetail({ id }: { id: string }) {
                 <span className={`priority priority-${detail.card.priority}`}>
                   {detail.card.priority.toUpperCase()} priority
                 </span>
+                <ExternalRefs refs={detail.card.externalRefs} />
               </div>
             </div>
             <Tabs

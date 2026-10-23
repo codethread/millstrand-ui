@@ -6,6 +6,7 @@ import { useDashboardActions, useIssueFilter } from '../lib/navigation';
 import { cn } from '../lib/utils';
 import { CardDependencyCounts } from './dependency-counts';
 import { CardSignals } from './card-signals';
+import { ExternalRefs } from './external-refs';
 import { StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { CardContextMenu, CardMenuButton } from './card-actions';
@@ -56,6 +57,7 @@ function CardMetadata({ card, outline }: { card: Card; outline: boolean }) {
     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
       {outline && <StatusBadge status={card.lane} />}
       <CardSignals card={card} />
+      <ExternalRefs refs={card.externalRefs} />
       <span className={`priority priority-${card.priority}`}>
         <span className="sr-only">Priority </span>
         {card.priority.toUpperCase()}

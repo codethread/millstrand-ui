@@ -154,6 +154,15 @@ const graphSchema = z
   })
   .loose();
 const compiledGraphSchema = z.compile(graphSchema, { strict: true });
+const externalRefsSchema = z.array(
+  z
+    .object({
+      url: z.url({ protocol: /^https?$/ }),
+      label: z.string().optional(),
+    })
+    .loose(),
+);
+const compiledExternalRefsSchema = z.compile(externalRefsSchema, { strict: true });
 const labelSchema = z
   .string()
   .trim()
@@ -317,6 +326,11 @@ export function parseCard(value: unknown, provenance: AttributionProjection): Ca
     source: maybeString(read('source', 'kanban/source'), 'card.source'),
     outcome: maybeString(read('outcome', 'kanban/outcome'), 'card.outcome'),
     labels: sorted([...new Set(labels)]),
+    externalRefs: parseSchema(
+      compiledExternalRefsSchema,
+      attrs['kanban/external-refs'] ?? [],
+      'kanban/external-refs',
+    ).map((ref) => ({ url: ref.url, label: ref.label ?? null })),
     autoRun: parseAutoRun(attrs, labels),
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? null,

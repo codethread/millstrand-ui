@@ -68,6 +68,7 @@ const provenanceAttributeKeys = [
   'kanban/owner',
   'kanban/claimed-at',
   'kanban/run-id',
+  'kanban/external-refs',
   'branch',
   'worktree',
   'auto-run/seat',

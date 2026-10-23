@@ -154,6 +154,35 @@ describe('strand projection boundaries', () => {
   );
 });
 
+describe('external reference projections', () => {
+  const row = { ...entity, created_at: '2026-10-23 10:00:00' };
+  const withRefs = (refs: unknown) =>
+    parseCard({ ...row, attributes: { 'kanban/card': 'true', 'kanban/external-refs': refs } });
+
+  it('reads the native array in order, keeping optional labels', () => {
+    expect(parseCard(row).externalRefs).toEqual([]);
+    expect(
+      withRefs([
+        { url: 'https://acme.atlassian.net/browse/DL-1', label: 'DL-1', added: 'by spool' },
+        { url: 'https://acme.atlassian.net/browse/DL-2' },
+        { url: 'https://git.example.io/team/app/-/merge_requests/7' },
+      ]).externalRefs,
+    ).toEqual([
+      { url: 'https://acme.atlassian.net/browse/DL-1', label: 'DL-1' },
+      { url: 'https://acme.atlassian.net/browse/DL-2', label: null },
+      { url: 'https://git.example.io/team/app/-/merge_requests/7', label: null },
+    ]);
+  });
+
+  it.each([
+    ['a JSON-encoded string', '[{"url":"https://github.com/a/b/pull/1"}]'],
+    ['a non-web URL', [{ url: 'javascript:alert(1)' }]],
+    ['a missing URL', [{ label: 'DL-1' }]],
+  ])('rejects %s', (_, refs) => {
+    expect(() => withRefs(refs)).toThrow('kanban/external-refs');
+  });
+});
+
 describe('auto-run card projections', () => {
   const row = { ...entity, created_at: '2026-09-17 10:00:00' };
 
