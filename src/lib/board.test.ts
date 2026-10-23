@@ -41,6 +41,7 @@ function card(id: string, labels: string[] = []): Card {
     labels,
     externalRefs: [],
     autoRun: null,
+    link: null,
     createdAt: '2026-09-12 10:00:00',
     updatedAt: null,
   };

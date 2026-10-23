@@ -17,6 +17,7 @@ import type { LogBinding } from '../shared/log-activity.ts';
 import { sorted } from '../shared/array.ts';
 import { providerSchema } from '../shared/session-log.ts';
 import { jsonObjectSchema } from './parse.ts';
+import { parseStoredLink, type StoredLink } from './linked-cards.ts';
 
 const strandStateSchema = z.enum(['active', 'closed', 'replaced']);
 const boardLanes: Lane[] = [
@@ -130,6 +131,7 @@ export interface ProvenanceCardRow {
     type: CardType;
     outcome: string | null;
     labels: string[];
+    link: StoredLink | null;
   };
 }
 
@@ -359,6 +361,7 @@ export class ProvenanceIndex {
                 .filter(([key, flag]) => key.startsWith('kanban.label/') && flag === 'true')
                 .map(([key]) => key.slice('kanban.label/'.length)),
             ),
+            link: parseStoredLink(strand.attributes),
           },
         };
       });

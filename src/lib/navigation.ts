@@ -6,7 +6,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { useDashboardStore } from '../store';
-import type { CardType, Lane, Priority, SavedView, ViewFilter } from '../../shared/api';
+import type { CardType, Lane, LinkTarget, Priority, SavedView, ViewFilter } from '../../shared/api';
 import { emptyFilter, type WorkspaceView } from './board';
 import {
   allGraphCardsSearch,
@@ -157,6 +157,13 @@ export function useDashboardActions() {
     selectWorkspace: (workspace: string) => {
       useDashboardStore.getState().resetWorkspace();
       void navigate({ search: workspaceDestination(workspace, { kind: 'board' }) });
+    },
+    /** The authoritative card lives on another board: route by its workspace and card ID. */
+    openLinkedCard: (target: LinkTarget) => {
+      useDashboardStore.getState().resetWorkspace();
+      void navigate({
+        search: workspaceDestination(target.workspaceId, { kind: 'card', id: target.card }),
+      });
     },
     openOverview: () => {
       useDashboardStore.getState().resetWorkspace();

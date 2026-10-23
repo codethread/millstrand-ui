@@ -9,6 +9,7 @@ import { HttpError } from './parse.ts';
 import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 import { SessionLogReader } from './session-log-reader.ts';
 import { StrandData } from './strand.ts';
+import type { LinkedSource } from './linked-cards.ts';
 import { ViewStore } from './views.ts';
 
 const workspaceEntrySchema = z
@@ -191,16 +192,54 @@ export class WorkspaceDirectory {
       throw new HttpError(503, 'This weaver changed during workspace selection.');
     if (this.lifecycleOperations.has(workspaceId(path)))
       throw new HttpError(503, 'This weaver has a lifecycle operation in progress.');
+    return this.client(path);
+  }
+
+  private client(path: string): WorkspaceClients {
     let selected = this.clients.get(path);
     if (selected === undefined) {
       selected = {
         path,
-        strand: new StrandData(path, { logger: this.logger }),
+        strand: new StrandData(path, {
+          logger: this.logger,
+          linkedSource: (workspace) => this.linkedSource(workspace),
+        }),
         logs: new SessionLogReader({ logger: this.logger }),
         views: new ViewStore(path),
       };
       this.clients.set(path, selected);
     }
     return selected;
+  }
+
+  /**
+   * A coordinator mirror's downstream board, read through the same bounded persisted
+   * snapshot as that workspace's own board. Every failure is a visible unavailable source.
+   */
+  private async linkedSource(workspace: string): Promise<LinkedSource> {
+    const path = resolve(workspace);
+    const { id, name } = option(path, 'offline');
+    const unavailable = (reason: string): LinkedSource => ({
+      kind: 'unavailable',
+      workspaceId: id,
+      workspaceName: name,
+      reason,
+    });
+    try {
+      const found = (await this.list()).find((candidate) => candidate.path === path);
+      if (found === undefined) return unavailable(`${path} is not known to the local mill.`);
+      if (found.status === 'offline') return unavailable(`The ${name} weaver is offline.`);
+      if (this.lifecycleOperations.has(id))
+        return unavailable(`The ${name} weaver has a lifecycle operation in progress.`);
+      const cards = await this.client(path).strand.persistedCards();
+      return {
+        kind: 'available',
+        workspaceId: id,
+        workspaceName: name,
+        cards: cards.map(({ card }) => card),
+      };
+    } catch (error) {
+      return unavailable(error instanceof Error ? error.message : `Could not read ${name}.`);
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { LinkedCardBadge } from './linked-card';
 import { CardDependencyCounts } from './dependency-counts';
 import type { ReactNode } from 'react';
 import { ArrowUpRight, Bell, Bot, Clock3, Inbox } from 'lucide-react';
@@ -59,12 +60,17 @@ function Section({
 }
 
 function CardRow({ item }: { item: CockpitCard }) {
-  const { inspectOverviewCard } = useDashboardActions();
+  const { inspectOverviewCard, openLinkedCard } = useDashboardActions();
   const reason = item.reason;
+  const link = item.card.link;
   return (
     <article className="border-b border-border last:border-b-0">
       <button
-        onClick={() => inspectOverviewCard(item.workspace.id, item.card.id)}
+        onClick={() =>
+          link?.status === 'live'
+            ? openLinkedCard(link.target)
+            : inspectOverviewCard(item.workspace.id, item.card.id)
+        }
         disabled={item.workspace.status !== 'running'}
         className="block w-full px-4 pt-4 pb-2 text-left transition-colors hover:bg-accent/40 disabled:opacity-60"
       >
@@ -97,6 +103,7 @@ function CardRow({ item }: { item: CockpitCard }) {
       <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
         <CardDependencyCounts counts={item.card.dependencies} />
         <ExternalRefs refs={item.card.externalRefs} />
+        {item.card.link !== null && <LinkedCardBadge link={item.card.link} />}
       </div>
     </article>
   );

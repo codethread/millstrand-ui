@@ -128,6 +128,24 @@ readers of the existing workspace owner; mounting a badge or popover adds no pol
 Absent activity and opted-out configuration are quiet; dispatch failures survive
 opt-out, and activity refresh errors visibly mark retained signals as last-known.
 
+### Linked coordinator cards
+
+A coordinator mirror stores the spool's `kanban/link` (`{workspace, card}`) and
+`kanban/link-snapshot`; both are allowlisted in the persisted board read and parsed in
+`server/linked-cards.ts`. `StrandData.persistedCards` is the un-overlaid card list;
+`board()` overlays each mirror from its downstream workspace's `persistedCards`,
+resolved by `WorkspaceDirectory` against the existing discovery snapshot. So every
+`['board', w]` poll reflects the downstream title, state, lane, outcome, owner and
+branch with no `link refresh`, CLI call, key, endpoint or poll owner. Downstream
+overlays never recurse. An undiscovered, offline, failing or cardless source yields
+`link.status = 'unavailable'` with its reason, keeping the stored mirror fields and
+the snapshot's `observed-at` (shown as last-known). Labels, priority and epic stay the
+coordinator's annotations. Mirror lane moves are rejected server-side and absent from
+card menus. `LinkedCardBadge` names the destination on board, outline and cockpit rows;
+a live title opens `openLinkedCard`, which routes by downstream workspace ID **and**
+card ID to the authoritative detail (body, tasks, notes). Unavailable mirrors open
+locally with `LinkedCardNotice`.
+
 ## Checked read inventory
 
 All paths below have `/api` prepended. `w` is a discovered workspace ID; `null`

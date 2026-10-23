@@ -7,6 +7,7 @@ import { cn } from '../lib/utils';
 import { CardDependencyCounts } from './dependency-counts';
 import { CardSignals } from './card-signals';
 import { ExternalRefs } from './external-refs';
+import { LinkedCardBadge } from './linked-card';
 import { StatusBadge, StatusIcon, TypeIcon } from './issue-parts';
 import { Button } from './ui/button';
 import { CardContextMenu, CardMenuButton } from './card-actions';
@@ -36,12 +37,19 @@ function BoardLabels({ labels }: { labels: string[] }) {
 }
 
 function CardTitle({ card }: { card: Card }) {
-  const { openCard } = useDashboardActions();
+  const { openCard, openLinkedCard } = useDashboardActions();
+  const link = card.link;
+  // A live mirror opens the authoritative card; an unavailable one opens its honest local notice.
+  const downstream = link?.status === 'live' ? link.target : null;
   return (
     <button
       className="flex min-h-7 w-full items-baseline gap-2 text-left text-[13px] leading-snug font-medium hover:text-primary"
-      onClick={() => openCard(card.id)}
-      aria-label={`Open ${card.title}`}
+      onClick={() => (downstream === null ? openCard(card.id) : openLinkedCard(downstream))}
+      aria-label={
+        downstream === null
+          ? `Open ${card.title}`
+          : `Open ${card.title} on ${downstream.workspaceName}`
+      }
     >
       <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[10px] font-normal text-muted-foreground">
         <TypeIcon type={card.type} />
@@ -56,6 +64,7 @@ function CardMetadata({ card, outline }: { card: Card; outline: boolean }) {
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
       {outline && <StatusBadge status={card.lane} />}
+      {card.link !== null && <LinkedCardBadge link={card.link} />}
       <CardSignals card={card} />
       <ExternalRefs refs={card.externalRefs} />
       <span className={`priority priority-${card.priority}`}>
@@ -75,11 +84,15 @@ function IssueCard({ card, outline = false }: { card: Card; outline?: boolean })
     <CardContextMenu card={card}>
       <article
         data-card={card.id}
+        data-linked={card.link?.status}
         className={cn(
           'min-w-0 bg-card hover:bg-accent/20',
           outline
             ? 'grid items-center gap-x-4 gap-y-1 border-b border-border px-3 py-2 last:border-b-0 @3xl:grid-cols-[minmax(0,1fr)_minmax(300px,380px)]'
             : 'rounded-lg border border-border p-3',
+          // Linked mirrors carry a destination accent after the base border classes.
+          card.link?.status === 'live' && 'border-l-4 border-l-primary/50',
+          card.link?.status === 'unavailable' && 'border-l-4 border-l-amber-500/70',
         )}
       >
         <div className="min-w-0 space-y-1">

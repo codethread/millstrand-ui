@@ -60,6 +60,23 @@ export interface ExternalRef {
   label: string | null;
 }
 
+/** Authoritative downstream card a coordinator mirror follows (`kanban/link`). */
+export interface LinkTarget {
+  /** Downstream `.millstrand` path as stored; `workspaceId` is its discovery ID. */
+  workspace: string;
+  workspaceId: string;
+  workspaceName: string;
+  card: string;
+}
+
+/**
+ * Live means the board overlays the downstream card's current persisted state. Unavailable
+ * keeps the mirror's stored fields, which are only as current as `observedAt`.
+ */
+export type CardLink =
+  | { status: 'live'; target: LinkTarget }
+  | { status: 'unavailable'; target: LinkTarget; reason: string; observedAt: string | null };
+
 export interface Card {
   id: string;
   title: string;
@@ -80,6 +97,8 @@ export interface Card {
   labels: string[];
   externalRefs: ExternalRef[];
   autoRun: AutoRun | null;
+  /** Non-null for a read-only coordinator mirror of a card on another board. */
+  link: CardLink | null;
   createdAt: string;
   updatedAt: string | null;
 }

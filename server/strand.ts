@@ -16,6 +16,12 @@ import { basename, dirname } from 'node:path';
 import { emptyProvenance, ProvenanceIndex } from './provenance.ts';
 import { nullPerfLogger, type PerfLogger } from '../shared/perf.ts';
 import { WorkspaceDatabase, type PersistedWorkspaceReads } from './workspace-database.ts';
+import {
+  overlayLinkedCard,
+  type LinkedSource,
+  type ResolveLinkedSource,
+  type StoredLink,
+} from './linked-cards.ts';
 import { parseAgentReply, parsePromptContext } from './agent-replies.ts';
 import type {
   AgentDirectory,
@@ -85,9 +91,23 @@ class ReadCache<T> {
   }
 }
 
+export type PersistedCards = { card: Card; link: StoredLink | null }[];
+
 interface StrandDataOptions {
   database?: PersistedWorkspaceReads;
   logger?: PerfLogger;
+  /** Resolves a mirror's downstream workspace; the directory supplies discovered weavers. */
+  linkedSource?: ResolveLinkedSource;
+}
+
+function unresolvedLinks(workspace: string): Promise<LinkedSource> {
+  return Promise.resolve({
+    kind: 'unavailable',
+    workspaceId: workspace,
+    workspaceName:
+      basename(workspace) === '.millstrand' ? basename(dirname(workspace)) : basename(workspace),
+    reason: 'Linked workspaces are not resolved here.',
+  });
 }
 
 export class StrandData {
@@ -96,7 +116,9 @@ export class StrandData {
   private readonly provenanceReads = new ReadCache<ProvenanceIndex>();
   private readonly logProvenanceReads = new ReadCache<ProvenanceIndex>();
   private readonly notes = new ReadCache<Note[]>();
+  private readonly persistedCardReads = new ReadCache<PersistedCards>();
   private readonly boards = new ReadCache<Board>();
+  private readonly linkedSource: ResolveLinkedSource;
   private readonly agentDirectories = new ReadCache<AgentDirectory>();
   private readonly details = new ReadCache<CardDetail>();
   private readonly graphs = new ReadCache<CardGraph>();
@@ -114,9 +136,11 @@ export class StrandData {
     {
       logger = nullPerfLogger,
       database = new WorkspaceDatabase(workspace, { logger }),
+      linkedSource = unresolvedLinks,
     }: StrandDataOptions = {},
   ) {
     this.database = database;
+    this.linkedSource = linkedSource;
     this.logger = logger;
   }
 
@@ -317,33 +341,52 @@ export class StrandData {
       : new ProvenanceIndex(await this.database.readNoteProvenance(noteIds));
   }
 
-  board(includeClosed = true): Promise<Board> {
-    return this.boards.get(includeClosed ? 'with-closed' : 'active', async () => {
+  /**
+   * Every card exactly as this workspace persists it, before any linked overlay. Linked
+   * coordinators read this from their downstream sources, so mutual links cannot recurse.
+   */
+  persistedCards(): Promise<PersistedCards> {
+    return this.persistedCardReads.get('cards', async () => {
       await this.assertKanban();
       const provenance = await this.provenance();
       const entries = provenance.cardRows();
       if (entries.length > 10_000) throw new Error('Board exceeds the 10,000 card limit.');
-      const active = entries.filter(({ metadata }) => metadata.state !== 'closed');
-      const parentIds = new Set(
-        active.flatMap(({ metadata }) => {
-          const parentId = provenance.epicId(metadata.id);
-          return parentId === null ? [] : [parentId];
+      return entries.map(({ row, metadata }) => ({
+        card: parseCard(row, provenance),
+        link: metadata.link,
+      }));
+    });
+  }
+
+  board(includeClosed = true): Promise<Board> {
+    return this.boards.get(includeClosed ? 'with-closed' : 'active', async () => {
+      const entries = await this.persistedCards();
+      const sources = new Map<string, Promise<LinkedSource>>();
+      const all = await Promise.all(
+        entries.map(async ({ card, link }) => {
+          if (link === null) return card;
+          let source = sources.get(link.workspace);
+          if (source === undefined) {
+            source = this.linkedSource(link.workspace);
+            sources.set(link.workspace, source);
+          }
+          return overlayLinkedCard(card, link, await source);
         }),
       );
+      const active = all.filter((card) => card.state !== 'closed');
+      const parentIds = new Set(active.flatMap(({ epicId }) => (epicId === null ? [] : [epicId])));
       const visible = includeClosed
-        ? entries
-        : entries.filter(
-            ({ metadata }) =>
-              metadata.state !== 'closed' ||
-              (metadata.type === 'epic' && parentIds.has(metadata.id)),
+        ? all
+        : all.filter(
+            (card) => card.state !== 'closed' || (card.type === 'epic' && parentIds.has(card.id)),
           );
       const cards = sorted(
-        visible.map(({ row }) => parseCard(row, provenance)),
+        visible,
         (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
       );
       const counts = new Map<string, number>();
-      for (const { metadata } of entries) {
-        for (const label of metadata.labels) counts.set(label, (counts.get(label) ?? 0) + 1);
+      for (const { labels } of all) {
+        for (const label of labels) counts.set(label, (counts.get(label) ?? 0) + 1);
       }
       return {
         workspace: { path: this.workspace, name: basename(dirname(this.workspace)) },
@@ -355,13 +398,11 @@ export class StrandData {
         })),
         summary: {
           active: active.length,
-          inProgress: active.filter(({ metadata }) => metadata.lane === 'claimed').length,
-          ready: active.filter(({ metadata }) => metadata.lane === 'pending').length,
-          review: active.filter(({ metadata }) => metadata.lane === 'in_review').length,
-          closed: entries.length - active.length,
-          done: entries.filter(
-            ({ metadata }) => metadata.state === 'closed' && metadata.outcome === 'done',
-          ).length,
+          inProgress: active.filter(({ lane }) => lane === 'claimed').length,
+          ready: active.filter(({ lane }) => lane === 'pending').length,
+          review: active.filter(({ lane }) => lane === 'in_review').length,
+          closed: all.length - active.length,
+          done: all.filter(({ state, outcome }) => state === 'closed' && outcome === 'done').length,
         },
       };
     });
@@ -415,7 +456,9 @@ export class StrandData {
         tasks.flatMap((task) => (task.latestNote === null ? [] : [task.latestNote.id])),
       );
       return {
-        card: { ...parseCard(cardRaw, provenance), epicId: known.epicId },
+        // A mirror's authoritative fields come from the same downstream overlay as the board.
+        card:
+          known.link === null ? { ...parseCard(cardRaw, provenance), epicId: known.epicId } : known,
         body: body ?? '',
         attributes: attrs,
         tasks: tasks.map((task) => ({
@@ -489,9 +532,15 @@ export class StrandData {
 
   async changeCard(id: string, action: CardAction): Promise<{ ok: true }> {
     // Validate against a fresh board, never a potentially stale polling snapshot.
+    this.persistedCardReads.clear();
     this.boards.clear();
     this.provenanceReads.clear();
-    await this.card(id);
+    const card = await this.card(id);
+    if (action.kind === 'move' && card.link !== null)
+      throw new HttpError(
+        409,
+        `This card mirrors ${card.link.target.card} on ${card.link.target.workspaceName}; move it on that board.`,
+      );
     try {
       await this.run(action.kind === 'delete' ? ['burn', id] : moveCardArgs(id, action.lane));
       return { ok: true };
@@ -499,6 +548,7 @@ export class StrandData {
       // Even a timeout may follow a committed mutation.
       this.provenanceReads.clear();
       this.notes.clear();
+      this.persistedCardReads.clear();
       this.boards.clear();
       this.details.clear();
       this.graphs.clear();
@@ -520,6 +570,7 @@ export class StrandData {
     } finally {
       this.provenanceReads.clear();
       this.notes.clear();
+      this.persistedCardReads.clear();
       this.boards.clear();
       this.details.clear();
       this.graphs.clear();
