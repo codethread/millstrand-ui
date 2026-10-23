@@ -102,7 +102,8 @@ limitation and done-only outcome semantics.
 `{url, label?}` objects, allowlisted for the persisted board read. URLs must be
 http(s), blank labels count as absent, other keys are ignored, and a malformed entry
 deliberately fails the whole read with an error naming the key. `src/lib/external-refs.ts` infers Jira, GitLab, GitHub or a
-generic link from the URL; cards and the detail header render one new-tab icon link each.
+generic link from the URL; cards, the detail header and overview review rows render one
+new-tab link each, using the inline brand marks in `src/components/provider-logos.tsx`.
 The board projection is built directly from the persisted snapshot: strands marked
 `kanban/card = "true"` supply membership, `kanban/lane`, `kanban/type`,
 `kanban/priority`, labels, external references and known auto-run fields, and direct `parent-of` edges

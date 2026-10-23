@@ -1,16 +1,18 @@
-import { GitMerge, GitPullRequest, Link, Ticket, type LucideIcon } from 'lucide-react';
+import type { ComponentType, SVGProps } from 'react';
+import { Link } from 'lucide-react';
 import type { ExternalRef } from '../../shared/api';
 import {
   externalRefName,
   externalRefProvider,
   type ExternalRefProvider,
 } from '../lib/external-refs';
+import { GitHubLogo, GitLabLogo, JiraLogo } from './provider-logos';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
-const providerIcons: Record<ExternalRefProvider, LucideIcon> = {
-  jira: Ticket,
-  gitlab: GitMerge,
-  github: GitPullRequest,
+const providerIcons: Record<ExternalRefProvider, ComponentType<SVGProps<SVGSVGElement>>> = {
+  jira: JiraLogo,
+  gitlab: GitLabLogo,
+  github: GitHubLogo,
   link: Link,
 };
 
