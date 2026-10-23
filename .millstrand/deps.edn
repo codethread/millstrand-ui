@@ -5,43 +5,43 @@
    :deps/root "spools/batteries"}
   millhouse/auto-run
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/auto-run"}
   millhouse/config
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/config"}
   millhouse/cron
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/cron"}
   millhouse/devflow
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/devflow"}
   millhouse/devflow-kanban-adapter
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/devflow/kanban-adapter"}
   millhouse/harnesses
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/harnesses"}
   millhouse/identity
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/identity"}
   millhouse/kanban
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/kanban"}
   millhouse/land
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/land"}
   millhouse/workflow
   {:git/url "https://github.com/codethread/millhouse.spool.git"
-   :git/sha "dee46b08895327661ee7350426ee93ab6abd82ea"
+   :git/sha "b988c14d3d94d132d49ef61a81ff5a1fa7460211"
    :deps/root "spools/workflow"}}
  :aliases {:test {:extra-paths ["test"]
                   :extra-deps {io.millstrand/millstrand
