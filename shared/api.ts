@@ -54,6 +54,12 @@ export interface DependencyCounts {
   outgoing: number;
 }
 
+/** Parsed `kanban/external-refs` entry; the provider is inferred from the URL when rendered. */
+export interface ExternalRef {
+  url: string;
+  label: string | null;
+}
+
 export interface Card {
   id: string;
   title: string;
@@ -72,6 +78,7 @@ export interface Card {
   source: string | null;
   outcome: string | null;
   labels: string[];
+  externalRefs: ExternalRef[];
   autoRun: AutoRun | null;
   createdAt: string;
   updatedAt: string | null;

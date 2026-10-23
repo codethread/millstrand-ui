@@ -98,9 +98,15 @@ limitation and done-only outcome semantics.
 `Card.autoRun` is a nullable, normalized configuration/dispatcher snapshot parsed in
 `server/parse.ts`; it is not an agent lifecycle. Opt-in comes from the spool's
 `kanban.label/auto-run` string flag, and all `auto-run/*` values are read-only.
+`Card.externalRefs` parses the spool's native `kanban/external-refs` array of
+`{url, label?}` objects, allowlisted for the persisted board read. URLs must be
+http(s), blank labels count as absent, other keys are ignored, and a malformed entry
+deliberately fails the whole read with an error naming the key. `src/lib/external-refs.ts` infers Jira, GitLab, GitHub or a
+generic link from the URL; cards, the detail header and overview review rows render one
+new-tab link each, using the inline brand marks in `src/components/provider-logos.tsx`.
 The board projection is built directly from the persisted snapshot: strands marked
 `kanban/card = "true"` supply membership, `kanban/lane`, `kanban/type`,
-`kanban/priority`, labels and known auto-run fields, and direct `parent-of` edges
+`kanban/priority`, labels, external references and known auto-run fields, and direct `parent-of` edges
 from epic cards supply `epicId` with the spool's last-edge annotation.
 `StrandData.board` probes `strand help kanban` once per workspace so a weaver without
 the spool still fails with the documented Kanban message, then reads every board

@@ -96,6 +96,7 @@ it('runs one selective graph read without note strands or workspace interpolatio
   expect(sql).toContain("attributes.key LIKE 'kanban.label/%'");
   expect(sql).not.toContain(workspace);
   expect(parameters).toContain('kanban/ownership-claim');
+  expect(parameters).toContain('kanban/external-refs');
   expect(parameters).toContain('harness/published');
   expect(parameters).toContain('performed');
   expect(parameters).toContain('serves-root');

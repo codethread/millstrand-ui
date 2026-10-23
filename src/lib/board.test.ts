@@ -39,6 +39,7 @@ function card(id: string, labels: string[] = []): Card {
     source: null,
     outcome: null,
     labels,
+    externalRefs: [],
     autoRun: null,
     createdAt: '2026-09-12 10:00:00',
     updatedAt: null,
