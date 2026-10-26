@@ -410,6 +410,18 @@ kbd {
   background: var(--background);
   color: var(--color-muted-foreground);
 }
+.swimlane-heading {
+  container-type: scroll-state;
+  background: color-mix(in oklab, var(--color-muted) 30%, var(--background));
+}
+.swimlane-heading > * {
+  transition: box-shadow 120ms;
+}
+@container scroll-state(stuck: top) {
+  .swimlane-heading > * {
+    box-shadow: 0 1px 0 var(--color-border);
+  }
+}
 .working-content .graph-toolbar {
   padding-right: 56px;
 }

@@ -119,7 +119,7 @@ function SidebarContents() {
           <X className="size-4" />
         </button>
       </div>
-      <button className="nav-item mx-3 mb-2" onClick={actions.openOverview}>
+      <button className="nav-item mx-3 mb-2 w-auto!" onClick={actions.openOverview}>
         <LayoutGrid />
         All weavers
         <ArrowUpRight className="ml-auto" />

@@ -36,14 +36,17 @@ function BoardLabels({ labels }: { labels: string[] }) {
   );
 }
 
-function CardTitle({ card }: { card: Card }) {
+function CardTitle({ card, className }: { card: Card; className?: string }) {
   const { openCard, openLinkedCard } = useDashboardActions();
   const link = card.link;
   // A live mirror opens the authoritative card; an unavailable one opens its honest local notice.
   const downstream = link?.status === 'live' ? link.target : null;
   return (
     <button
-      className="flex min-h-7 w-full items-baseline gap-2 text-left text-[13px] leading-snug font-medium hover:text-primary"
+      className={cn(
+        'flex min-h-7 w-full items-baseline gap-2 text-left text-[13px] leading-snug font-medium hover:text-primary',
+        className,
+      )}
       onClick={() => (downstream === null ? openCard(card.id) : openLinkedCard(downstream))}
       aria-label={
         downstream === null
@@ -112,6 +115,15 @@ function IssueCard({ card, outline = false }: { card: Card; outline?: boolean })
 const canvasClass =
   '@container flex-1 min-h-0 overflow-auto border-t border-border bg-muted/30 px-3 pb-6 pt-12 sm:px-5';
 
+function CountChip({ count }: { count: number }) {
+  return (
+    <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+      {count}
+      <span className="sr-only"> matching features</span>
+    </span>
+  );
+}
+
 export function BoardView({
   columns,
   swimlanes,
@@ -122,26 +134,33 @@ export function BoardView({
   const gridStyle = { gridTemplateColumns: `repeat(${columns.length}, minmax(230px, 1fr))` };
   return (
     <section
-      className={cn(canvasClass, 'relative focus-visible:outline-primary')}
+      // The flush status header replaces the shared top gutter; its left-aligned counts keep
+      // the floating fullscreen toggle clear without a dedicated band.
+      // Rows carry their own --board-pad inset so full-bleed bands never overflow the scrollport.
+      className={cn(
+        canvasClass,
+        'relative px-0 pt-0 [--board-pad:--spacing(3)] focus-visible:outline-primary sm:px-0 sm:[--board-pad:--spacing(5)]',
+      )}
       aria-label="Board by epic, scroll to see more statuses"
       // Keyboard users need to focus the scroll region to pan across statuses.
       // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
     >
-      <div style={{ minWidth: columns.length * 230 + (columns.length - 1) * 12 }}>
+      <div
+        style={{
+          minWidth: `calc(${columns.length * 230 + (columns.length - 1) * 12}px + 2 * var(--board-pad))`,
+        }}
+      >
         <div
-          className="sticky top-0 z-1 grid gap-3 border-b border-border bg-background py-3 shadow-sm before:absolute before:inset-x-0 before:bottom-full before:h-12 before:bg-background"
+          className="sticky top-0 z-2 grid min-h-11 gap-3 border-b border-border bg-background px-(--board-pad)"
           style={gridStyle}
           aria-label="Status columns"
         >
           {columns.map(({ lane, count }) => (
-            <div key={lane.id} className="flex min-w-0 items-center gap-2 px-2">
+            <div key={lane.id} className="flex min-w-0 items-center gap-2 px-3">
               <StatusIcon status={lane.id} />
               <h2 className="text-xs font-semibold">{lane.title}</h2>
-              <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                {count}
-                <span className="sr-only"> matching features</span>
-              </span>
+              <CountChip count={count} />
             </div>
           ))}
         </div>
@@ -149,42 +168,80 @@ export function BoardView({
           <section
             key={group.parent?.id ?? 'standalone'}
             aria-label={group.parent?.title ?? 'Standalone work'}
-            className="border-b border-border pb-4 last:border-b-0"
+            className="group"
           >
-            <div className="sticky left-0 my-3 w-[100cqw] max-w-full rounded-lg border border-border bg-card">
-              {group.parent ? (
-                <EpicHeading
-                  card={group.parent}
-                  count={group.cards.length}
-                  context={group.context}
-                />
+            {/* Stacks under the status row while its lane scrolls; full-bleed and opaque so
+                cards pass cleanly beneath it in both axes. 100cqw includes a classic scrollbar,
+                so cap it to the content width. */}
+            <div className="swimlane-heading sticky top-11 left-0 z-1 w-[100cqw] max-w-full">
+              <div className="px-[calc(var(--board-pad)+--spacing(3))] pt-4 pb-3">
+                {group.parent ? (
+                  <SwimlaneHeading
+                    card={group.parent}
+                    count={group.cards.length}
+                    context={group.context}
+                  />
+                ) : (
+                  <h2 className="flex min-h-7 items-center gap-2 text-[13px] font-semibold">
+                    <Layers className="size-3.5 text-primary" />
+                    Standalone work
+                    <CountChip count={group.cards.length} />
+                  </h2>
+                )}
+              </div>
+            </div>
+            <div className="mx-(--board-pad) border-b border-border pb-5 group-last:border-b-0">
+              {group.cards.length === 0 ? (
+                <p className="sticky left-(--board-pad) w-fit px-3 pb-1 text-sm text-muted-foreground">
+                  No matching features in this epic.
+                </p>
               ) : (
-                <h2 className="flex items-center gap-2 px-3 py-2 text-xs font-semibold">
-                  <Layers className="size-4 text-primary" />
-                  Standalone work
-                  <span className="font-normal text-muted-foreground">{group.cards.length}</span>
-                </h2>
+                <div className="grid items-start gap-3" style={gridStyle}>
+                  {group.columns.map(({ lane, cards }) => (
+                    <section key={lane.id} aria-label={lane.title} className="min-w-0 space-y-2">
+                      {cards.map((card) => (
+                        <IssueCard key={card.id} card={card} />
+                      ))}
+                    </section>
+                  ))}
+                </div>
               )}
             </div>
-            {group.cards.length === 0 ? (
-              <p className="sticky left-0 w-fit px-3 py-3 text-sm text-muted-foreground">
-                No matching features in this epic.
-              </p>
-            ) : (
-              <div className="grid items-start gap-3" style={gridStyle}>
-                {group.columns.map(({ lane, cards }) => (
-                  <section key={lane.id} aria-label={lane.title} className="min-w-0 space-y-2">
-                    {cards.map((card) => (
-                      <IssueCard key={card.id} card={card} />
-                    ))}
-                  </section>
-                ))}
-              </div>
-            )}
           </section>
         ))}
       </div>
     </section>
+  );
+}
+
+/** A lane divider rather than a card: the epic reads inline above its features. */
+function SwimlaneHeading({
+  card,
+  count,
+  context,
+}: {
+  card: Card;
+  count: number;
+  context: boolean;
+}) {
+  return (
+    <CardContextMenu card={card}>
+      <div className="space-y-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="max-w-full min-w-0">
+            <CardTitle card={card} className="text-sm font-semibold" />
+          </h2>
+          <CountChip count={count} />
+          <div className="min-w-48 flex-1">
+            <CardMetadata card={card} outline />
+          </div>
+        </div>
+        {context && (
+          <p className="text-xs text-muted-foreground">Parent context · outside current filters</p>
+        )}
+        {card.labels.length > 0 && <BoardLabels labels={card.labels} />}
+      </div>
+    </CardContextMenu>
   );
 }
 
@@ -197,10 +254,7 @@ function EpicHeading({ card, count, context }: { card: Card; count: number; cont
             <h2 className="min-w-0 flex-1">
               <CardTitle card={card} />
             </h2>
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-              {count}
-              <span className="sr-only"> matching features</span>
-            </span>
+            <CountChip count={count} />
           </div>
           {context && (
             <p className="text-xs text-muted-foreground">
