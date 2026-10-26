@@ -136,15 +136,23 @@ export function BoardView({
     <section
       // The flush status header replaces the shared top gutter; its left-aligned counts keep
       // the floating fullscreen toggle clear without a dedicated band.
-      className={cn(canvasClass, 'relative pt-0 focus-visible:outline-primary')}
+      // Rows carry their own --board-pad inset so full-bleed bands never overflow the scrollport.
+      className={cn(
+        canvasClass,
+        'relative px-0 pt-0 [--board-pad:--spacing(3)] focus-visible:outline-primary sm:px-0 sm:[--board-pad:--spacing(5)]',
+      )}
       aria-label="Board by epic, scroll to see more statuses"
       // Keyboard users need to focus the scroll region to pan across statuses.
       // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
       tabIndex={0}
     >
-      <div style={{ minWidth: columns.length * 230 + (columns.length - 1) * 12 }}>
+      <div
+        style={{
+          minWidth: `calc(${columns.length * 230 + (columns.length - 1) * 12}px + 2 * var(--board-pad))`,
+        }}
+      >
         <div
-          className="sticky top-0 z-2 -mx-3 grid min-h-11 gap-3 border-b border-border bg-background px-3 sm:-mx-5 sm:px-5"
+          className="sticky top-0 z-2 grid min-h-11 gap-3 border-b border-border bg-background px-(--board-pad)"
           style={gridStyle}
           aria-label="Status columns"
         >
@@ -160,12 +168,13 @@ export function BoardView({
           <section
             key={group.parent?.id ?? 'standalone'}
             aria-label={group.parent?.title ?? 'Standalone work'}
-            className="border-b border-border pb-5 last:border-b-0"
+            className="group"
           >
             {/* Stacks under the status row while its lane scrolls; full-bleed and opaque so
-                cards pass cleanly beneath it in both axes. */}
-            <div className="swimlane-heading sticky top-11 left-0 z-1 -mx-3 w-[calc(100cqw+1.5rem)] sm:-mx-5 sm:w-[calc(100cqw+2.5rem)]">
-              <div className="px-6 pt-4 pb-3 sm:px-8">
+                cards pass cleanly beneath it in both axes. 100cqw includes a classic scrollbar,
+                so cap it to the content width. */}
+            <div className="swimlane-heading sticky top-11 left-0 z-1 w-[100cqw] max-w-full">
+              <div className="px-[calc(var(--board-pad)+--spacing(3))] pt-4 pb-3">
                 {group.parent ? (
                   <SwimlaneHeading
                     card={group.parent}
@@ -181,21 +190,23 @@ export function BoardView({
                 )}
               </div>
             </div>
-            {group.cards.length === 0 ? (
-              <p className="sticky left-0 w-fit px-3 pb-1 text-sm text-muted-foreground">
-                No matching features in this epic.
-              </p>
-            ) : (
-              <div className="grid items-start gap-3" style={gridStyle}>
-                {group.columns.map(({ lane, cards }) => (
-                  <section key={lane.id} aria-label={lane.title} className="min-w-0 space-y-2">
-                    {cards.map((card) => (
-                      <IssueCard key={card.id} card={card} />
-                    ))}
-                  </section>
-                ))}
-              </div>
-            )}
+            <div className="mx-(--board-pad) border-b border-border pb-5 group-last:border-b-0">
+              {group.cards.length === 0 ? (
+                <p className="sticky left-(--board-pad) w-fit px-3 pb-1 text-sm text-muted-foreground">
+                  No matching features in this epic.
+                </p>
+              ) : (
+                <div className="grid items-start gap-3" style={gridStyle}>
+                  {group.columns.map(({ lane, cards }) => (
+                    <section key={lane.id} aria-label={lane.title} className="min-w-0 space-y-2">
+                      {cards.map((card) => (
+                        <IssueCard key={card.id} card={card} />
+                      ))}
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         ))}
       </div>
