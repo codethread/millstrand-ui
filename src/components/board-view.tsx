@@ -144,7 +144,7 @@ export function BoardView({
     >
       <div style={{ minWidth: columns.length * 230 + (columns.length - 1) * 12 }}>
         <div
-          className="sticky top-0 z-1 -mx-3 grid min-h-11 gap-3 border-b border-border bg-background px-3 sm:-mx-5 sm:px-5"
+          className="sticky top-0 z-2 -mx-3 grid min-h-11 gap-3 border-b border-border bg-background px-3 sm:-mx-5 sm:px-5"
           style={gridStyle}
           aria-label="Status columns"
         >
@@ -162,20 +162,24 @@ export function BoardView({
             aria-label={group.parent?.title ?? 'Standalone work'}
             className="border-b border-border pb-5 last:border-b-0"
           >
-            <div className="sticky left-0 w-[100cqw] max-w-full px-3 pt-4 pb-3">
-              {group.parent ? (
-                <SwimlaneHeading
-                  card={group.parent}
-                  count={group.cards.length}
-                  context={group.context}
-                />
-              ) : (
-                <h2 className="flex min-h-7 items-center gap-2 text-[13px] font-semibold">
-                  <Layers className="size-3.5 text-primary" />
-                  Standalone work
-                  <CountChip count={group.cards.length} />
-                </h2>
-              )}
+            {/* Stacks under the status row while its lane scrolls; full-bleed and opaque so
+                cards pass cleanly beneath it in both axes. */}
+            <div className="swimlane-heading sticky top-11 left-0 z-1 -mx-3 w-[calc(100cqw+1.5rem)] sm:-mx-5 sm:w-[calc(100cqw+2.5rem)]">
+              <div className="px-6 pt-4 pb-3 sm:px-8">
+                {group.parent ? (
+                  <SwimlaneHeading
+                    card={group.parent}
+                    count={group.cards.length}
+                    context={group.context}
+                  />
+                ) : (
+                  <h2 className="flex min-h-7 items-center gap-2 text-[13px] font-semibold">
+                    <Layers className="size-3.5 text-primary" />
+                    Standalone work
+                    <CountChip count={group.cards.length} />
+                  </h2>
+                )}
+              </div>
             </div>
             {group.cards.length === 0 ? (
               <p className="sticky left-0 w-fit px-3 pb-1 text-sm text-muted-foreground">
